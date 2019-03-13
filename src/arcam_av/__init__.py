@@ -29,7 +29,7 @@ class ResponsePacket(object):
     data = attr.ib(type=bytes)
 
     @staticmethod
-    def from_bytes(data: bytes):
+    def from_bytes(data: bytes) -> ResponsePacket:
         if len(data) < 5:
             raise InvalidPacket("Packet to short {}".format(data))
 
