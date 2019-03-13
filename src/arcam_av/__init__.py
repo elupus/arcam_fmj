@@ -73,22 +73,38 @@ async def _write_packet(writer: asyncio.StreamWriter, packet: CommandPacket) -> 
 
 
 class Client:
-    def __init__(self, reader, writer) -> None:
+    def __init__(self, reader, writer, loop) -> None:
         self._reader = reader
         self._writer = writer
+        self._loop = loop
+        self._task = None
 
     async def __aenter__(self):
+        self.start()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        await self.close()
+        await self.stop()
+
+    async def _process(self):
+        while True:
+            packet = await _read_packet(self._reader)
+            _LOGGER.debug("Packet received: %s", packet)
 
     @staticmethod
     async def connect(host: str, port: int, loop=None):
         reader, writer = await asyncio.open_connection(
             host, port, loop=loop)
-        return Client(reader, writer)
+        return Client(reader, writer, loop)
 
-    async def close(self):
+    async def start(self):
+        if self._task:
+            raise Exception("Already started")
+        self._task = asyncio.ensure_future(self._process)
+
+    async def stop(self):
+        if self._task:
+            self._task.cancel()
+            asyncio.wait(self._task)
         self._writer.close()
         await self._writer.wait_closed()
