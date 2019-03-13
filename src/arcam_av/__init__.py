@@ -56,6 +56,20 @@ class CommandPacket(object):
             *self.data
         ])
 
+    @staticmethod
+    def from_bytes(data: bytes) -> 'CommandPacket':
+        if len(data) < 3:
+            raise InvalidPacket("Packet to short {}".format(data))
+
+        if data[2] != len(data)-4:
+            raise InvalidPacket("Invalid length in data {}".format(data))
+
+        return CommandPacket(
+            data[0],
+            data[1],
+            data[3:3+data[2]])
+
+
 async def _read_packet(reader: asyncio.StreamReader) -> ResponsePacket:
     while await reader.read(1) != PROTOCOL_STR:
         pass
@@ -63,6 +77,16 @@ async def _read_packet(reader: asyncio.StreamReader) -> ResponsePacket:
     data = await reader.readuntil(PROTOCOL_ETR)
 
     return ResponsePacket.from_bytes(data)
+
+
+async def _read_command_packet(reader: asyncio.StreamReader) -> CommandPacket:
+    while await reader.read(1) != PROTOCOL_STR:
+        pass
+
+    data = await reader.readuntil(PROTOCOL_ETR)
+
+    return CommandPacket.from_bytes(data)
+
 
 
 async def _write_packet(writer: asyncio.StreamWriter, packet: CommandPacket) -> None:
