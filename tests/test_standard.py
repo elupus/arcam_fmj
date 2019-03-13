@@ -36,9 +36,6 @@ async def test_writer_valid(loop):
     await arcam_av._write_packet(writer, arcam_av.CommandPacket(1, 8, b'\x10\x10'))
     writer.write.assert_has_calls([
         call(b'\x21'),
-        call(b'\x01'),
-        call(b'\x08'),
-        call(b'\x02'),
-        call(b'\x10\x10'),
+        call(b'\x01\x08\x02\x10\x10'),
         call(b'\x0D')
     ])
