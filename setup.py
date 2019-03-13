@@ -22,7 +22,7 @@ setup(
         ]
     },
     entry_points = {
-        'console_scripts' : ['arcam-av=arcam_av:main']
+        'console_scripts' : ['arcam-av=arcam_av.console:main']
     },
     url='https://github.com/elupus/arcam_av',
     classifiers=[
