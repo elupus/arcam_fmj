@@ -5,3 +5,4 @@ build
 dist
 .vscode/settings.json
 .coverage
+.mypy_cache
