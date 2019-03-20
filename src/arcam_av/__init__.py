@@ -3,6 +3,7 @@ import asyncio
 import attr
 import logging
 import enum
+import sys
 
 PROTOCOL_STR = b'\x21'
 PROTOCOL_ETR = b'\x0D'
@@ -69,23 +70,30 @@ class CommandPacket(object):
             data[1],
             data[3:3+data[2]])
 
+async def _read_delimited(reader: asyncio.StreamReader) -> bytes:
+    eof = bytes()
+    while True:
+        start = await reader.read(1)
+        if start == eof:
+            return None
+        if start == PROTOCOL_STR:
+            break
+    return await reader.readuntil(PROTOCOL_ETR)
 
 async def _read_packet(reader: asyncio.StreamReader) -> ResponsePacket:
-    while await reader.read(1) != PROTOCOL_STR:
-        pass
-
-    data = await reader.readuntil(PROTOCOL_ETR)
-
-    return ResponsePacket.from_bytes(data)
+    data = await _read_delimited(reader)
+    if data:
+        return ResponsePacket.from_bytes(data)
+    else:
+        return None
 
 
 async def _read_command_packet(reader: asyncio.StreamReader) -> CommandPacket:
-    while await reader.read(1) != PROTOCOL_STR:
-        pass
-
-    data = await reader.readuntil(PROTOCOL_ETR)
-
-    return CommandPacket.from_bytes(data)
+    data = await _read_delimited(reader)
+    if data:
+        return CommandPacket.from_bytes(data)
+    else:
+        return None
 
 
 
@@ -104,7 +112,7 @@ class Client:
         self._task = None
 
     async def __aenter__(self):
-        self.start()
+        await self.start()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
@@ -113,6 +121,9 @@ class Client:
     async def _process(self):
         while True:
             packet = await _read_packet(self._reader)
+            if packet is None:
+                _LOGGER.debug("Server disconnected")
+                return
             _LOGGER.debug("Packet received: %s", packet)
 
     @staticmethod
@@ -122,13 +133,16 @@ class Client:
         return Client(reader, writer, loop)
 
     async def start(self):
+        _LOGGER.debug("Starting client")
         if self._task:
             raise Exception("Already started")
-        self._task = asyncio.ensure_future(self._process)
+        self._task = asyncio.ensure_future(self._process())
 
     async def stop(self):
+        _LOGGER.debug("Stopping client")
         if self._task:
             self._task.cancel()
             asyncio.wait(self._task)
         self._writer.close()
-        await self._writer.wait_closed()
+        if (sys.version_info >= (3, 7)):
+            await self._writer.wait_closed()
