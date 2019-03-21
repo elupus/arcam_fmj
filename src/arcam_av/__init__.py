@@ -9,7 +9,7 @@ PROTOCOL_STR = b'\x21'
 PROTOCOL_ETR = b'\x0D'
 
 _LOGGER = logging.getLogger(__name__)
-
+_REQUEST_TIMEOUT = 3
 
 class InvalidPacket(Exception):
     pass
@@ -105,11 +105,14 @@ async def _write_packet(writer: asyncio.StreamWriter, packet: CommandPacket) -> 
 
 
 class Client:
-    def __init__(self, reader, writer, loop) -> None:
-        self._reader = reader
-        self._writer = writer
+    def __init__(self, host, port, loop) -> None:
+        self._reader = None
+        self._writer = None
         self._loop = loop
         self._task = None
+        self._listen = set()
+        self._host = host
+        self._port = port
 
     async def __aenter__(self):
         await self.start()
@@ -124,19 +127,21 @@ class Client:
             if packet is None:
                 _LOGGER.debug("Server disconnected")
                 return
-            _LOGGER.debug("Packet received: %s", packet)
 
-    @staticmethod
-    async def connect(host: str, port: int, loop=None):
-        reader, writer = await asyncio.open_connection(
-            host, port, loop=loop)
-        return Client(reader, writer, loop)
+            _LOGGER.debug("Packet received: %s", packet)
+            for l in self._listen:
+                l(packet)
 
     async def start(self):
         _LOGGER.debug("Starting client")
         if self._task:
             raise Exception("Already started")
-        self._task = asyncio.ensure_future(self._process())
+
+        self._reader, self._writer = await asyncio.open_connection(
+            self._host, self._port, loop=self._loop)
+
+        self._task = asyncio.ensure_future(
+            self._process(), loop=self._loop)
 
     async def stop(self):
         _LOGGER.debug("Stopping client")
@@ -146,3 +151,22 @@ class Client:
         self._writer.close()
         if (sys.version_info >= (3, 7)):
             await self._writer.wait_closed()
+
+        self._writer = None
+        self._reader = None
+
+    async def request(self, request: CommandPacket):
+
+        result = None
+        event  = asyncio.Event()
+
+        def listen(response: ResponsePacket):
+            if (response.zn == request.zn and 
+                response.cc == request.cc):
+                nonlocal result
+                result = response
+                event.set()
+
+        self._listen.add(listen)
+        await asyncio.wait_for(event.wait(), _REQUEST_TIMEOUT)
+        return result

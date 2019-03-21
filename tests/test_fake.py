@@ -11,25 +11,14 @@ _LOGGER = logging.getLogger(__name__)
 @pytest.mark.asyncio
 @pytest.fixture
 async def server(event_loop):
-    async def handle_server(reader, writer):
-        while True:
-            packet = await arcam_av._read_command_packet(reader)
-            if packet is None:
-                _LOGGER.debug("Client disconnected")
-                return
-            
-            print(packet)
-
-    s = await asyncio.start_server(handle_server, 'localhost', 8888, loop=event_loop)
-    yield s
-    s.close()
-    await s.wait_closed()
+    from arcam_av.server import Server
+    async with Server('localhost', 8888) as s:
+        yield s
 
 @pytest.mark.asyncio
 @pytest.fixture
 async def client(event_loop):
-    c = await arcam_av.Client.connect("localhost", 8888, loop=event_loop)
-    async with c:
+    async with arcam_av.Client("localhost", 8888, loop=event_loop) as c:
         yield c
 
 @pytest.mark.asyncio
