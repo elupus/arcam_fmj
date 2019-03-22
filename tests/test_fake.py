@@ -17,6 +17,9 @@ async def server(event_loop):
         s.register_handler(0x01, CommandCodes.POWER, bytes([0xF0]),
             lambda **kwargs: (AnswerCodes.STATUS_UPDATE, bytes([0x00]))
         )
+        s.register_handler(0x01, CommandCodes.VOLUME, bytes([0xF0]),
+            lambda **kwargs: (AnswerCodes.STATUS_UPDATE, bytes([0x01]))
+        )
         yield s
 
 @pytest.mark.asyncio
@@ -29,6 +32,15 @@ async def client(event_loop):
 async def test_power(event_loop, server, client):
     data = await client.request(0x01, CommandCodes.POWER, bytes([0xF0]))
     assert data == bytes([0x00])
+
+@pytest.mark.asyncio
+async def test_multiple(event_loop, server, client):
+    data = await asyncio.gather(
+        client.request(0x01, CommandCodes.POWER, bytes([0xF0])),
+        client.request(0x01, CommandCodes.VOLUME, bytes([0xF0])),
+    )
+    assert data[0] == bytes([0x00])
+    assert data[1] == bytes([0x01])
 
 @pytest.mark.asyncio
 async def test_invalid_command(event_loop, server, client):
