@@ -31,8 +31,23 @@ class AnswerCodes(enum.IntEnum):
     COMMAND_INVALID_AT_THIS_TIME = 0x85
     INVALID_DATA_LENGTH = 0x86
 
+    @staticmethod
+    def from_int(v: int):
+        try:
+            return AnswerCodes(v)
+        except ValueError:
+            return v
+
+
 class CommandCodes(enum.IntEnum):
     POWER = 0x00
+
+    @staticmethod
+    def from_int(v: int):
+        try:
+            return CommandCodes(v)
+        except ValueError:
+            return v
 
 @attr.s
 class ResponsePacket(object):
@@ -51,8 +66,8 @@ class ResponsePacket(object):
 
         return ResponsePacket(
             data[1],
-            data[2],
-            data[3],
+            CommandCodes.from_int(data[2]),
+            AnswerCodes.from_int(data[3]),
             data[5:5+data[4]])
 
     def to_bytes(self):
@@ -92,7 +107,7 @@ class CommandPacket(object):
 
         return CommandPacket(
             data[1],
-            data[2],
+            CommandCodes.from_int(data[2]),
             data[4:4+data[3]])
 
 async def _read_delimited(reader: asyncio.StreamReader) -> bytes:
