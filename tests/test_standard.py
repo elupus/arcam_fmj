@@ -35,25 +35,5 @@ async def test_writer_valid(event_loop):
     writer.drain.return_value.set_result(None)
     await arcam_av._write_packet(writer, arcam_av.CommandPacket(1, 8, b'\x10\x10'))
     writer.write.assert_has_calls([
-        call(b'\x21'),
-        call(b'\x01\x08\x02\x10\x10'),
-        call(b'\x0D')
+        call(b'\x21\x01\x08\x02\x10\x10\x0D'),
     ])
-
-@pytest.mark.asyncio
-@pytest.fixture
-async def fake_server(event_loop):
-    async def handle_server(reader, writer):
-        while True:
-            packet = await arcam_av._read_command_packet(reader)
-            print(packet)
-
-    server = await asyncio.start_server(handle_server, 'localhost', 8888, loop=event_loop)
-    yield server
-    server.close()
-    await server.wait_closed()
-
-@pytest.mark.asyncio
-async def test_client_connect(event_loop, fake_server):
-    print(fake_server)
-    pass

@@ -1,7 +1,9 @@
 """Test with a fake server"""
 
 import asyncio
-import arcam_av
+from arcam_av import CommandCodes, AnswerCodes
+from arcam_av.server import Server
+from arcam_av.client import Client
 import pytest
 import logging
 from unittest.mock import MagicMock, call
@@ -11,18 +13,21 @@ _LOGGER = logging.getLogger(__name__)
 @pytest.mark.asyncio
 @pytest.fixture
 async def server(event_loop):
-    from arcam_av.server import Server
     async with Server('localhost', 8888) as s:
+        s.register_handler(0x01, CommandCodes.POWER, bytes([0xF0]),
+            lambda **kwargs: (AnswerCodes.STATUS_UPDATE, bytes([0x00]))
+        )
         yield s
 
 @pytest.mark.asyncio
 @pytest.fixture
 async def client(event_loop):
-    async with arcam_av.Client("localhost", 8888, loop=event_loop) as c:
+    async with Client("localhost", 8888, loop=event_loop) as c:
         yield c
 
 @pytest.mark.asyncio
-async def test_volume(event_loop, server, client):
-    print(server, client)
-    #await client.stop()
+async def test_power(event_loop, server, client):
+    ac, data = await client.request(0x01, CommandCodes.POWER, bytes([0xF0]))
+    assert ac == AnswerCodes.STATUS_UPDATE
+    assert data == bytes([0x00])
 

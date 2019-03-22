@@ -4,12 +4,12 @@ import attr
 import logging
 import enum
 import sys
+from typing import Union
 
 PROTOCOL_STR = b'\x21'
 PROTOCOL_ETR = b'\x0D'
 
 _LOGGER = logging.getLogger(__name__)
-_REQUEST_TIMEOUT = 3
 
 class InvalidPacket(Exception):
     pass
@@ -22,6 +22,9 @@ class AnswerCodes(enum.IntEnum):
     COMMAND_INVALID_AT_THIS_TIME = 0x85
     INVALID_DATA_LENGTH = 0x86
 
+class CommandCodes(enum.IntEnum):
+    POWER = 0x00
+
 @attr.s
 class ResponsePacket(object):
     zn = attr.ib(type=int)
@@ -31,17 +34,28 @@ class ResponsePacket(object):
 
     @staticmethod
     def from_bytes(data: bytes) -> 'ResponsePacket':
-        if len(data) < 5:
+        if len(data) < 6:
             raise InvalidPacket("Packet to short {}".format(data))
 
-        if data[3] != len(data)-5:
+        if data[4] != len(data)-6:
             raise InvalidPacket("Invalid length in data {}".format(data))
 
         return ResponsePacket(
-            data[0],
             data[1],
             data[2],
-            data[4:4+data[3]])
+            data[3],
+            data[5:5+data[4]])
+
+    def to_bytes(self):
+        return bytes([
+            *PROTOCOL_STR,
+            self.zn,
+            self.cc,
+            self.ac,
+            len(self.data),
+            *self.data,
+            *PROTOCOL_ETR
+        ])
 
 @attr.s
 class CommandPacket(object):
@@ -51,34 +65,39 @@ class CommandPacket(object):
 
     def to_bytes(self):
         return bytes([
+            *PROTOCOL_STR,
             self.zn,
             self.cc,
             len(self.data),
-            *self.data
+            *self.data,
+            *PROTOCOL_ETR
         ])
 
     @staticmethod
     def from_bytes(data: bytes) -> 'CommandPacket':
-        if len(data) < 3:
+        if len(data) < 5:
             raise InvalidPacket("Packet to short {}".format(data))
 
-        if data[2] != len(data)-4:
+        if data[3] != len(data)-5:
             raise InvalidPacket("Invalid length in data {}".format(data))
 
         return CommandPacket(
-            data[0],
             data[1],
-            data[3:3+data[2]])
+            data[2],
+            data[4:4+data[3]])
 
 async def _read_delimited(reader: asyncio.StreamReader) -> bytes:
     eof = bytes()
     while True:
         start = await reader.read(1)
+        _LOGGER.debug("start %s", start)
         if start == eof:
             return None
         if start == PROTOCOL_STR:
             break
-    return await reader.readuntil(PROTOCOL_ETR)
+    packet = await reader.readuntil(PROTOCOL_ETR)
+    _LOGGER.debug("packet %s", packet)
+    return bytes([*start, *packet])
 
 async def _read_packet(reader: asyncio.StreamReader) -> ResponsePacket:
     data = await _read_delimited(reader)
@@ -96,77 +115,6 @@ async def _read_command_packet(reader: asyncio.StreamReader) -> CommandPacket:
         return None
 
 
-
-async def _write_packet(writer: asyncio.StreamWriter, packet: CommandPacket) -> None:
-    writer.write(PROTOCOL_STR)
+async def _write_packet(writer: asyncio.StreamWriter, packet: Union[CommandPacket, ResponsePacket]) -> None:
     writer.write(packet.to_bytes())
-    writer.write(PROTOCOL_ETR)
     await writer.drain()
-
-
-class Client:
-    def __init__(self, host, port, loop) -> None:
-        self._reader = None
-        self._writer = None
-        self._loop = loop
-        self._task = None
-        self._listen = set()
-        self._host = host
-        self._port = port
-
-    async def __aenter__(self):
-        await self.start()
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        await self.stop()
-
-    async def _process(self):
-        while True:
-            packet = await _read_packet(self._reader)
-            if packet is None:
-                _LOGGER.debug("Server disconnected")
-                return
-
-            _LOGGER.debug("Packet received: %s", packet)
-            for l in self._listen:
-                l(packet)
-
-    async def start(self):
-        _LOGGER.debug("Starting client")
-        if self._task:
-            raise Exception("Already started")
-
-        self._reader, self._writer = await asyncio.open_connection(
-            self._host, self._port, loop=self._loop)
-
-        self._task = asyncio.ensure_future(
-            self._process(), loop=self._loop)
-
-    async def stop(self):
-        _LOGGER.debug("Stopping client")
-        if self._task:
-            self._task.cancel()
-            asyncio.wait(self._task)
-        self._writer.close()
-        if (sys.version_info >= (3, 7)):
-            await self._writer.wait_closed()
-
-        self._writer = None
-        self._reader = None
-
-    async def request(self, request: CommandPacket):
-
-        result = None
-        event  = asyncio.Event()
-
-        def listen(response: ResponsePacket):
-            if (response.zn == request.zn and 
-                response.cc == request.cc):
-                nonlocal result
-                result = response
-                event.set()
-
-        self._listen.add(listen)
-        await asyncio.wait_for(event.wait(), _REQUEST_TIMEOUT)
-        return result
