@@ -3,7 +3,15 @@ import asyncio
 import logging
 import sys
 
-from . import _read_packet, _write_packet, CommandCodes, AnswerCodes, CommandPacket, ResponsePacket, ResponseException
+from . import (
+    AnswerCodes,
+    CommandCodes,
+    CommandPacket,
+    ResponseException,
+    ResponsePacket,
+    _read_packet,
+    _write_packet
+)
 
 _LOGGER = logging.getLogger(__name__)
 _REQUEST_TIMEOUT = 3

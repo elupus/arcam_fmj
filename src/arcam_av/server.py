@@ -2,7 +2,7 @@
 import asyncio
 import logging
 
-from . import _read_command_packet, _write_packet, ResponsePacket, AnswerCodes
+from . import AnswerCodes, ResponsePacket, _read_command_packet, _write_packet
 
 _LOGGER = logging.getLogger(__name__)
 

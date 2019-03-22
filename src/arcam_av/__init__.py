@@ -1,10 +1,11 @@
 """Arcam AV Control"""
 import asyncio
-import attr
-import logging
 import enum
+import logging
 import sys
 from typing import Union
+
+import attr
 
 PROTOCOL_STR = b'\x21'
 PROTOCOL_ETR = b'\x0D'
