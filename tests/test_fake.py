@@ -1,7 +1,7 @@
 """Test with a fake server"""
 
 import asyncio
-from arcam_av import CommandCodes, AnswerCodes
+from arcam_av import CommandCodes, AnswerCodes, ResponseException
 from arcam_av.server import Server
 from arcam_av.client import Client
 import pytest
@@ -30,3 +30,8 @@ async def test_power(event_loop, server, client):
     data = await client.request(0x01, CommandCodes.POWER, bytes([0xF0]))
     assert data == bytes([0x00])
 
+@pytest.mark.asyncio
+async def test_invalid_command(event_loop, server, client):
+    with pytest.raises(ResponseException) as exc_info:
+        await client.request(0x01, 0xff, bytes([0xF0]))
+    assert exc_info.value.response.ac == AnswerCodes.COMMAND_NOT_RECOGNISED
