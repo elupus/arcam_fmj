@@ -3,7 +3,7 @@ import asyncio
 import logging
 import sys
 
-from . import _read_packet, _write_packet, CommandCodes, CommandPacket, ResponsePacket
+from . import _read_packet, _write_packet, CommandCodes, AnswerCodes, CommandPacket, ResponsePacket, ResponseException
 
 _LOGGER = logging.getLogger(__name__)
 _REQUEST_TIMEOUT = 3
@@ -79,4 +79,8 @@ class Client:
 
     async def request(self, zn, cc, data):
         response = await self._request(CommandPacket(zn, cc, data))
-        return response.ac, response.data
+
+        if response.ac == AnswerCodes.STATUS_UPDATE:
+            return response.data
+
+        raise ResponseException(response)

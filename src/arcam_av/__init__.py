@@ -11,7 +11,15 @@ PROTOCOL_ETR = b'\x0D'
 
 _LOGGER = logging.getLogger(__name__)
 
-class InvalidPacket(Exception):
+class ArcamException(Exception):
+    pass
+
+class ResponseException(Exception):
+    def __init__(self, response: 'ResponsePacket'):
+        self.response = response
+        super().__init__("Answer code: {} {}".format(AnswerCodes(response.ac).name, response))
+
+class InvalidPacket(ArcamException):
     pass
 
 class AnswerCodes(enum.IntEnum):

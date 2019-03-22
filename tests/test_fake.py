@@ -27,7 +27,6 @@ async def client(event_loop):
 
 @pytest.mark.asyncio
 async def test_power(event_loop, server, client):
-    ac, data = await client.request(0x01, CommandCodes.POWER, bytes([0xF0]))
-    assert ac == AnswerCodes.STATUS_UPDATE
+    data = await client.request(0x01, CommandCodes.POWER, bytes([0xF0]))
     assert data == bytes([0x00])
 
