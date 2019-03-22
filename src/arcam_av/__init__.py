@@ -40,7 +40,49 @@ class AnswerCodes(enum.IntEnum):
 
 
 class CommandCodes(enum.IntEnum):
+    # System Commands
     POWER = 0x00
+    DISPLAY_BRIGHTNESS = 0x01
+    HEADPHONES = 0x02
+    FMGENRE = 0x03
+    SOFTWARE_VERSION = 0x04
+    RESTORE_FACTORY_DEFAULT = 0x05
+    SAVE_RESTORE_COPY_OF_SETTINGS = 0x06
+    SIMULATE_RC5_IR_COMMAND = 0x08
+    DISPLAY_INFORMATION_TYPE = 0x09
+    REQUEST_CURRENT_SOURCE = 0x1D
+    HEADPHONES_OVERRIDE = 0x1F
+
+
+    # Input Commands
+    VIDEO_SELECTION = 0x0A
+    SELECT_ANALOG_DIGITAL = 0x0B
+    VIDEO_INPUT_TYPE = 0x0C
+
+
+    # Output Commands
+    VOLUME = 0x0D  # Set/Request
+    MUTE = 0x0E  # Request
+    DIRECT_MODE_STATUS = 0x0F  # Request
+    DECODE_MODE_STATUS_2CH = 0x10  # Request
+    DECODE_MODE_STATUS_MCH = 0x11  # Request
+    RDS_INFORMATION = 0x12  # Request
+    VIDEO_OUTPUT_RESOLUTION = 0x13 # Set/Request
+
+
+    # Menu Command
+
+
+    # Network Command
+
+
+    # 2.0 Commands
+    INPUT_NAME = 0x20 # Set/Request
+    FM_SCAN = 0x23
+    DAB_SCAN = 0x24
+    HEARTBEAT = 0x25
+    REBOOT = 0x26
+
 
     @staticmethod
     def from_int(v: int):
