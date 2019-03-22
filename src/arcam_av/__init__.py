@@ -174,7 +174,6 @@ async def _read_delimited(reader: asyncio.StreamReader, header_len: int) -> byte
             continue
 
         packet = bytes([*start, *header, *data_len, *data, *etr])
-        _LOGGER.debug("packet %s", packet)
         return packet
 
 async def _read_packet(reader: asyncio.StreamReader) -> ResponsePacket:
