@@ -9,6 +9,7 @@ import attr
 
 PROTOCOL_STR = b'\x21'
 PROTOCOL_ETR = b'\x0D'
+PROTOCOL_EOF = b''
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -152,21 +153,32 @@ class CommandPacket(object):
             CommandCodes.from_int(data[2]),
             data[4:4+data[3]])
 
-async def _read_delimited(reader: asyncio.StreamReader) -> bytes:
-    eof = bytes()
+async def _read_delimited(reader: asyncio.StreamReader, header_len: int) -> bytes:
     while True:
         start = await reader.read(1)
-        _LOGGER.debug("start %s", start)
-        if start == eof:
+        if start == PROTOCOL_EOF:
+            _LOGGER.debug("eof")
             return None
-        if start == PROTOCOL_STR:
-            break
-    packet = await reader.readuntil(PROTOCOL_ETR)
-    _LOGGER.debug("packet %s", packet)
-    return bytes([*start, *packet])
+
+        if start != PROTOCOL_STR:
+            _LOGGER.warning("unexpected str byte %s", start)
+            continue
+
+        header   = await reader.read(header_len-1)
+        data_len = await reader.read(1)
+        data     = await reader.read(int.from_bytes(data_len, 'big'))
+        etr      = await reader.read(1)
+
+        if etr != PROTOCOL_ETR:
+            _LOGGER.warning("unexpected etr byte %s", etr)
+            continue
+
+        packet = bytes([*start, *header, *data_len, *data, *etr])
+        _LOGGER.debug("packet %s", packet)
+        return packet
 
 async def _read_packet(reader: asyncio.StreamReader) -> ResponsePacket:
-    data = await _read_delimited(reader)
+    data = await _read_delimited(reader, 4)
     if data:
         return ResponsePacket.from_bytes(data)
     else:
@@ -174,7 +186,7 @@ async def _read_packet(reader: asyncio.StreamReader) -> ResponsePacket:
 
 
 async def _read_command_packet(reader: asyncio.StreamReader) -> CommandPacket:
-    data = await _read_delimited(reader)
+    data = await _read_delimited(reader, 3)
     if data:
         return CommandPacket.from_bytes(data)
     else:
@@ -182,5 +194,7 @@ async def _read_command_packet(reader: asyncio.StreamReader) -> CommandPacket:
 
 
 async def _write_packet(writer: asyncio.StreamWriter, packet: Union[CommandPacket, ResponsePacket]) -> None:
-    writer.write(packet.to_bytes())
+    b = packet.to_bytes()
+    _LOGGER.debug("write %s", b)
+    writer.write(b)
     await writer.drain()
