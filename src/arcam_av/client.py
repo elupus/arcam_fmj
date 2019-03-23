@@ -91,4 +91,4 @@ class Client:
         if response.ac == AnswerCodes.STATUS_UPDATE:
             return response.data
 
-        raise ResponseException(response)
+        raise ResponseException.from_response(response)

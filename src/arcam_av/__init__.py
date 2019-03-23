@@ -19,7 +19,37 @@ class ArcamException(Exception):
 class ResponseException(Exception):
     def __init__(self, response: 'ResponsePacket'):
         self.response = response
-        super().__init__("Answer code: {} {}".format(AnswerCodes(response.ac).name, response))
+        super().__init__("{}".format(response))
+
+    @staticmethod
+    def from_response(response: 'ResponsePacket'):
+        if response.ac == AnswerCodes.ZONE_INVALID:
+            return InvalidZoneException(response)
+        elif response.ac == AnswerCodes.COMMAND_NOT_RECOGNISED:
+            return CommandNotRecognised(response)
+        elif response.ac == AnswerCodes.PARAMETER_NOT_RECOGNISED:
+            return ParameterNotRecognised(response)
+        elif response.ac == AnswerCodes.COMMAND_INVALID_AT_THIS_TIME:
+            return CommandInvalidAtThisTime(response)
+        elif response.ac == AnswerCodes.INVALID_DATA_LENGTH:
+            return InvalidDataLength(response)
+        else:
+            return ResponseException(response)
+
+class InvalidZoneException(ResponseException):
+    pass
+
+class CommandNotRecognised(ResponseException):
+    pass
+
+class ParameterNotRecognised(ResponseException):
+    pass
+
+class CommandInvalidAtThisTime(ResponseException):
+    pass
+
+class InvalidDataLength(ResponseException):
+    pass
 
 class InvalidPacket(ArcamException):
     pass
