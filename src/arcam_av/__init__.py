@@ -92,6 +92,30 @@ class CommandCodes(enum.IntEnum):
         except ValueError:
             return v
 
+class SourceCodes(enum.IntEnum):
+    FOLLOW_ZONE_1 = 0x00
+    CD = 0x01
+    BD = 0x02
+    AV = 0x03
+    SAT = 0x04
+    PVR = 0x05
+    VCR = 0x06
+    AUX = 0x08
+    DISPLAY = 0x09
+    TUNER_FM = 0x0B
+    TUNER_DAB = 0x0C
+    NET = 0x0E
+    USB = 0x0F
+    STB = 0x10
+    GAME = 0x11
+
+    @staticmethod
+    def from_int(v: int):
+        try:
+            return SourceCodes(v)
+        except ValueError:
+            return v
+
 @attr.s
 class ResponsePacket(object):
     zn = attr.ib(type=int)

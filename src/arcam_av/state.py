@@ -2,7 +2,7 @@
 import asyncio
 import logging
 
-from . import CommandCodes, ResponsePacket
+from . import CommandCodes, ResponsePacket, SourceCodes
 from .client import Client
 
 _LOGGER = logging.getLogger(__name__)
@@ -44,10 +44,11 @@ class State():
         await self._client.request(
             self._zn, CommandCodes.MUTE, bytes([mute]))
 
-    def get_source(self):
-        return int.from_bytes(self._state[CommandCodes.CURRENT_SOURCE], 'big')
+    def get_source(self) -> SourceCodes:
+        return SourceCodes.from_int(
+            int.from_bytes(self._state[CommandCodes.CURRENT_SOURCE], 'big'))
 
-    async def set_source(self, mute: int) -> None:
+    async def set_source(self, mute: SourceCodes) -> None:
         await self._client.request(
             self._zn, CommandCodes.CURRENT_SOURCE, bytes([mute]))
 
