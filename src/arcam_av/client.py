@@ -81,8 +81,11 @@ class Client:
                 event.set()
 
         self._listen.add(listen)
-        await _write_packet(self._writer, request)
-        await asyncio.wait_for(event.wait(), _REQUEST_TIMEOUT)
+        try:
+            await _write_packet(self._writer, request)
+            await asyncio.wait_for(event.wait(), _REQUEST_TIMEOUT)
+        finally:
+            self._listen.remove(listen)
         return result
 
     async def request(self, zn, cc, data):
