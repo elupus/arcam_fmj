@@ -4,6 +4,7 @@ import asyncio
 from arcam_av import CommandCodes, AnswerCodes, ResponseException
 from arcam_av.server import Server
 from arcam_av.client import Client
+from arcam_av.state import State
 import pytest
 import logging
 from unittest.mock import MagicMock, call
@@ -47,3 +48,10 @@ async def test_invalid_command(event_loop, server, client):
     with pytest.raises(ResponseException) as exc_info:
         await client.request(0x01, 0xff, bytes([0xF0]))
     assert exc_info.value.response.ac == AnswerCodes.COMMAND_NOT_RECOGNISED
+
+@pytest.mark.asyncio
+async def test_state(event_loop, server, client):
+    state = State(client, 0x01)
+    await state.update()
+    assert state.get(CommandCodes.POWER) == bytes([0x00])
+    assert state.get(CommandCodes.VOLUME) == bytes([0x01])
