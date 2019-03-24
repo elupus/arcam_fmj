@@ -13,6 +13,8 @@ from . import (
     _write_packet
 )
 
+from .utils import async_retry
+
 _LOGGER = logging.getLogger(__name__)
 _REQUEST_TIMEOUT = 3
 
@@ -26,6 +28,7 @@ class Client:
         self._listen = set()
         self._host = host
         self._port = port
+        self._lock = asyncio.Semaphore(2)  # limit to one outstanding request
 
     async def __aenter__(self):
         await self.start()
@@ -68,6 +71,7 @@ class Client:
         self._writer = None
         self._reader = None
 
+    @async_retry(2, asyncio.TimeoutError)
     async def _request(self, request: CommandPacket):
         _LOGGER.debug("Requesting %s", request)
         result = None
@@ -80,12 +84,13 @@ class Client:
                 result = response
                 event.set()
 
-        self._listen.add(listen)
-        try:
-            await _write_packet(self._writer, request)
-            await asyncio.wait_for(event.wait(), _REQUEST_TIMEOUT)
-        finally:
-            self._listen.remove(listen)
+        async with self._lock:
+            self._listen.add(listen)
+            try:
+                await _write_packet(self._writer, request)
+                await asyncio.wait_for(event.wait(), _REQUEST_TIMEOUT)
+            finally:
+                self._listen.remove(listen)
         return result
 
     async def request(self, zn, cc, data):
