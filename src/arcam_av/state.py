@@ -16,6 +16,7 @@ class State():
         self.monitor(CommandCodes.POWER)
         self.monitor(CommandCodes.VOLUME)
         self.monitor(CommandCodes.MUTE)
+        self.monitor(CommandCodes.CURRENT_SOURCE)
 
     def monitor(self, cc):
         self._state[cc] = None
@@ -54,9 +55,9 @@ class State():
         else:
             return None
 
-    async def set_source(self, mute: SourceCodes) -> None:
+    async def set_source(self, src: SourceCodes) -> None:
         await self._client.request(
-            self._zn, CommandCodes.CURRENT_SOURCE, bytes([mute]))
+            self._zn, CommandCodes.CURRENT_SOURCE, bytes([src]))
 
     def get_volume(self) -> int:
         if self._state[CommandCodes.VOLUME]:
