@@ -38,22 +38,31 @@ class State():
             self._zn, CommandCodes.POWER, bytes([power]))
 
     def get_mute(self):
-        return int.from_bytes(self._state[CommandCodes.MUTE], 'big')
+        if self._state[CommandCodes.MUTE]:
+            return int.from_bytes(self._state[CommandCodes.MUTE], 'big')
+        else:
+            return None
 
     async def set_mute(self, mute: int) -> None:
         await self._client.request(
             self._zn, CommandCodes.MUTE, bytes([mute]))
 
     def get_source(self) -> SourceCodes:
-        return SourceCodes.from_int(
-            int.from_bytes(self._state[CommandCodes.CURRENT_SOURCE], 'big'))
+        if self._state[CommandCodes.CURRENT_SOURCE]:
+            return SourceCodes.from_int(
+                int.from_bytes(self._state[CommandCodes.CURRENT_SOURCE], 'big'))
+        else:
+            return None
 
     async def set_source(self, mute: SourceCodes) -> None:
         await self._client.request(
             self._zn, CommandCodes.CURRENT_SOURCE, bytes([mute]))
 
     def get_volume(self) -> int:
-        return int.from_bytes(self._state[CommandCodes.VOLUME], 'big')
+        if self._state[CommandCodes.VOLUME]:
+            return int.from_bytes(self._state[CommandCodes.VOLUME], 'big')
+        else:
+            return None
 
     async def set_volume(self, volume: int) -> None:
         await self._client.request(
