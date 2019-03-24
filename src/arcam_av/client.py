@@ -18,10 +18,10 @@ _REQUEST_TIMEOUT = 3
 
 
 class Client:
-    def __init__(self, host, port, loop) -> None:
+    def __init__(self, host, port, loop=None) -> None:
         self._reader = None
         self._writer = None
-        self._loop = loop
+        self._loop = loop if loop else asyncio.get_event_loop()
         self._task = None
         self._listen = set()
         self._host = host

@@ -3,7 +3,8 @@ import asyncio
 import logging
 import sys
 
-import arcam_av
+from arcam_av.client import Client
+from arcam_av.state import State
 
 parser = argparse.ArgumentParser(description='Communicate with arcam receivers.')
 parser.add_argument('--host', required=True)
@@ -11,8 +12,10 @@ parser.add_argument('--port', default=50000)
 parser.add_argument('--verbose', action='store_true')
 
 async def run(args):
-    async with await arcam_av.Client.connect(args.host, args.port) as client:
-        pass
+    async with Client(args.host, args.port) as client:
+        state = State(client, 1)
+        await state.update()
+        print(state.get_power())
 
 def main():
 

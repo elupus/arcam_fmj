@@ -2,7 +2,7 @@
 import asyncio
 import logging
 
-from . import CommandCodes, ResponsePacket, SourceCodes
+from . import CommandCodes, ResponsePacket, SourceCodes, ResponseException
 from .client import Client
 
 _LOGGER = logging.getLogger(__name__)
@@ -62,8 +62,15 @@ class State():
     async def update(self):
         async def _update(cc):
             _LOGGER.debug("Updating %s", cc)
-            data = await self._client.request(self._zn, cc, bytes([0xF0]))
-            self._state[cc] = data
+            try:
+                data = await self._client.request(self._zn, cc, bytes([0xF0]))
+                self._state[cc] = data
+            except ResponseException:
+                _LOGGER.error("Response error skipping %s", cc, exc_info=1)
+                self._state[cc] = None
+            except asyncio.TimeoutError:
+                _LOGGER.error("Timeout requesting %s", cc)
+                
     
         await asyncio.wait(
             [_update(cc) for cc in self._state.keys()]
