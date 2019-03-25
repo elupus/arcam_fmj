@@ -13,8 +13,7 @@ from . import (
     _read_packet,
     _write_packet
 )
-
-from .utils import async_retry, Throttle
+from .utils import Throttle, async_retry
 
 _LOGGER = logging.getLogger(__name__)
 _REQUEST_TIMEOUT = 3

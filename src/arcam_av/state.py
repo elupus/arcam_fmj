@@ -2,7 +2,16 @@
 import asyncio
 import logging
 
-from . import CommandCodes, ResponsePacket, SourceCodes, ResponseException, AnswerCodes, MenuCodes, DecodeMode2CH, DecodeModeMCH
+from . import (
+    AnswerCodes,
+    CommandCodes,
+    DecodeMode2CH,
+    DecodeModeMCH,
+    MenuCodes,
+    ResponseException,
+    ResponsePacket,
+    SourceCodes
+)
 from .client import Client
 
 _LOGGER = logging.getLogger(__name__)
