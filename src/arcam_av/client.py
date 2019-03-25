@@ -2,6 +2,7 @@
 import asyncio
 import logging
 import sys
+from datetime import datetime, timedelta
 
 from . import (
     AnswerCodes,
@@ -13,10 +14,11 @@ from . import (
     _write_packet
 )
 
-from .utils import async_retry
+from .utils import async_retry, Throttle
 
 _LOGGER = logging.getLogger(__name__)
 _REQUEST_TIMEOUT = 3
+_REQUEST_THROTTLE = 0.2
 
 
 class Client:
@@ -29,6 +31,7 @@ class Client:
         self._host = host
         self._port = port
         self._lock = asyncio.Semaphore(2)  # limit to one outstanding request
+        self._throttle = Throttle(_REQUEST_THROTTLE)
 
     async def __aenter__(self):
         await self.start()
@@ -39,14 +42,17 @@ class Client:
 
     async def _process(self):
         while True:
-            packet = await _read_packet(self._reader)
-            if packet is None:
-                _LOGGER.debug("Server disconnected")
-                return
+            try:
+                packet = await _read_packet(self._reader)
+                if packet is None:
+                    _LOGGER.debug("Server disconnected")
+                    return
 
-            _LOGGER.debug("Packet received: %s", packet)
-            for l in self._listen:
-                l(packet)
+                _LOGGER.debug("Packet received: %s", packet)
+                for l in self._listen:
+                    l(packet)
+            except:
+                _LOGGER.error("Error occured during packet processing", exc_info=1)
 
     async def start(self):
         _LOGGER.debug("Starting client")
@@ -73,7 +79,6 @@ class Client:
 
     @async_retry(2, asyncio.TimeoutError)
     async def _request(self, request: CommandPacket):
-        _LOGGER.debug("Requesting %s", request)
         result = None
         event  = asyncio.Event()
 
@@ -84,7 +89,10 @@ class Client:
                 result = response
                 event.set()
 
+        await self._throttle.get()
+
         async with self._lock:
+            _LOGGER.debug("Requesting %s", request)
             self._listen.add(listen)
             try:
                 await _write_packet(self._writer, request)

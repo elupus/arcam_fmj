@@ -2,7 +2,7 @@
 import asyncio
 import logging
 
-from . import CommandCodes, ResponsePacket, SourceCodes, ResponseException
+from . import CommandCodes, ResponsePacket, SourceCodes, ResponseException, AnswerCodes
 from .client import Client
 
 _LOGGER = logging.getLogger(__name__)
@@ -18,6 +18,24 @@ class State():
         self.monitor(CommandCodes.MUTE)
         self.monitor(CommandCodes.CURRENT_SOURCE)
 
+    async def __aenter__(self):
+        self._client._listen.add(self._listen)
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        self._client._listen.remove(self._listen)
+
+    def to_dict(self):
+        return {
+            'POWER': self.get_power(),
+            'VOLUME': self.get_volume(),
+            'SOURCE': self.get_source(),
+            'MUTE': self.get_mute(),
+        }
+
+    def __repr__(self):
+        return "State ({})".format(self.to_dict())
+
     def monitor(self, cc):
         self._state[cc] = None
 
@@ -25,28 +43,29 @@ class State():
         if packet.zn != self._zn:
             return
 
+        if packet.ac != AnswerCodes.STATUS_UPDATE:
+            return
+
         if packet.cc in self._state:
-            self._state[packet.cc] = packet.data
+            if packet.ac == AnswerCodes.STATUS_UPDATE:
+                self._state[packet.cc] = packet.data
+            else:
+                self._state[packet.cc] = None
 
     def get(self, cc):
         return self._state[cc]
 
     def get_power(self):
-        return int.from_bytes(self._state[CommandCodes.POWER], 'big')
-
-    async def set_power(self, power: int) -> None:
-        await self._client.request(
-            self._zn, CommandCodes.POWER, bytes([power]))
+        if self._state[CommandCodes.POWER]:
+            return int.from_bytes(self._state[CommandCodes.POWER], 'big')
+        else:
+            return None
 
     def get_mute(self):
         if self._state[CommandCodes.MUTE]:
             return int.from_bytes(self._state[CommandCodes.MUTE], 'big')
         else:
             return None
-
-    async def set_mute(self, mute: int) -> None:
-        await self._client.request(
-            self._zn, CommandCodes.MUTE, bytes([mute]))
 
     def get_source(self) -> SourceCodes:
         if self._state[CommandCodes.CURRENT_SOURCE]:
@@ -71,7 +90,6 @@ class State():
 
     async def update(self):
         async def _update(cc):
-            _LOGGER.debug("Updating %s", cc)
             try:
                 data = await self._client.request(self._zn, cc, bytes([0xF0]))
                 self._state[cc] = data

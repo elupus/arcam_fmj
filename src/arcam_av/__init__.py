@@ -248,6 +248,5 @@ async def _read_command_packet(reader: asyncio.StreamReader) -> CommandPacket:
 
 async def _write_packet(writer: asyncio.StreamWriter, packet: Union[CommandPacket, ResponsePacket]) -> None:
     b = packet.to_bytes()
-    _LOGGER.debug("write %s", b)
     writer.write(b)
     await writer.drain()
