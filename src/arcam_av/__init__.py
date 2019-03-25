@@ -103,13 +103,51 @@ class CommandCodes(enum.IntEnum):
 
     # Menu Command
     MENU = 0x14  # Request
+    TUNER_PRESET = 0x15  # Set/Request
+    TUNE = 0x16  # Set/Request
+    DAB_STATION = 0x17  # Set/Request
+    DAB_PROGRAM_TYPE_CATEGORY = 0x18  # Set/Request
+    DLS_PDT_INFO = 0x1A  # Request
+    PRESET_DETAIL = 0x1B # Request
 
 
     # Network Command
 
 
+    # Setup
+    TREBLE_EQUALIZATION = 0x35
+    BASS_EQUALIZATION = 0x36
+    ROOM_EQUALIZATION = 0x37
+    DOLBY_VOLUME = 0x38
+    DOLBY_LEVELER = 0x39
+    DOLBY_VOLUME_CALIBRATION_OFFSET = 0x3A
+    BALANCE = 0x3B
+
+    DOLBY_PLII_X_MUSIC_DIMENSION = 0x3C
+    DOLBY_PLII_X_MUSIC_CENTRE_WIDTH = 0x3D
+    DOLBY_PLII_X_MUSIC_PANORAMA = 0x3E
+    SUBWOOFER_TRIM = 0x3F
+    LIPSYNC_DELAY = 0x40
+    COMPRESSION = 0x41
+
+    INCOMING_VIDEO_FORMAT = 0x42
+    INCOMING_AUDIO_FORMAT = 0x43
+    INCOMING_AUDIO_SAMPLERATE = 0x44
+
+    SUB_STEREO_TRIM = 0x45  # Set/Request
+    VIDEO_BRIGHTNESS = 0x46  # Set/Request
+    VIDEO_CONTRAST = 0x47  # Set/Request
+    VIDEO_COLOUR = 0x48  # Set/Request
+    VIDEO_FILM_MODE = 0x49  # Set/Request
+    VIDEO_EDGE_ENHANCEMENT = 0x4A  # Set/Request
+    VIDEO_NOISE_REDUCTION = 0x4C  # Set/Request
+    VIDEO_MPEG_NOISE_REDUCTION = 0x4D  # Set/Request
+    ZONE_1_OSD_ON_OFF = 0x4E  # Set/Request
+    VIDEO_OUTPUT_SWITCHING = 0x4F  # Set/Request
+    VIDEO_OUTPUT_FRAME_RATE = 0x50  # Set/Request
+
     # 2.0 Commands
-    INPUT_NAME = 0x20 # Set/Request
+    INPUT_NAME = 0x20  # Set/Request
     FM_SCAN = 0x23
     DAB_SCAN = 0x24
     HEARTBEAT = 0x25
