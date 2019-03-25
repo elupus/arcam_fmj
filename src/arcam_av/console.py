@@ -32,10 +32,13 @@ async def run(args):
  
         if args.monitor:
             async with state:
+                prev = repr(state)
                 await state.update()
-                print(state)
                 while True:
-                    print(state)
+                    curr = repr(state)
+                    if prev != curr:
+                        print(curr)
+                        prev = curr
                     await asyncio.sleep(delay=1)
 def main():
 
