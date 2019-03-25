@@ -43,9 +43,6 @@ class State():
     def __repr__(self):
         return "State ({})".format(self.to_dict())
 
-    def monitor(self, cc):
-        self._state[cc] = None
-
     def _listen(self, packet: ResponsePacket):
         if packet.zn != self._zn:
             return
