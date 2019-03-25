@@ -2,7 +2,7 @@
 import asyncio
 import logging
 
-from . import CommandCodes, ResponsePacket, SourceCodes, ResponseException, AnswerCodes
+from . import CommandCodes, ResponsePacket, SourceCodes, ResponseException, AnswerCodes, MenuCodes
 from .client import Client
 
 _LOGGER = logging.getLogger(__name__)
@@ -26,6 +26,7 @@ class State():
             'VOLUME': self.get_volume(),
             'SOURCE': self.get_source(),
             'MUTE': self.get_mute(),
+            'MENU': self.get_menu(),
         }
 
     def __repr__(self):
@@ -52,6 +53,11 @@ class State():
             return int.from_bytes(value, 'big')
         else:
             return None
+
+    def get_menu(self) -> MenuCodes:
+        value = self._state.get(CommandCodes.MENU)
+        if value:
+            return MenuCodes.from_bytes(value)
 
     def get_mute(self):
         value = self._state.get(CommandCodes.MUTE)
@@ -99,4 +105,5 @@ class State():
             _update(CommandCodes.VOLUME),
             _update(CommandCodes.MUTE),
             _update(CommandCodes.CURRENT_SOURCE),
+            _update(CommandCodes.MENU),
         ])

@@ -102,6 +102,7 @@ class CommandCodes(enum.IntEnum):
 
 
     # Menu Command
+    MENU = 0x14  # Request
 
 
     # Network Command
@@ -145,6 +146,35 @@ class SourceCodes(enum.IntEnum):
             return SourceCodes(v)
         except ValueError:
             return v
+
+    @staticmethod
+    def from_bytes(v: bytes):
+        return SourceCodes.from_int(int.from_bytes(v, 'big'))
+
+
+class MenuCodes(enum.IntEnum):
+    NONE = 0x00
+    SETUP = 0x02
+    TRIM = 0x03
+    BASS = 0x04
+    TREBLE = 0x05
+    SYNC = 0x06
+    SUB = 0x07
+    TUNER = 0x08
+    NETWORK = 0x09
+    USB = 0x0A
+
+    @staticmethod
+    def from_int(v: int):
+        try:
+            return MenuCodes(v)
+        except ValueError:
+            return v
+
+    @staticmethod
+    def from_bytes(v: bytes):
+        return MenuCodes.from_int(int.from_bytes(v, 'big'))
+
 
 @attr.s
 class ResponsePacket(object):
