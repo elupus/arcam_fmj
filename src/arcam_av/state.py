@@ -13,11 +13,6 @@ class State():
         self._client = client
         self._state = dict()
 
-        self.monitor(CommandCodes.POWER)
-        self.monitor(CommandCodes.VOLUME)
-        self.monitor(CommandCodes.MUTE)
-        self.monitor(CommandCodes.CURRENT_SOURCE)
-
     async def __aenter__(self):
         self._client._listen.add(self._listen)
         return self
@@ -43,34 +38,33 @@ class State():
         if packet.zn != self._zn:
             return
 
-        if packet.ac != AnswerCodes.STATUS_UPDATE:
-            return
-
-        if packet.cc in self._state:
-            if packet.ac == AnswerCodes.STATUS_UPDATE:
-                self._state[packet.cc] = packet.data
-            else:
-                self._state[packet.cc] = None
+        if packet.ac == AnswerCodes.STATUS_UPDATE:
+            self._state[packet.cc] = packet.data
+        else:
+            self._state[packet.cc] = None
 
     def get(self, cc):
         return self._state[cc]
 
     def get_power(self):
-        if self._state[CommandCodes.POWER]:
-            return int.from_bytes(self._state[CommandCodes.POWER], 'big')
+        value = self._state.get(CommandCodes.POWER)
+        if value:
+            return int.from_bytes(value, 'big')
         else:
             return None
 
     def get_mute(self):
-        if self._state[CommandCodes.MUTE]:
-            return int.from_bytes(self._state[CommandCodes.MUTE], 'big')
+        value = self._state.get(CommandCodes.MUTE)
+        if value:
+            return int.from_bytes(value, 'big')
         else:
             return None
 
     def get_source(self) -> SourceCodes:
-        if self._state[CommandCodes.CURRENT_SOURCE]:
+        value = self._state.get(CommandCodes.CURRENT_SOURCE)
+        if value:
             return SourceCodes.from_int(
-                int.from_bytes(self._state[CommandCodes.CURRENT_SOURCE], 'big'))
+                int.from_bytes(value, 'big'))
         else:
             return None
 
@@ -79,8 +73,9 @@ class State():
             self._zn, CommandCodes.CURRENT_SOURCE, bytes([src]))
 
     def get_volume(self) -> int:
-        if self._state[CommandCodes.VOLUME]:
-            return int.from_bytes(self._state[CommandCodes.VOLUME], 'big')
+        value = self._state.get(CommandCodes.CURRENT_SOURCE)
+        if value:
+            return int.from_bytes(value, 'big')
         else:
             return None
 
@@ -98,8 +93,10 @@ class State():
                 self._state[cc] = None
             except asyncio.TimeoutError:
                 _LOGGER.error("Timeout requesting %s", cc)
-                
-    
-        await asyncio.wait(
-            [_update(cc) for cc in self._state.keys()]
-        )
+
+        await asyncio.wait([
+            _update(CommandCodes.POWER),
+            _update(CommandCodes.VOLUME),
+            _update(CommandCodes.MUTE),
+            _update(CommandCodes.CURRENT_SOURCE),
+        ])
