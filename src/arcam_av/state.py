@@ -2,7 +2,7 @@
 import asyncio
 import logging
 
-from . import CommandCodes, ResponsePacket, SourceCodes, ResponseException, AnswerCodes, MenuCodes
+from . import CommandCodes, ResponsePacket, SourceCodes, ResponseException, AnswerCodes, MenuCodes, DecodeMode2CH, DecodeModeMCH
 from .client import Client
 
 _LOGGER = logging.getLogger(__name__)
@@ -27,6 +27,8 @@ class State():
             'SOURCE': self.get_source(),
             'MUTE': self.get_mute(),
             'MENU': self.get_menu(),
+            'DECODE_MODE_2CH': self.get_decode_mode_2ch(),
+            'DECODE_MODE_MCH': self.get_decode_mode_mch(),
         }
 
     def __repr__(self):
@@ -46,6 +48,20 @@ class State():
 
     def get(self, cc):
         return self._state[cc]
+
+    def get_decode_mode_2ch(self):
+        value = self._state.get(CommandCodes.DECODE_MODE_STATUS_2CH)
+        if value:
+            return DecodeMode2CH.from_bytes(value)
+        else:
+            return None
+
+    def get_decode_mode_mch(self):
+        value = self._state.get(CommandCodes.DECODE_MODE_STATUS_MCH)
+        if value:
+            return DecodeModeMCH.from_bytes(value)
+        else:
+            return None
 
     def get_power(self):
         value = self._state.get(CommandCodes.POWER)
@@ -106,4 +122,6 @@ class State():
             _update(CommandCodes.MUTE),
             _update(CommandCodes.CURRENT_SOURCE),
             _update(CommandCodes.MENU),
+            _update(CommandCodes.DECODE_MODE_STATUS_2CH),
+            _update(CommandCodes.DECODE_MODE_STATUS_MCH),
         ])

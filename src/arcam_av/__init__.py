@@ -214,6 +214,47 @@ class MenuCodes(enum.IntEnum):
         return MenuCodes.from_int(int.from_bytes(v, 'big'))
 
 
+class DecodeMode2CH(enum.IntEnum):
+    STEREO = 0x01
+    DOLBY_PLII_X_MOVIE = 0x02
+    DOLBY_PLII_X_MUSIC = 0x03
+    DOLBY_PLII_X_GAME = 0x05
+    DOLBY_PL = 0x06
+    NEO_6_CINEMA = 0x07
+    NEO_6_MUSIC = 0x08
+    MCH_STEREO = 0x09
+
+    @staticmethod
+    def from_int(v: int):
+        try:
+            return DecodeMode2CH(v)
+        except ValueError:
+            return v
+
+    @staticmethod
+    def from_bytes(v: bytes):
+        return DecodeMode2CH.from_int(int.from_bytes(v, 'big'))
+
+
+class DecodeModeMCH(enum.IntEnum):
+    STEREO_DOWNMIX = 0x01
+    MULTI_CHANNEL = 0x02
+    DOLBY_D_EX_OR_DTS_ES = 0x03
+    DOLBY_PLIIx_MOVIE = 0x04
+    DOLBY_PLIIx_MUSIC = 0x05
+
+    @staticmethod
+    def from_int(v: int):
+        try:
+            return DecodeModeMCH(v)
+        except ValueError:
+            return v
+
+    @staticmethod
+    def from_bytes(v: bytes):
+        return DecodeModeMCH.from_int(int.from_bytes(v, 'big'))
+
+
 @attr.s
 class ResponsePacket(object):
     zn = attr.ib(type=int)
