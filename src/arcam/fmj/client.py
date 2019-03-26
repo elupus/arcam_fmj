@@ -50,8 +50,11 @@ class Client:
                 _LOGGER.debug("Packet received: %s", packet)
                 for l in self._listen:
                     l(packet)
+            except asyncio.CancelledError:
+                return
             except:
                 _LOGGER.error("Error occured during packet processing", exc_info=1)
+                raise
 
     async def start(self):
         _LOGGER.debug("Starting client")
