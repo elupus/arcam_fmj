@@ -1,7 +1,7 @@
 """Tests for utils."""
 import pytest
 
-from arcam_av.utils import async_retry
+from arcam.fmj.utils import async_retry
 
 async def test_retry_fails():
 

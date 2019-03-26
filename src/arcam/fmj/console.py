@@ -3,8 +3,8 @@ import asyncio
 import logging
 import sys
 
-from arcam_av.client import Client
-from arcam_av.state import State
+from .client import Client
+from .state import State
 
 parser = argparse.ArgumentParser(description='Communicate with arcam receivers.')
 parser.add_argument('--host', required=True)

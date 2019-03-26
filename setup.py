@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name='arcam-av',
+    name='arcam-fmj',
     version='0.1.0',
     description='A python library for speaking to Arcam receivers',
     license='MIT',
@@ -22,9 +22,9 @@ setup(
         ]
     },
     entry_points = {
-        'console_scripts' : ['arcam-av=arcam_av.console:main']
+        'console_scripts' : ['arcam-fmj-client=arcam.fmj.console:main']
     },
-    url='https://github.com/elupus/arcam_av',
+    url='https://github.com/elupus/arcam_fmj',
     classifiers=[
         'License :: OSI Approved :: MIT License',
         'Development Status :: 4 - Beta',

@@ -1,10 +1,10 @@
 """Test with a fake server"""
 
 import asyncio
-from arcam_av import CommandCodes, AnswerCodes, ResponseException
-from arcam_av.server import Server
-from arcam_av.client import Client
-from arcam_av.state import State
+from arcam.fmj import CommandCodes, AnswerCodes, ResponseException
+from arcam.fmj.server import Server
+from arcam.fmj.client import Client
+from arcam.fmj.state import State
 import pytest
 import logging
 from unittest.mock import MagicMock, call
