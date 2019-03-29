@@ -101,7 +101,7 @@ class State():
             self._zn, CommandCodes.CURRENT_SOURCE, bytes([src]))
 
     def get_volume(self) -> int:
-        value = self._state.get(CommandCodes.CURRENT_SOURCE)
+        value = self._state.get(CommandCodes.VOLUME)
         if value:
             return int.from_bytes(value, 'big')
         else:
@@ -116,8 +116,8 @@ class State():
             try:
                 data = await self._client.request(self._zn, cc, bytes([0xF0]))
                 self._state[cc] = data
-            except ResponseException:
-                _LOGGER.error("Response error skipping %s", cc, exc_info=1)
+            except ResponseException as e:
+                _LOGGER.debug("Response error skipping %s - %s", cc, e.response.ac)
                 self._state[cc] = None
             except asyncio.TimeoutError:
                 _LOGGER.error("Timeout requesting %s", cc)

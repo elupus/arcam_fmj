@@ -51,7 +51,7 @@ class Client:
                 for l in self._listen:
                     l(packet)
             except asyncio.CancelledError:
-                return
+                raise
             except:
                 _LOGGER.error("Error occured during packet processing", exc_info=1)
                 raise

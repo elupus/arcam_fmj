@@ -22,7 +22,7 @@ setup(
         ]
     },
     entry_points = {
-        'console_scripts' : ['arcam-fmj-client=arcam.fmj.console:main']
+        'console_scripts' : ['arcam-fmj=arcam.fmj.console:main']
     },
     url='https://github.com/elupus/arcam_fmj',
     classifiers=[
