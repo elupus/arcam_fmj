@@ -2,7 +2,7 @@
 import asyncio
 import logging
 
-from . import AnswerCodes, ResponsePacket, _read_command_packet, _write_packet
+from . import AnswerCodes, ResponsePacket, _read_command_packet, _write_packet, CommandNotRecognised, ResponseException
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -21,8 +21,8 @@ class Server():
                 _LOGGER.debug("Client disconnected")
                 return
             
-            _LOGGER.debug("Client command %s", request)
             response = await self.process_request(request)
+            _LOGGER.debug("Client command %s -> %s", request, response)
             await _write_packet(writer, response)
 
     async def process_request(self, request):
@@ -30,20 +30,28 @@ class Server():
             if handler is None:
                 handler = self._handlers.get((request.zn, request.cc))
 
-            if handler:
-                ac, data = handler(
-                    zn=request.zn,
-                    cc=request.cc,
-                    data=request.data)
-            else:
-                ac = AnswerCodes.COMMAND_NOT_RECOGNISED
-                data = bytes()
+            try:
+                if handler:
+                    ac, data = handler(
+                        zn=request.zn,
+                        cc=request.cc,
+                        data=request.data)
 
-            response = ResponsePacket(
-                request.zn,
-                request.cc,
-                ac,
-                data)
+                    response = ResponsePacket(
+                        request.zn,
+                        request.cc,
+                        ac,
+                        data)
+                else:
+                    raise CommandNotRecognised()
+            except ResponseException as e:
+                response = ResponsePacket(
+                    request.zn,
+                    request.cc,
+                    e.ac,
+                    e.data or bytes(),
+                )
+
             return response
 
     def register_handler(self, zn, cc, data, fun):

@@ -17,39 +17,54 @@ class ArcamException(Exception):
     pass
 
 class ResponseException(Exception):
-    def __init__(self, response: 'ResponsePacket'):
-        self.response = response
-        super().__init__("{}".format(response))
+    def __init__(self, ac=None, zn=None, cc=None, data=None):
+        self.ac = ac
+        self.zn = zn
+        self.cc = cc
+        self.data = data
+        super().__init__("'ac':{}, 'zn':{}, 'cc':{}, 'data':{}".format(
+            ac, zn, cc, data
+        ))
 
     @staticmethod
     def from_response(response: 'ResponsePacket'):
+        kw = {
+            'zn': response.zn,
+            'cc': response.cc,
+            'data': response.data
+        }
         if response.ac == AnswerCodes.ZONE_INVALID:
-            return InvalidZoneException(response)
+            return InvalidZoneException(**kw)
         elif response.ac == AnswerCodes.COMMAND_NOT_RECOGNISED:
-            return CommandNotRecognised(response)
+            return CommandNotRecognised(**kw)
         elif response.ac == AnswerCodes.PARAMETER_NOT_RECOGNISED:
-            return ParameterNotRecognised(response)
+            return ParameterNotRecognised(**kw)
         elif response.ac == AnswerCodes.COMMAND_INVALID_AT_THIS_TIME:
-            return CommandInvalidAtThisTime(response)
+            return CommandInvalidAtThisTime(**kw)
         elif response.ac == AnswerCodes.INVALID_DATA_LENGTH:
-            return InvalidDataLength(response)
+            return InvalidDataLength(**kw)
         else:
-            return ResponseException(response)
+            return ResponseException(ac=response.ac, **kw)
 
 class InvalidZoneException(ResponseException):
-    pass
+    def __init__(self, zn=None, cc=None, data=None):
+        super().__init__(ac=AnswerCodes.ZONE_INVALID, zn=zn, cc=cc,data=data)
 
 class CommandNotRecognised(ResponseException):
-    pass
+    def __init__(self, zn=None, cc=None, data=None):
+        super().__init__(ac=AnswerCodes.COMMAND_NOT_RECOGNISED, zn=zn, cc=cc,data=data)
 
 class ParameterNotRecognised(ResponseException):
-    pass
+    def __init__(self, zn=None, cc=None, data=None):
+        super().__init__(ac=AnswerCodes.PARAMETER_NOT_RECOGNISED, zn=zn, cc=cc,data=data)
 
 class CommandInvalidAtThisTime(ResponseException):
-    pass
+    def __init__(self, zn=None, cc=None, data=None):
+        super().__init__(ac=AnswerCodes.COMMAND_INVALID_AT_THIS_TIME, zn=zn, cc=cc,data=data)
 
 class InvalidDataLength(ResponseException):
-    pass
+    def __init__(self, zn=None, cc=None, data=None):
+        super().__init__(ac=AnswerCodes.INVALID_DATA_LENGTH, zn=zn, cc=cc,data=data)
 
 class InvalidPacket(ArcamException):
     pass

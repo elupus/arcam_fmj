@@ -1,7 +1,7 @@
 """Test with a fake server"""
 
 import asyncio
-from arcam.fmj import CommandCodes, AnswerCodes, ResponseException
+from arcam.fmj import CommandCodes, AnswerCodes, ResponseException, CommandNotRecognised
 from arcam.fmj.server import Server
 from arcam.fmj.client import Client
 from arcam.fmj.state import State
@@ -45,9 +45,8 @@ async def test_multiple(event_loop, server, client):
 
 @pytest.mark.asyncio
 async def test_invalid_command(event_loop, server, client):
-    with pytest.raises(ResponseException) as exc_info:
+    with pytest.raises(CommandNotRecognised):
         await client.request(0x01, 0xff, bytes([0xF0]))
-    assert exc_info.value.response.ac == AnswerCodes.COMMAND_NOT_RECOGNISED
 
 @pytest.mark.asyncio
 async def test_state(event_loop, server, client):

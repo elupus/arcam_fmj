@@ -117,7 +117,7 @@ class State():
                 data = await self._client.request(self._zn, cc, bytes([0xF0]))
                 self._state[cc] = data
             except ResponseException as e:
-                _LOGGER.debug("Response error skipping %s - %s", cc, e.response.ac)
+                _LOGGER.debug("Response error skipping %s - %s", cc, e.ac)
                 self._state[cc] = None
             except asyncio.TimeoutError:
                 _LOGGER.error("Timeout requesting %s", cc)
