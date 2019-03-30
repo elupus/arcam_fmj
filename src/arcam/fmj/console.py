@@ -6,7 +6,7 @@ import sys
 from .server import Server
 from .client import Client
 from .state import State
-from . import CommandCodes, AnswerCodes
+from . import CommandCodes, AnswerCodes, SourceCodes
 
 parser = argparse.ArgumentParser(description='Communicate with arcam receivers.')
 parser.add_argument('--verbose', action='store_true')
@@ -53,14 +53,24 @@ async def run_client(args):
                     await asyncio.sleep(delay=1)
 
 async def run_server(args):
-    async with Server(args.host, args.port) as server:
-        server.register_handler(0x01, CommandCodes.POWER, bytes([0xF0]),
-            lambda **kwargs: (AnswerCodes.STATUS_UPDATE, bytes([0x00]))
-        )
-        server.register_handler(0x01, CommandCodes.VOLUME, bytes([0xF0]),
-            lambda **kwargs: (AnswerCodes.STATUS_UPDATE, bytes([0x10]))
-        )
+    class DummyServer(Server):
+        def __init__(self, host, port):
+            super().__init__(host, port)
 
+            self.register_handler(0x01, CommandCodes.POWER, bytes([0xF0]), self.get_power)
+            self.register_handler(0x01, CommandCodes.VOLUME, bytes([0xF0]), self.get_volume)
+            self.register_handler(0x01, CommandCodes.CURRENT_SOURCE, bytes([0xF0]), self.get_source)
+
+        def get_power(self, **kwargs):
+            return bytes([1])
+
+        def get_volume(self, **kwargs):
+            return bytes([10])
+
+        def get_source(self, **kwargs):
+            return bytes([SourceCodes.PVR])
+
+    async with DummyServer(args.host, args.port):
         while True:
             await asyncio.sleep(delay=1)
 
