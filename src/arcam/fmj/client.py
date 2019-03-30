@@ -55,6 +55,13 @@ class Client:
             except:
                 _LOGGER.error("Error occured during packet processing", exc_info=1)
                 raise
+    @property
+    def connected(self):
+        return self._task is not None and not self._task.done()
+
+    @property
+    def started(self):
+        return self._task is not None
 
     async def start(self):
         _LOGGER.debug("Starting client")
