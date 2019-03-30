@@ -32,7 +32,7 @@ class Server():
 
             try:
                 if handler:
-                    ac, data = handler(
+                    data = handler(
                         zn=request.zn,
                         cc=request.cc,
                         data=request.data)
@@ -40,7 +40,7 @@ class Server():
                     response = ResponsePacket(
                         request.zn,
                         request.cc,
-                        ac,
+                        AnswerCodes.STATUS_UPDATE,
                         data)
                 else:
                     raise CommandNotRecognised()

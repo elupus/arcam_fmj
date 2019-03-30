@@ -16,10 +16,10 @@ _LOGGER = logging.getLogger(__name__)
 async def server(event_loop):
     async with Server('localhost', 8888) as s:
         s.register_handler(0x01, CommandCodes.POWER, bytes([0xF0]),
-            lambda **kwargs: (AnswerCodes.STATUS_UPDATE, bytes([0x00]))
+            lambda **kwargs: bytes([0x00])
         )
         s.register_handler(0x01, CommandCodes.VOLUME, bytes([0xF0]),
-            lambda **kwargs: (AnswerCodes.STATUS_UPDATE, bytes([0x01]))
+            lambda **kwargs: bytes([0x01])
         )
         yield s
 
