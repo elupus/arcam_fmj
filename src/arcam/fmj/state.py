@@ -22,12 +22,19 @@ class State():
         self._client = client
         self._state = dict()
 
-    async def __aenter__(self):
+    async def start(self):
         self._client._listen.add(self._listen)
+        await self.update()
+
+    async def stop(self):
+        self._client._listen.remove(self._listen)
+
+    async def __aenter__(self):
+        await self.start()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        self._client._listen.remove(self._listen)
+        await self.stop()
 
     def to_dict(self):
         return {
