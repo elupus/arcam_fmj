@@ -88,12 +88,22 @@ class State():
         if value:
             return MenuCodes.from_bytes(value)
 
-    def get_mute(self):
+    def get_mute(self) -> bool:
         value = self._state.get(CommandCodes.MUTE)
         if value:
-            return int.from_bytes(value, 'big')
+            return int.from_bytes(value, 'big') == 0
         else:
             return None
+
+    async def set_mute(self, mute: bool) -> None:
+        if mute:
+            command = 119
+        else:
+            command = 120
+
+        await self._client.request(
+            self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND,
+            bytes([16, command]))
 
     def get_source(self) -> SourceCodes:
         value = self._state.get(CommandCodes.CURRENT_SOURCE)
