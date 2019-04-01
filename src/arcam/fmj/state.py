@@ -74,19 +74,59 @@ class State():
         else:
             return None, None
 
-    def get_decode_mode_2ch(self):
+    def get_decode_mode_2ch(self) -> DecodeMode2CH:
         value = self._state.get(CommandCodes.DECODE_MODE_STATUS_2CH)
         if value:
             return DecodeMode2CH.from_bytes(value)
         else:
             return None
 
-    def get_decode_mode_mch(self):
+    async def set_decode_mode_2ch(self, mode: DecodeMode2CH):
+        if mode == DecodeMode2CH.STEREO:
+            command = RC5Codes.STEREO
+        elif mode == DecodeMode2CH.DOLBY_PLII_IIx_MOVIE:
+            command = RC5Codes.DOLBY_PLII_IIx_MOVIE
+        elif mode == DecodeMode2CH.DOLBY_PLII_IIx_MUSIC:
+            command = RC5Codes.DOLBY_PLII_IIx_MUSIC
+        elif mode == DecodeMode2CH.DOLBY_PLII_IIx_GAME:
+            command = RC5Codes.DOLBY_PLII_IIx_GAME
+        elif mode == DecodeMode2CH.DOLBY_PL:
+            command = RC5Codes.DOLBY_PL
+        elif mode == DecodeMode2CH.DTS_NEO_6_CINEMA:
+            command = RC5Codes.DTS_NEO_6_CINEMA
+        elif mode == DecodeMode2CH.DTS_NEO_6_MUSIC:
+            command = RC5Codes.DTS_NEO_6_MUSIC
+        elif mode == DecodeMode2CH.MCH_STEREO:
+            command = RC5Codes.MCH_STEREO
+        else:
+            raise ValueError("Unkown mapping for mode {}".format(mode))
+
+        await self._client.request(
+            self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command.value)
+
+    def get_decode_mode_mch(self) -> DecodeModeMCH:
         value = self._state.get(CommandCodes.DECODE_MODE_STATUS_MCH)
         if value:
             return DecodeModeMCH.from_bytes(value)
         else:
             return None
+
+    async def set_decode_mode_mch(self, mode: DecodeModeMCH):
+        if mode == DecodeModeMCH.STEREO_DOWNMIX:
+            command = RC5Codes.STEREO
+        elif mode == DecodeModeMCH.MULTI_CHANNEL:
+            command = RC5Codes.MULTI_CHANNEL
+        elif mode == DecodeModeMCH.DOLBY_D_EX_OR_DTS_ES:
+            command = RC5Codes.DOLBY_D_EX
+        elif mode == DecodeModeMCH.DOLBY_PLII_IIx_MOVIE:
+            command = RC5Codes.DOLBY_PLII_IIx_MOVIE
+        elif mode == DecodeModeMCH.DOLBY_PLII_IIx_MUSIC:
+            command = RC5Codes.DOLBY_PLII_IIx_MUSIC
+        else:
+            raise ValueError("Unkown mapping for mode {}".format(mode))
+
+        await self._client.request(
+            self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command.value)
 
     def get_power(self):
         value = self._state.get(CommandCodes.POWER)

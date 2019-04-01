@@ -231,12 +231,12 @@ class MenuCodes(enum.IntEnum):
 
 class DecodeMode2CH(enum.IntEnum):
     STEREO = 0x01
-    DOLBY_PLII_X_MOVIE = 0x02
-    DOLBY_PLII_X_MUSIC = 0x03
-    DOLBY_PLII_X_GAME = 0x05
+    DOLBY_PLII_IIx_MOVIE = 0x02
+    DOLBY_PLII_IIx_MUSIC = 0x03
+    DOLBY_PLII_IIx_GAME = 0x05
     DOLBY_PL = 0x06
-    NEO_6_CINEMA = 0x07
-    NEO_6_MUSIC = 0x08
+    DTS_NEO_6_CINEMA = 0x07
+    DTS_NEO_6_MUSIC = 0x08
     MCH_STEREO = 0x09
 
     @staticmethod
@@ -255,8 +255,8 @@ class DecodeModeMCH(enum.IntEnum):
     STEREO_DOWNMIX = 0x01
     MULTI_CHANNEL = 0x02
     DOLBY_D_EX_OR_DTS_ES = 0x03
-    DOLBY_PLIIx_MOVIE = 0x04
-    DOLBY_PLIIx_MUSIC = 0x05
+    DOLBY_PLII_IIx_MOVIE = 0x04
+    DOLBY_PLII_IIx_MUSIC = 0x05
 
     @staticmethod
     def from_int(v: int):
@@ -274,6 +274,18 @@ class RC5Codes(enum.Enum):
     DEC_VOLUME = bytes([16, 17])
     MUTE_ON = bytes([16,  119])
     MUTE_OFF = bytes([16,  120])
+    DIRECT_MODE_ON = bytes([16, 78])
+    DIRECT_MODE_OFF = bytes([16, 79])
+    DOLBY_PLII_IIx_GAME = bytes([16, 102])
+    DOLBY_PLII_IIx_MOVIE = bytes([16, 103])
+    DOLBY_PLII_IIx_MUSIC = bytes([16, 104])
+    MULTI_CHANNEL = bytes([16, 106])
+    STEREO = bytes([16, 107])
+    DOLBY_PL = bytes([16, 110])
+    DTS_NEO_6_CINEMA = bytes([16, 111])
+    DTS_NEO_6_MUSIC = bytes([16, 112])
+    MCH_STEREO = bytes([16, 69])
+    DOLBY_D_EX = bytes([16, 118])
 
 class IncomingAudioFormat(enum.IntEnum):
     PCM = 0x00
