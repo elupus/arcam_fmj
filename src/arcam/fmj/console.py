@@ -54,21 +54,35 @@ async def run_client(args):
 
 async def run_server(args):
     class DummyServer(Server):
+
         def __init__(self, host, port):
             super().__init__(host, port)
 
+            self._volume = bytes([10])
+            self._source = bytes([SourceCodes.PVR])
+
             self.register_handler(0x01, CommandCodes.POWER, bytes([0xF0]), self.get_power)
             self.register_handler(0x01, CommandCodes.VOLUME, bytes([0xF0]), self.get_volume)
+            self.register_handler(0x01, CommandCodes.VOLUME, None, self.set_volume)
             self.register_handler(0x01, CommandCodes.CURRENT_SOURCE, bytes([0xF0]), self.get_source)
+            self.register_handler(0x01, CommandCodes.CURRENT_SOURCE, None, self.set_source)
 
         def get_power(self, **kwargs):
             return bytes([1])
 
+        def set_volume(self, data, **kwargs):
+            self._volume = data
+            return self._volume
+
         def get_volume(self, **kwargs):
-            return bytes([10])
+            return self._volume
 
         def get_source(self, **kwargs):
-            return bytes([SourceCodes.PVR])
+            return self._source
+
+        def set_source(self, data, **kwargs):
+            self._source = data
+            return self._source
 
     async with DummyServer(args.host, args.port):
         while True:
