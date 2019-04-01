@@ -269,6 +269,11 @@ class DecodeModeMCH(enum.IntEnum):
     def from_bytes(v: bytes):
         return DecodeModeMCH.from_int(int.from_bytes(v, 'big'))
 
+class RC5Codes(enum.Enum):
+    INC_VOLUME = bytes([16, 16])
+    DEC_VOLUME = bytes([16, 17])
+    MUTE_ON = bytes([16,  119])
+    MUTE_OFF = bytes([16,  120])
 
 @attr.s
 class ResponsePacket(object):

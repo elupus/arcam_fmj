@@ -10,7 +10,8 @@ from . import (
     MenuCodes,
     ResponseException,
     ResponsePacket,
-    SourceCodes
+    SourceCodes,
+    RC5Codes
 )
 from .client import Client
 
@@ -97,13 +98,12 @@ class State():
 
     async def set_mute(self, mute: bool) -> None:
         if mute:
-            command = 119
+            command = RC5Codes.MUTE_ON.value
         else:
-            command = 120
+            command = RC5Codes.MUTE_OFF.value
 
         await self._client.request(
-            self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND,
-            bytes([16, command]))
+            self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command)
 
     def get_source(self) -> SourceCodes:
         value = self._state.get(CommandCodes.CURRENT_SOURCE)
@@ -127,6 +127,14 @@ class State():
     async def set_volume(self, volume: int) -> None:
         await self._client.request(
             self._zn, CommandCodes.VOLUME, bytes([volume]))
+
+    async def inc_volume(self) -> None:
+        await self._client.request(
+            self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, RC5Codes.INC_VOLUME.value)
+
+    async def dec_volume(self) -> None:
+        await self._client.request(
+            self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, RC5Codes.DEC_VOLUME.value)
 
     async def update(self):
         async def _update(cc):
