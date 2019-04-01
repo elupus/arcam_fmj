@@ -11,7 +11,9 @@ from . import (
     ResponseException,
     ResponsePacket,
     SourceCodes,
-    RC5Codes
+    RC5Codes,
+    IncomingAudioFormat,
+    IncomingAudioConfig,
 )
 from .client import Client
 
@@ -44,6 +46,7 @@ class State():
             'SOURCE': self.get_source(),
             'MUTE': self.get_mute(),
             'MENU': self.get_menu(),
+            'INCOMING_AUDIO_FORMAT': self.get_incoming_audio_format(),
             'DECODE_MODE_2CH': self.get_decode_mode_2ch(),
             'DECODE_MODE_MCH': self.get_decode_mode_mch(),
         }
@@ -62,6 +65,14 @@ class State():
 
     def get(self, cc):
         return self._state[cc]
+
+    def get_incoming_audio_format(self):
+        value = self._state.get(CommandCodes.INCOMING_AUDIO_FORMAT)
+        if value:
+            return (IncomingAudioFormat.from_int(value[0]),
+                    IncomingAudioConfig.from_int(value[1]))
+        else:
+            return None, None
 
     def get_decode_mode_2ch(self):
         value = self._state.get(CommandCodes.DECODE_MODE_STATUS_2CH)
@@ -155,4 +166,5 @@ class State():
             _update(CommandCodes.MENU),
             _update(CommandCodes.DECODE_MODE_STATUS_2CH),
             _update(CommandCodes.DECODE_MODE_STATUS_MCH),
+            _update(CommandCodes.INCOMING_AUDIO_FORMAT),
         ])

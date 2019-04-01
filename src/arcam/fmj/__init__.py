@@ -275,6 +275,47 @@ class RC5Codes(enum.Enum):
     MUTE_ON = bytes([16,  119])
     MUTE_OFF = bytes([16,  120])
 
+class IncomingAudioFormat(enum.IntEnum):
+    PCM = 0x00
+    ANALOGUE_DIRECT = 0x01
+    DOLBY_DIGITAL = 0x02
+    DOLBY_DIGITAL_EX = 0x03
+    DOLBY_DIGITAL_SURROUND = 0x04
+    DOLBY_DIGITAL_PLUS = 0x05
+    DOLBY_DIGITAL_TRUE_HD = 0x07
+    DTS_96_24 = 0x08
+    DTS_ES_MATRIX = 0x09
+    DTS_ES_DISCRETE = 0x0A
+    DTS_ES_MATRIX_96_24 = 0x0B
+    DTS_ES_DISCRETE_96_24 = 0x0C
+    DTS_HD_MASTER_AUDIO = 0x0D
+    DTS_HD_HIGH_RES_AUDIO = 0x0E
+    DTS_LOW_BIT_RATE = 0x0F
+    DTS_CORE=0x10
+    PCM_ZERO=0x13
+    UNSUPPORTED=0x14
+    UNDETECTED=0x15
+
+    @staticmethod
+    def from_int(v: int):
+        try:
+            return IncomingAudioFormat(v)
+        except ValueError:
+            return v
+
+class IncomingAudioConfig(enum.IntEnum):
+    MONO = 0x01
+    CENTER_ONLY = 0x01
+    STEREO_ONLY = 0x02
+    # Incomplete list...
+
+    @staticmethod
+    def from_int(v: int):
+        try:
+            return IncomingAudioConfig(v)
+        except ValueError:
+            return v
+
 @attr.s
 class ResponsePacket(object):
     zn = attr.ib(type=int)
