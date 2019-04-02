@@ -2,6 +2,7 @@
 import asyncio
 import logging
 import sys
+from contextlib import contextmanager
 from datetime import datetime, timedelta
 
 from . import (
@@ -29,7 +30,6 @@ class Client:
         self._listen = set()
         self._host = host
         self._port = port
-        self._lock = asyncio.Semaphore(2)  # limit to one outstanding request
         self._throttle = Throttle(_REQUEST_THROTTLE)
 
     async def __aenter__(self):
@@ -38,6 +38,12 @@ class Client:
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.stop()
+
+    @contextmanager
+    def listen(self, listener):
+        self._listen.add(listener)
+        yield self
+        self._listen.remove(listener)
 
     async def _process(self):
         while True:
@@ -100,14 +106,11 @@ class Client:
 
         await self._throttle.get()
 
-        async with self._lock:
-            _LOGGER.debug("Requesting %s", request)
-            self._listen.add(listen)
-            try:
-                await _write_packet(self._writer, request)
-                await asyncio.wait_for(event.wait(), _REQUEST_TIMEOUT)
-            finally:
-                self._listen.remove(listen)
+        _LOGGER.debug("Requesting %s", request)
+        with self.listen(listen):
+            await _write_packet(self._writer, request)
+            await asyncio.wait_for(event.wait(), _REQUEST_TIMEOUT)
+
         return result
 
     async def request(self, zn, cc, data):
