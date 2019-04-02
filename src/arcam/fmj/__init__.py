@@ -16,10 +16,7 @@ _LOGGER = logging.getLogger(__name__)
 class ArcamException(Exception):
     pass
 
-class NotConnectedException(ArcamException):
-    pass
-
-class ResponseException(ArcamException):
+class ResponseException(Exception):
     def __init__(self, ac=None, zn=None, cc=None, data=None):
         self.ac = ac
         self.zn = zn
