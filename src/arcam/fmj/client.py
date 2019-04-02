@@ -2,6 +2,7 @@
 import asyncio
 import logging
 import sys
+from contextlib import contextmanager
 from datetime import datetime, timedelta
 
 from . import (
@@ -11,7 +12,8 @@ from . import (
     ResponseException,
     ResponsePacket,
     _read_packet,
-    _write_packet
+    _write_packet,
+    NotConnectedException
 )
 from .utils import Throttle, async_retry
 
@@ -29,15 +31,46 @@ class Client:
         self._listen = set()
         self._host = host
         self._port = port
-        self._lock = asyncio.Semaphore(2)  # limit to one outstanding request
         self._throttle = Throttle(_REQUEST_THROTTLE)
+        self._condition = asyncio.Condition(loop=self._loop)
+
+    @contextmanager
+    def listen(self, listener):
+        self._listen.add(listener)
+        yield None
+        self._listen.remove(listener)
 
     async def __aenter__(self):
-        await self.start()
+        self._task = asyncio.ensure_future(self.run())
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        await self.stop()
+        self._task.cancel()
+        await asyncio.wait([self._task])
+
+    async def run(self):
+        await self._connect()
+        try:
+            await self._process()
+        finally:
+            await self._disconnect()
+
+    async def _connect(self):
+        async with self._condition:
+            self._reader, self._writer = await asyncio.open_connection(
+                self._host, self._port, loop=self._loop)
+            self._condition.notify_all()
+
+    async def _disconnect(self):
+        async with self._condition:
+            if self._writer:
+                self._writer.close()
+                if (sys.version_info >= (3, 7)):
+                    await self._writer.wait_closed()
+
+            self._writer = None
+            self._reader = None
+            self._condition.notify_all()
 
     async def _process(self):
         while True:
@@ -63,29 +96,6 @@ class Client:
     def started(self):
         return self._task is not None
 
-    async def start(self):
-        _LOGGER.debug("Starting client")
-        if self._task:
-            raise Exception("Already started")
-
-        self._reader, self._writer = await asyncio.open_connection(
-            self._host, self._port, loop=self._loop)
-
-        self._task = asyncio.ensure_future(
-            self._process(), loop=self._loop)
-
-    async def stop(self):
-        _LOGGER.debug("Stopping client")
-        if self._task:
-            self._task.cancel()
-            asyncio.wait(self._task)
-        self._writer.close()
-        if (sys.version_info >= (3, 7)):
-            await self._writer.wait_closed()
-
-        self._writer = None
-        self._reader = None
-
     @async_retry(2, asyncio.TimeoutError)
     async def _request(self, request: CommandPacket):
         result = None
@@ -98,16 +108,19 @@ class Client:
                 result = response
                 event.set()
 
+        async def req():
+            with self.listen(listen):
+                async with self._condition:
+                    await self._condition.wait_for(lambda: self._writer)
+                    await _write_packet(self._writer, request)
+
+                await event.wait()
+
         await self._throttle.get()
 
-        async with self._lock:
-            _LOGGER.debug("Requesting %s", request)
-            self._listen.add(listen)
-            try:
-                await _write_packet(self._writer, request)
-                await asyncio.wait_for(event.wait(), _REQUEST_TIMEOUT)
-            finally:
-                self._listen.remove(listen)
+        _LOGGER.debug("Requesting %s", request)
+        await asyncio.wait_for(req(), _REQUEST_TIMEOUT)
+
         return result
 
     async def request(self, zn, cc, data):
