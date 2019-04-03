@@ -20,6 +20,22 @@ _LOGGER = logging.getLogger(__name__)
 _REQUEST_TIMEOUT = 3
 _REQUEST_THROTTLE = 0.2
 
+class ClientContext:
+    def __init__(self, client):
+        self._client = client
+
+    async def __aenter__(self):
+        await self._client.start()
+        self._task = asyncio.ensure_future(
+            self._client.process(), loop=self._client._loop
+        )
+        return self._client
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        if self._task:
+            self._task.cancel()
+            asyncio.wait(self._task)
+        await self._client.stop()
 
 class Client:
     def __init__(self, host, port, loop=None) -> None:
@@ -45,7 +61,7 @@ class Client:
         yield self
         self._listen.remove(listener)
 
-    async def _process(self):
+    async def process(self):
         while True:
             try:
                 packet = await _read_packet(self._reader)
@@ -77,17 +93,12 @@ class Client:
         self._reader, self._writer = await asyncio.open_connection(
             self._host, self._port, loop=self._loop)
 
-        self._task = asyncio.ensure_future(
-            self._process(), loop=self._loop)
-
     async def stop(self):
         _LOGGER.debug("Stopping client")
-        if self._task:
-            self._task.cancel()
-            asyncio.wait(self._task)
-        self._writer.close()
-        if (sys.version_info >= (3, 7)):
-            await self._writer.wait_closed()
+        if self._writer:
+            self._writer.close()
+            if (sys.version_info >= (3, 7)):
+                await self._writer.wait_closed()
 
         self._writer = None
         self._reader = None
