@@ -3,10 +3,10 @@ import asyncio
 import logging
 import sys
 
-from .server import Server
+from . import AnswerCodes, CommandCodes, SourceCodes
 from .client import Client
+from .server import Server
 from .state import State
-from . import CommandCodes, AnswerCodes, SourceCodes
 
 parser = argparse.ArgumentParser(description='Communicate with arcam receivers.')
 parser.add_argument('--verbose', action='store_true')

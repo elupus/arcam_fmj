@@ -2,7 +2,14 @@
 import asyncio
 import logging
 
-from . import AnswerCodes, ResponsePacket, _read_command_packet, _write_packet, CommandNotRecognised, ResponseException
+from . import (
+    AnswerCodes,
+    CommandNotRecognised,
+    ResponseException,
+    ResponsePacket,
+    _read_command_packet,
+    _write_packet
+)
 
 _LOGGER = logging.getLogger(__name__)
 

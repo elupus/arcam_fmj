@@ -3,6 +3,7 @@ import pytest
 
 from arcam.fmj.utils import async_retry
 
+
 async def test_retry_fails():
 
     calls = 0

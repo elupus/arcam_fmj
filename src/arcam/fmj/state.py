@@ -7,13 +7,13 @@ from . import (
     CommandCodes,
     DecodeMode2CH,
     DecodeModeMCH,
+    IncomingAudioConfig,
+    IncomingAudioFormat,
     MenuCodes,
+    RC5Codes,
     ResponseException,
     ResponsePacket,
-    SourceCodes,
-    RC5Codes,
-    IncomingAudioFormat,
-    IncomingAudioConfig,
+    SourceCodes
 )
 from .client import Client
 

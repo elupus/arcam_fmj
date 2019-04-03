@@ -1,8 +1,17 @@
 """Standard tests for component"""
 import asyncio
-from arcam.fmj import _read_packet, ResponsePacket, InvalidPacket, _write_packet, CommandPacket
-import pytest
 from unittest.mock import MagicMock, call
+
+import pytest
+
+from arcam.fmj import (
+    CommandPacket,
+    InvalidPacket,
+    ResponsePacket,
+    _read_packet,
+    _write_packet
+)
+
 
 async def test_reader_valid(event_loop):
     reader = asyncio.StreamReader(loop=event_loop)
