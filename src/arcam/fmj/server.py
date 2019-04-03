@@ -60,7 +60,7 @@ class Server():
         else:
             self._handlers[(zn, cc)] = fun
 
-    async def __aenter__(self):
+    async def start(self):
         _LOGGER.debug("Starting server")
         self._server = await asyncio.start_server(
             self.process,
@@ -68,8 +68,20 @@ class Server():
             self._port)
         return self
 
+    async def stop(self):
+        if self._server:
+            _LOGGER.debug("Stopping server")
+            self._server.close()
+            await self._server.wait_closed()
+            self._server = None
+
+
+class ServerContext():
+    def __init__(self, server: Server):
+        self._server = server
+
+    async def __aenter__(self):
+        await self._server.start()
+
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        _LOGGER.debug("Stopping server")
-        self._server.close()
-        await self._server.wait_closed()
-        self._server = None
+        await self._server.stop()

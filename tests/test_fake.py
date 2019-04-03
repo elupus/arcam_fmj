@@ -2,7 +2,7 @@
 
 import asyncio
 from arcam.fmj import CommandCodes, AnswerCodes, ResponseException, CommandNotRecognised
-from arcam.fmj.server import Server
+from arcam.fmj.server import Server, ServerContext
 from arcam.fmj.client import Client, ClientContext
 from arcam.fmj.state import State
 import pytest
@@ -14,7 +14,8 @@ _LOGGER = logging.getLogger(__name__)
 @pytest.mark.asyncio
 @pytest.fixture
 async def server(event_loop):
-    async with Server('localhost', 8888) as s:
+    s = Server('localhost', 8888)
+    async with ServerContext(s):
         s.register_handler(0x01, CommandCodes.POWER, bytes([0xF0]),
             lambda **kwargs: bytes([0x00])
         )
