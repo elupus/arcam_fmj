@@ -20,23 +20,6 @@ _LOGGER = logging.getLogger(__name__)
 _REQUEST_TIMEOUT = 3
 _REQUEST_THROTTLE = 0.2
 
-class ClientContext:
-    def __init__(self, client):
-        self._client = client
-
-    async def __aenter__(self):
-        await self._client.start()
-        self._task = asyncio.ensure_future(
-            self._client.process(), loop=self._client._loop
-        )
-        return self._client
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        if self._task:
-            self._task.cancel()
-            asyncio.wait(self._task)
-        await self._client.stop()
-
 class Client:
     def __init__(self, host, port, loop=None) -> None:
         self._reader = None
@@ -131,3 +114,20 @@ class Client:
             return response.data
 
         raise ResponseException.from_response(response)
+
+class ClientContext:
+    def __init__(self, client: Client):
+        self._client = client
+
+    async def __aenter__(self):
+        await self._client.start()
+        self._task = asyncio.ensure_future(
+            self._client.process(), loop=self._client._loop
+        )
+        return self._client
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        if self._task:
+            self._task.cancel()
+            asyncio.wait(self._task)
+        await self._client.stop()
