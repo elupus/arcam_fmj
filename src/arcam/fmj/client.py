@@ -62,15 +62,15 @@ class Client:
                 raise
     @property
     def connected(self):
-        return self._task is not None and not self._task.done()
+        return self._reader is not None and not self._reader.at_eof()
 
     @property
     def started(self):
-        return self._task is not None
+        return self._writer is not None
 
     async def start(self):
         _LOGGER.debug("Starting client")
-        if self._task:
+        if self._writer:
             raise Exception("Already started")
 
         self._reader, self._writer = await asyncio.open_connection(
