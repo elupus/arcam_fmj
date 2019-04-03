@@ -31,13 +31,6 @@ class Client:
         self._port = port
         self._throttle = Throttle(_REQUEST_THROTTLE)
 
-    async def __aenter__(self):
-        await self.start()
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        await self.stop()
-
     @contextmanager
     def listen(self, listener):
         self._listen.add(listener)
