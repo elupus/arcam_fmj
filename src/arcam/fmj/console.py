@@ -4,8 +4,8 @@ import logging
 import sys
 
 from . import AnswerCodes, CommandCodes, SourceCodes
-from .client import Client
-from .server import Server
+from .client import Client, ClientContext
+from .server import Server, ServerContext
 from .state import State
 
 parser = argparse.ArgumentParser(description='Communicate with arcam receivers.')
@@ -28,7 +28,8 @@ parser_server.add_argument('--port', default=50000)
 
 
 async def run_client(args):
-    async with Client(args.host, args.port) as client:
+    client = Client(args.host, args.port)
+    async with ClientContext(client):
         state = State(client, args.zone)
 
         if args.volume is not None:
@@ -84,7 +85,8 @@ async def run_server(args):
             self._source = data
             return self._source
 
-    async with DummyServer(args.host, args.port):
+    s = DummyServer(args.host, args.port)
+    async with ServerContext(s):
         while True:
             await asyncio.sleep(delay=1)
 
