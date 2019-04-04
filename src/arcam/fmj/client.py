@@ -70,14 +70,13 @@ class Client:
             self._host, self._port, loop=self._loop)
 
     async def stop(self):
-        _LOGGER.debug("Stopping client")
         if self._writer:
+            _LOGGER.debug("Stopping client")
             self._writer.close()
             if (sys.version_info >= (3, 7)):
                 await self._writer.wait_closed()
-
-        self._writer = None
-        self._reader = None
+            self._writer = None
+            self._reader = None
 
     @async_retry(2, asyncio.TimeoutError)
     async def _request(self, request: CommandPacket):
