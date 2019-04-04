@@ -15,6 +15,8 @@ from arcam.fmj.state import State
 
 _LOGGER = logging.getLogger(__name__)
 
+# pylint: disable=redefined-outer-name
+
 @pytest.mark.asyncio
 @pytest.fixture
 async def server(event_loop):

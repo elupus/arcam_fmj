@@ -19,6 +19,9 @@ class ArcamException(Exception):
 class ConnectionFailed(ArcamException):
     pass
 
+class NotConnectedException(ArcamException):
+    pass
+
 class ResponseException(ArcamException):
     def __init__(self, ac=None, zn=None, cc=None, data=None):
         self.ac = ac

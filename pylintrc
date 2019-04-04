@@ -50,7 +50,7 @@ generated-members=botocore.errorfactory
 expected-line-ending-format=LF
 
 [EXCEPTIONS]
-overgeneral-exceptions=Exception,HomeAssistantError
+overgeneral-exceptions=Exception
 
 [BASIC]
 good-names=ac,zn,cc,e,s,c

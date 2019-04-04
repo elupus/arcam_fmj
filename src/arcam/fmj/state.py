@@ -26,10 +26,12 @@ class State():
         self._state = dict()
 
     async def start(self):
+        # pylint: disable=protected-access
         self._client._listen.add(self._listen)
         await self.update()
 
     async def stop(self):
+        # pylint: disable=protected-access
         self._client._listen.remove(self._listen)
 
     async def __aenter__(self):

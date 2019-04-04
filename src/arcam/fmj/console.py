@@ -8,6 +8,8 @@ from .client import Client, ClientContext
 from .server import Server, ServerContext
 from .state import State
 
+# pylint: disable=invalid-name
+
 parser = argparse.ArgumentParser(description='Communicate with arcam receivers.')
 parser.add_argument('--verbose', action='store_true')
 
