@@ -6,7 +6,7 @@ setup(
     description='A python library for speaking to Arcam receivers',
     license='MIT',
     packages=find_packages('src'),
-    package_dir = {'': 'src'},
+    package_dir={'': 'src'},
     python_requires='>3.5',
     author='Joakim Plate',
     install_requires=[
@@ -21,8 +21,8 @@ setup(
             'coveralls'
         ]
     },
-    entry_points = {
-        'console_scripts' : ['arcam-fmj=arcam.fmj.console:main']
+    entry_points={
+        'console_scripts':['arcam-fmj=arcam.fmj.console:main']
     },
     url='https://github.com/elupus/arcam_fmj',
     classifiers=[

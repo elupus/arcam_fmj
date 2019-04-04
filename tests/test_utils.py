@@ -32,7 +32,7 @@ async def test_retry_succeeds():
             raise Exception()
         return True
 
-    assert await tester() == True
+    assert await tester()
 
 
 async def test_retry_unexpected():

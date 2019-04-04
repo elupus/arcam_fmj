@@ -3,7 +3,7 @@ import asyncio
 import logging
 import sys
 
-from . import AnswerCodes, CommandCodes, SourceCodes
+from . import CommandCodes, SourceCodes
 from .client import Client, ClientContext
 from .server import Server, ServerContext
 from .state import State
@@ -41,7 +41,7 @@ async def run_client(args):
         if args.state:
             await state.update()
             print(state)
- 
+
         if args.monitor:
             async with state:
                 prev = repr(state)
@@ -85,8 +85,8 @@ async def run_server(args):
             self._source = data
             return self._source
 
-    s = DummyServer(args.host, args.port)
-    async with ServerContext(s):
+    server = DummyServer(args.host, args.port)
+    async with ServerContext(server):
         while True:
             await asyncio.sleep(delay=1)
 
@@ -98,16 +98,16 @@ def main():
         root = logging.getLogger()
         root.setLevel(logging.DEBUG)
 
-        ch = logging.StreamHandler(sys.stdout)
-        ch.setLevel(logging.DEBUG)
+        channel = logging.StreamHandler(sys.stdout)
+        channel.setLevel(logging.DEBUG)
         formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        ch.setFormatter(formatter)
-        root.addHandler(ch)
+        channel.setFormatter(formatter)
+        root.addHandler(channel)
 
 
     loop = asyncio.get_event_loop()
 
     if args.command == 'client':
-        loop.run_until_complete (run_client(args))
+        loop.run_until_complete(run_client(args))
     elif args.command == 'server':
-        loop.run_until_complete (run_server(args))
+        loop.run_until_complete(run_server(args))

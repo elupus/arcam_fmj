@@ -3,11 +3,9 @@ import asyncio
 import logging
 import sys
 from contextlib import contextmanager
-from datetime import datetime, timedelta
 
 from . import (
     AnswerCodes,
-    CommandCodes,
     CommandPacket,
     ConnectionFailed,
     ResponseException,
@@ -40,6 +38,10 @@ class Client:
     def port(self):
         return self._port
 
+    @property
+    def loop(self):
+        return self._loop
+
     @contextmanager
     def listen(self, listener):
         self._listen.add(listener)
@@ -55,8 +57,8 @@ class Client:
                     return
 
                 _LOGGER.debug("Packet received: %s", packet)
-                for l in self._listen:
-                    l(packet)
+                for listener in self._listen:
+                    listener(packet)
             except asyncio.CancelledError:
                 raise
             except:
@@ -85,7 +87,7 @@ class Client:
         if self._writer:
             _LOGGER.debug("Stopping client")
             self._writer.close()
-            if (sys.version_info >= (3, 7)):
+            if sys.version_info >= (3, 7):
                 await self._writer.wait_closed()
             self._writer = None
             self._reader = None
@@ -93,11 +95,11 @@ class Client:
     @async_retry(2, asyncio.TimeoutError)
     async def _request(self, request: CommandPacket):
         result = None
-        event  = asyncio.Event()
+        event = asyncio.Event()
 
         def listen(response: ResponsePacket):
-            if (response.zn == request.zn and 
-                response.cc == request.cc):
+            if (response.zn == request.zn and
+                    response.cc == request.cc):
                 nonlocal result
                 result = response
                 event.set()
@@ -122,11 +124,13 @@ class Client:
 class ClientContext:
     def __init__(self, client: Client):
         self._client = client
+        self._task = None
 
     async def __aenter__(self):
         await self._client.start()
         self._task = asyncio.ensure_future(
-            self._client.process(), loop=self._client._loop
+            self._client.process(),
+            loop=self._client.loop
         )
         return self._client
 

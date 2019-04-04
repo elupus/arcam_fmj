@@ -31,43 +31,48 @@ class ResponseException(ArcamException):
 
     @staticmethod
     def from_response(response: 'ResponsePacket'):
-        kw = {
+        kwargs = {
             'zn': response.zn,
             'cc': response.cc,
             'data': response.data
         }
         if response.ac == AnswerCodes.ZONE_INVALID:
-            return InvalidZoneException(**kw)
+            return InvalidZoneException(**kwargs)
         elif response.ac == AnswerCodes.COMMAND_NOT_RECOGNISED:
-            return CommandNotRecognised(**kw)
+            return CommandNotRecognised(**kwargs)
         elif response.ac == AnswerCodes.PARAMETER_NOT_RECOGNISED:
-            return ParameterNotRecognised(**kw)
+            return ParameterNotRecognised(**kwargs)
         elif response.ac == AnswerCodes.COMMAND_INVALID_AT_THIS_TIME:
-            return CommandInvalidAtThisTime(**kw)
+            return CommandInvalidAtThisTime(**kwargs)
         elif response.ac == AnswerCodes.INVALID_DATA_LENGTH:
-            return InvalidDataLength(**kw)
+            return InvalidDataLength(**kwargs)
         else:
-            return ResponseException(ac=response.ac, **kw)
+            return ResponseException(ac=response.ac, **kwargs)
 
 class InvalidZoneException(ResponseException):
     def __init__(self, zn=None, cc=None, data=None):
-        super().__init__(ac=AnswerCodes.ZONE_INVALID, zn=zn, cc=cc,data=data)
+        super().__init__(ac=AnswerCodes.ZONE_INVALID,
+                         zn=zn, cc=cc, data=data)
 
 class CommandNotRecognised(ResponseException):
     def __init__(self, zn=None, cc=None, data=None):
-        super().__init__(ac=AnswerCodes.COMMAND_NOT_RECOGNISED, zn=zn, cc=cc,data=data)
+        super().__init__(ac=AnswerCodes.COMMAND_NOT_RECOGNISED,
+                         zn=zn, cc=cc, data=data)
 
 class ParameterNotRecognised(ResponseException):
     def __init__(self, zn=None, cc=None, data=None):
-        super().__init__(ac=AnswerCodes.PARAMETER_NOT_RECOGNISED, zn=zn, cc=cc,data=data)
+        super().__init__(ac=AnswerCodes.PARAMETER_NOT_RECOGNISED,
+                         zn=zn, cc=cc, data=data)
 
 class CommandInvalidAtThisTime(ResponseException):
     def __init__(self, zn=None, cc=None, data=None):
-        super().__init__(ac=AnswerCodes.COMMAND_INVALID_AT_THIS_TIME, zn=zn, cc=cc,data=data)
+        super().__init__(ac=AnswerCodes.COMMAND_INVALID_AT_THIS_TIME,
+                         zn=zn, cc=cc, data=data)
 
 class InvalidDataLength(ResponseException):
     def __init__(self, zn=None, cc=None, data=None):
-        super().__init__(ac=AnswerCodes.INVALID_DATA_LENGTH, zn=zn, cc=cc,data=data)
+        super().__init__(ac=AnswerCodes.INVALID_DATA_LENGTH,
+                         zn=zn, cc=cc, data=data)
 
 class InvalidPacket(ArcamException):
     pass
@@ -81,11 +86,11 @@ class AnswerCodes(enum.IntEnum):
     INVALID_DATA_LENGTH = 0x86
 
     @staticmethod
-    def from_int(v: int):
+    def from_int(value: int):
         try:
-            return AnswerCodes(v)
+            return AnswerCodes(value)
         except ValueError:
-            return v
+            return value
 
 
 class CommandCodes(enum.IntEnum):
@@ -173,11 +178,11 @@ class CommandCodes(enum.IntEnum):
 
 
     @staticmethod
-    def from_int(v: int):
+    def from_int(value: int):
         try:
-            return CommandCodes(v)
+            return CommandCodes(value)
         except ValueError:
-            return v
+            return value
 
 class SourceCodes(enum.IntEnum):
     FOLLOW_ZONE_1 = 0x00
@@ -197,15 +202,15 @@ class SourceCodes(enum.IntEnum):
     GAME = 0x11
 
     @staticmethod
-    def from_int(v: int):
+    def from_int(value: int):
         try:
-            return SourceCodes(v)
+            return SourceCodes(value)
         except ValueError:
-            return v
+            return value
 
     @staticmethod
-    def from_bytes(v: bytes):
-        return SourceCodes.from_int(int.from_bytes(v, 'big'))
+    def from_bytes(value: bytes):
+        return SourceCodes.from_int(int.from_bytes(value, 'big'))
 
 
 class MenuCodes(enum.IntEnum):
@@ -221,15 +226,15 @@ class MenuCodes(enum.IntEnum):
     USB = 0x0A
 
     @staticmethod
-    def from_int(v: int):
+    def from_int(value: int):
         try:
-            return MenuCodes(v)
+            return MenuCodes(value)
         except ValueError:
-            return v
+            return value
 
     @staticmethod
-    def from_bytes(v: bytes):
-        return MenuCodes.from_int(int.from_bytes(v, 'big'))
+    def from_bytes(value: bytes):
+        return MenuCodes.from_int(int.from_bytes(value, 'big'))
 
 
 class DecodeMode2CH(enum.IntEnum):
@@ -243,15 +248,15 @@ class DecodeMode2CH(enum.IntEnum):
     MCH_STEREO = 0x09
 
     @staticmethod
-    def from_int(v: int):
+    def from_int(value: int):
         try:
-            return DecodeMode2CH(v)
+            return DecodeMode2CH(value)
         except ValueError:
-            return v
+            return value
 
     @staticmethod
-    def from_bytes(v: bytes):
-        return DecodeMode2CH.from_int(int.from_bytes(v, 'big'))
+    def from_bytes(value: bytes):
+        return DecodeMode2CH.from_int(int.from_bytes(value, 'big'))
 
 
 class DecodeModeMCH(enum.IntEnum):
@@ -262,21 +267,21 @@ class DecodeModeMCH(enum.IntEnum):
     DOLBY_PLII_IIx_MUSIC = 0x05
 
     @staticmethod
-    def from_int(v: int):
+    def from_int(value: int):
         try:
-            return DecodeModeMCH(v)
+            return DecodeModeMCH(value)
         except ValueError:
-            return v
+            return value
 
     @staticmethod
-    def from_bytes(v: bytes):
-        return DecodeModeMCH.from_int(int.from_bytes(v, 'big'))
+    def from_bytes(value: bytes):
+        return DecodeModeMCH.from_int(int.from_bytes(value, 'big'))
 
 class RC5Codes(enum.Enum):
     INC_VOLUME = bytes([16, 16])
     DEC_VOLUME = bytes([16, 17])
-    MUTE_ON = bytes([16,  119])
-    MUTE_OFF = bytes([16,  120])
+    MUTE_ON = bytes([16, 119])
+    MUTE_OFF = bytes([16, 120])
     DIRECT_MODE_ON = bytes([16, 78])
     DIRECT_MODE_OFF = bytes([16, 79])
     DOLBY_PLII_IIx_GAME = bytes([16, 102])
@@ -306,33 +311,35 @@ class IncomingAudioFormat(enum.IntEnum):
     DTS_HD_MASTER_AUDIO = 0x0D
     DTS_HD_HIGH_RES_AUDIO = 0x0E
     DTS_LOW_BIT_RATE = 0x0F
-    DTS_CORE=0x10
-    PCM_ZERO=0x13
-    UNSUPPORTED=0x14
-    UNDETECTED=0x15
+    DTS_CORE = 0x10
+    PCM_ZERO = 0x13
+    UNSUPPORTED = 0x14
+    UNDETECTED = 0x15
 
     @staticmethod
-    def from_int(v: int):
+    def from_int(value: int):
         try:
-            return IncomingAudioFormat(v)
+            return IncomingAudioFormat(value)
         except ValueError:
-            return v
+            return value
 
 class IncomingAudioConfig(enum.IntEnum):
+    """List of possible audio configurations."""
     MONO = 0x01
     CENTER_ONLY = 0x01
     STEREO_ONLY = 0x02
     # Incomplete list...
 
     @staticmethod
-    def from_int(v: int):
+    def from_int(value: int):
         try:
-            return IncomingAudioConfig(v)
+            return IncomingAudioConfig(value)
         except ValueError:
-            return v
+            return value
 
 @attr.s
-class ResponsePacket(object):
+class ResponsePacket():
+    """Represent a response from device."""
     zn = attr.ib(type=int)
     cc = attr.ib(type=int)
     ac = attr.ib(type=int)
@@ -364,9 +371,10 @@ class ResponsePacket(object):
         ])
 
 @attr.s
-class CommandPacket(object):
-    zn   = attr.ib(type=int)
-    cc   = attr.ib(type=int)
+class CommandPacket():
+    """Represent a command sent to device."""
+    zn = attr.ib(type=int)
+    cc = attr.ib(type=int)
     data = attr.ib(type=bytes)
 
     def to_bytes(self):
@@ -403,10 +411,10 @@ async def _read_delimited(reader: asyncio.StreamReader, header_len: int) -> byte
             _LOGGER.warning("unexpected str byte %s", start)
             continue
 
-        header   = await reader.read(header_len-1)
+        header = await reader.read(header_len-1)
         data_len = await reader.read(1)
-        data     = await reader.read(int.from_bytes(data_len, 'big'))
-        etr      = await reader.read(1)
+        data = await reader.read(int.from_bytes(data_len, 'big'))
+        etr = await reader.read(1)
 
         if etr != PROTOCOL_ETR:
             _LOGGER.warning("unexpected etr byte %s", etr)
@@ -417,21 +425,21 @@ async def _read_delimited(reader: asyncio.StreamReader, header_len: int) -> byte
 
 async def _read_packet(reader: asyncio.StreamReader) -> ResponsePacket:
     data = await _read_delimited(reader, 4)
-    if data:
-        return ResponsePacket.from_bytes(data)
-    else:
+    if not data:
         return None
+    return ResponsePacket.from_bytes(data)
 
 
 async def _read_command_packet(reader: asyncio.StreamReader) -> CommandPacket:
     data = await _read_delimited(reader, 3)
-    if data:
-        return CommandPacket.from_bytes(data)
-    else:
+    if not data:
         return None
+    return CommandPacket.from_bytes(data)
 
 
-async def _write_packet(writer: asyncio.StreamWriter, packet: Union[CommandPacket, ResponsePacket]) -> None:
-    b = packet.to_bytes()
-    writer.write(b)
+async def _write_packet(writer: asyncio.StreamWriter,
+                        packet: Union[CommandPacket,
+                                      ResponsePacket]) -> None:
+    data = packet.to_bytes()
+    writer.write(data)
     await writer.drain()

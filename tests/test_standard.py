@@ -18,7 +18,7 @@ async def test_reader_valid(event_loop):
     reader.feed_data(b'\x21\x01\x08\x00\x02\x10\x10\x0D')
     reader.feed_eof()
     packet = await _read_packet(reader)
-    assert packet == ResponsePacket(1, 8 , 0, b'\x10\x10')
+    assert packet == ResponsePacket(1, 8, 0, b'\x10\x10')
 
 
 async def test_reader_invalid_data(event_loop):

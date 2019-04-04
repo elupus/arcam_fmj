@@ -2,15 +2,12 @@
 
 import asyncio
 import logging
-from unittest.mock import MagicMock, call
 
 import pytest
 
 from arcam.fmj import (
-    AnswerCodes,
     CommandCodes,
-    CommandNotRecognised,
-    ResponseException
+    CommandNotRecognised
 )
 from arcam.fmj.client import Client, ClientContext
 from arcam.fmj.server import Server, ServerContext
@@ -23,10 +20,12 @@ _LOGGER = logging.getLogger(__name__)
 async def server(event_loop):
     s = Server('localhost', 8888)
     async with ServerContext(s):
-        s.register_handler(0x01, CommandCodes.POWER, bytes([0xF0]),
+        s.register_handler(
+            0x01, CommandCodes.POWER, bytes([0xF0]),
             lambda **kwargs: bytes([0x00])
         )
-        s.register_handler(0x01, CommandCodes.VOLUME, bytes([0xF0]),
+        s.register_handler(
+            0x01, CommandCodes.VOLUME, bytes([0xF0]),
             lambda **kwargs: bytes([0x01])
         )
         yield s

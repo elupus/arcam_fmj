@@ -27,39 +27,39 @@ class Server():
             if request is None:
                 _LOGGER.debug("Client disconnected")
                 return
-            
+
             response = await self.process_request(request)
             _LOGGER.debug("Client command %s -> %s", request, response)
             await _write_packet(writer, response)
 
     async def process_request(self, request):
-            handler = self._handlers.get((request.zn, request.cc, request.data))
-            if handler is None:
-                handler = self._handlers.get((request.zn, request.cc))
+        handler = self._handlers.get((request.zn, request.cc, request.data))
+        if handler is None:
+            handler = self._handlers.get((request.zn, request.cc))
 
-            try:
-                if handler:
-                    data = handler(
-                        zn=request.zn,
-                        cc=request.cc,
-                        data=request.data)
+        try:
+            if handler:
+                data = handler(
+                    zn=request.zn,
+                    cc=request.cc,
+                    data=request.data)
 
-                    response = ResponsePacket(
-                        request.zn,
-                        request.cc,
-                        AnswerCodes.STATUS_UPDATE,
-                        data)
-                else:
-                    raise CommandNotRecognised()
-            except ResponseException as e:
                 response = ResponsePacket(
                     request.zn,
                     request.cc,
-                    e.ac,
-                    e.data or bytes(),
-                )
+                    AnswerCodes.STATUS_UPDATE,
+                    data)
+            else:
+                raise CommandNotRecognised()
+        except ResponseException as e:
+            response = ResponsePacket(
+                request.zn,
+                request.cc,
+                e.ac,
+                e.data or bytes(),
+            )
 
-            return response
+        return response
 
     def register_handler(self, zn, cc, data, fun):
         if data:
