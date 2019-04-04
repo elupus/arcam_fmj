@@ -29,7 +29,6 @@ class State():
     async def start(self):
         # pylint: disable=protected-access
         self._client._listen.add(self._listen)
-        await self.update()
 
     async def stop(self):
         # pylint: disable=protected-access
