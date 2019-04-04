@@ -298,6 +298,11 @@ class RC5Codes(enum.Enum):
     MCH_STEREO = bytes([16, 69])
     DOLBY_D_EX = bytes([16, 118])
 
+    MUTE_ON_ZONE2 = bytes([23, 4])
+    MUTE_OFF_ZONE2 = bytes([23, 5])
+    INC_VOLUME_ZONE2 = bytes([23, 1])
+    DEC_VOLUME_ZONE2 = bytes([23, 2])
+
 class IncomingAudioFormat(enum.IntEnum):
     PCM = 0x00
     ANALOGUE_DIRECT = 0x01

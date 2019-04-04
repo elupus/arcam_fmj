@@ -152,12 +152,18 @@ class State():
 
     async def set_mute(self, mute: bool) -> None:
         if mute:
-            command = RC5Codes.MUTE_ON.value
+            if self._zn == 1:
+                command = RC5Codes.MUTE_ON
+            else:
+                command = RC5Codes.MUTE_ON_ZONE2
         else:
-            command = RC5Codes.MUTE_OFF.value
+            if self._zn == 1:
+                command = RC5Codes.MUTE_OFF
+            else:
+                command = RC5Codes.MUTE_OFF_ZONE2
 
         await self._client.request(
-            self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command)
+            self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command.value)
 
     def get_source(self) -> SourceCodes:
         value = self._state.get(CommandCodes.CURRENT_SOURCE)
@@ -183,12 +189,22 @@ class State():
             self._zn, CommandCodes.VOLUME, bytes([volume]))
 
     async def inc_volume(self) -> None:
+        if self._zn == 1:
+            command = RC5Codes.INC_VOLUME
+        else:
+            command = RC5Codes.INC_VOLUME_ZONE2
+
         await self._client.request(
-            self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, RC5Codes.INC_VOLUME.value)
+            self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command.value)
 
     async def dec_volume(self) -> None:
+        if self._zn == 1:
+            command = RC5Codes.DEC_VOLUME
+        else:
+            command = RC5Codes.DEC_VOLUME_ZONE2
+
         await self._client.request(
-            self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, RC5Codes.DEC_VOLUME.value)
+            self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command.value)
 
     async def update(self):
         async def _update(cc):
