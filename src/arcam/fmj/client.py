@@ -9,6 +9,7 @@ from . import (
     AnswerCodes,
     CommandCodes,
     CommandPacket,
+    ConnectionFailed,
     ResponseException,
     ResponsePacket,
     _read_packet,
@@ -62,12 +63,15 @@ class Client:
         return self._writer is not None
 
     async def start(self):
-        _LOGGER.debug("Starting client")
         if self._writer:
             raise Exception("Already started")
 
-        self._reader, self._writer = await asyncio.open_connection(
-            self._host, self._port, loop=self._loop)
+        _LOGGER.debug("Starting client to %s:%d", self._host, self._port)
+        try:
+            self._reader, self._writer = await asyncio.open_connection(
+                self._host, self._port, loop=self._loop)
+        except (ConnectionError, OSError):
+            raise ConnectionFailed()
 
     async def stop(self):
         if self._writer:
