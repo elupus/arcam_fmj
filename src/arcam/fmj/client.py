@@ -32,6 +32,14 @@ class Client:
         self._port = port
         self._throttle = Throttle(_REQUEST_THROTTLE)
 
+    @property
+    def host(self):
+        return self._host
+
+    @property
+    def port(self):
+        return self._port
+
     @contextmanager
     def listen(self, listener):
         self._listen.add(listener)
