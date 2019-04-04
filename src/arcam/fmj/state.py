@@ -220,13 +220,18 @@ class State():
             except asyncio.TimeoutError:
                 _LOGGER.error("Timeout requesting %s", cc)
 
-        await asyncio.wait([
-            _update(CommandCodes.POWER),
-            _update(CommandCodes.VOLUME),
-            _update(CommandCodes.MUTE),
-            _update(CommandCodes.CURRENT_SOURCE),
-            _update(CommandCodes.MENU),
-            _update(CommandCodes.DECODE_MODE_STATUS_2CH),
-            _update(CommandCodes.DECODE_MODE_STATUS_MCH),
-            _update(CommandCodes.INCOMING_AUDIO_FORMAT),
-        ])
+        if self._client.connected:
+            await asyncio.wait([
+                _update(CommandCodes.POWER),
+                _update(CommandCodes.VOLUME),
+                _update(CommandCodes.MUTE),
+                _update(CommandCodes.CURRENT_SOURCE),
+                _update(CommandCodes.MENU),
+                _update(CommandCodes.DECODE_MODE_STATUS_2CH),
+                _update(CommandCodes.DECODE_MODE_STATUS_MCH),
+                _update(CommandCodes.INCOMING_AUDIO_FORMAT),
+            ])
+        else:
+            if self._state:
+                self._state = dict()
+
