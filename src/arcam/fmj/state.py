@@ -10,6 +10,7 @@ from . import (
     IncomingAudioConfig,
     IncomingAudioFormat,
     MenuCodes,
+    NotConnectedException,
     RC5Codes,
     ResponseException,
     ResponsePacket,
@@ -196,6 +197,9 @@ class State():
                 self._state[cc] = data
             except ResponseException as e:
                 _LOGGER.debug("Response error skipping %s - %s", cc, e.ac)
+                self._state[cc] = None
+            except NotConnectedException as e:
+                _LOGGER.debug("Not connected skipping %s", cc)
                 self._state[cc] = None
             except asyncio.TimeoutError:
                 _LOGGER.error("Timeout requesting %s", cc)

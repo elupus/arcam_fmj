@@ -8,6 +8,7 @@ from . import (
     AnswerCodes,
     CommandPacket,
     ConnectionFailed,
+    NotConnectedException,
     ResponseException,
     ResponsePacket,
     _read_packet,
@@ -50,6 +51,9 @@ class Client:
 
     async def process(self):
         while True:
+            if not self._reader:
+                raise NotConnectedException()
+
             try:
                 packet = await _read_packet(self._reader)
                 if packet is None:
@@ -94,6 +98,9 @@ class Client:
 
     @async_retry(2, asyncio.TimeoutError)
     async def _request(self, request: CommandPacket):
+        if not self._writer:
+            raise NotConnectedException()
+
         result = None
         event = asyncio.Event()
 
