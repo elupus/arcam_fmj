@@ -2,7 +2,7 @@ from setuptools import find_packages, setup
 
 setup(
     name='arcam-fmj',
-    version='0.1.0',
+    version='0.2.0',
     description='A python library for speaking to Arcam receivers',
     license='MIT',
     packages=find_packages('src'),
