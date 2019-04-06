@@ -52,4 +52,4 @@ Code to set volume and source using console.
 .. code-block:: bash
 
 
-    arcam-fmj client --host 192.168.0.2 --port 50000 --source 5 --volume 50
+    arcam-fmj state --host 192.168.0.2 --port 50000 --source 5 --volume 50

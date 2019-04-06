@@ -10,19 +10,32 @@ from .state import State
 
 # pylint: disable=invalid-name
 
+def auto_int(x):
+    return int(x, 0)
+
+def auto_bytes(x):
+    print(x)
+    return bytes.decode(x)
+
 parser = argparse.ArgumentParser(description='Communicate with arcam receivers.')
 parser.add_argument('--verbose', action='store_true')
 
-subparsers = parser.add_subparsers(dest="command")
+subparsers = parser.add_subparsers(dest="subcommand")
+
+parser_state = subparsers.add_parser('state')
+parser_state.add_argument('--host', required=True)
+parser_state.add_argument('--port', default=50000)
+parser_state.add_argument('--zone', default=1, type=int)
+parser_state.add_argument('--volume', type=int)
+parser_state.add_argument('--source', type=auto_int)
+parser_state.add_argument('--monitor', action='store_true')
 
 parser_client = subparsers.add_parser('client')
 parser_client.add_argument('--host', required=True)
 parser_client.add_argument('--port', default=50000)
 parser_client.add_argument('--zone', default=1, type=int)
-parser_client.add_argument('--volume', type=int)
-parser_client.add_argument('--source', type=int)
-parser_client.add_argument('--state', action='store_true')
-parser_client.add_argument('--monitor', action='store_true')
+parser_client.add_argument('--command', type=auto_int)
+parser_client.add_argument('--data', nargs='+', default=[0xF0], type=auto_int)
 
 parser_server = subparsers.add_parser('server')
 parser_server.add_argument('--host', default='localhost')
@@ -32,6 +45,12 @@ parser_server.add_argument('--port', default=50000)
 async def run_client(args):
     client = Client(args.host, args.port)
     async with ClientContext(client):
+        result = await client.request(args.zone, args.command, bytes(args.data))
+        print(result)
+
+async def run_state(args):
+    client = Client(args.host, args.port)
+    async with ClientContext(client):
         state = State(client, args.zone)
 
         if args.volume is not None:
@@ -39,10 +58,6 @@ async def run_client(args):
 
         if args.source is not None:
             await state.set_source(args.source)
-
-        if args.state:
-            await state.update()
-            print(state)
 
         if args.monitor:
             async with state:
@@ -54,6 +69,10 @@ async def run_client(args):
                         print(curr)
                         prev = curr
                     await asyncio.sleep(delay=1)
+        else:
+            await state.update()
+            print(state)
+
 
 async def run_server(args):
     class DummyServer(Server):
@@ -124,7 +143,9 @@ def main():
 
     loop = asyncio.get_event_loop()
 
-    if args.command == 'client':
+    if args.subcommand == 'client':
         loop.run_until_complete(run_client(args))
-    elif args.command == 'server':
+    elif args.subcommand == 'state':
+        loop.run_until_complete(run_state(args))
+    elif args.subcommand == 'server':
         loop.run_until_complete(run_server(args))
