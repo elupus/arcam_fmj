@@ -14,7 +14,9 @@ from . import (
     RC5Codes,
     ResponseException,
     ResponsePacket,
-    SourceCodes
+    SourceCodes,
+    SOURCECODE_TO_RC5CODE_ZONE1,
+    SOURCECODE_TO_RC5CODE_ZONE2,
 )
 from .client import Client
 
@@ -176,8 +178,14 @@ class State():
             return None
 
     async def set_source(self, src: SourceCodes) -> None:
+
+        if self._zn == 1:
+            command = SOURCECODE_TO_RC5CODE_ZONE1[src]
+        else:
+            command = SOURCECODE_TO_RC5CODE_ZONE2[src]
+
         await self._client.request(
-            self._zn, CommandCodes.CURRENT_SOURCE, bytes([src]))
+            self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command.value)
 
     def get_volume(self) -> int:
         value = self._state.get(CommandCodes.VOLUME)
