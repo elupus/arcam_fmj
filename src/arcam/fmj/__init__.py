@@ -131,8 +131,8 @@ class CommandCodes(enum.IntEnum):
     MENU = 0x14  # Request
     TUNER_PRESET = 0x15  # Set/Request
     TUNE = 0x16  # Set/Request
-    DAB_STATION = 0x17  # Set/Request
-    DAB_PROGRAM_TYPE_CATEGORY = 0x18  # Set/Request
+    DAB_STATION = 0x18  # Set/Request
+    DAB_PROGRAM_TYPE_CATEGORY = 0x19  # Set/Request
     DLS_PDT_INFO = 0x1A  # Request
     PRESET_DETAIL = 0x1B # Request
 
