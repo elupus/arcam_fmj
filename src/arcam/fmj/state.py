@@ -51,6 +51,9 @@ class State():
             'INCOMING_AUDIO_FORMAT': self.get_incoming_audio_format(),
             'DECODE_MODE_2CH': self.get_decode_mode_2ch(),
             'DECODE_MODE_MCH': self.get_decode_mode_mch(),
+            'DAB_STATION': self.get_dab_station(),
+            'DLS_PDT': self.get_dls_pdt(),
+            'RDS_INFORMATION': self.get_rds_information(),
         }
 
     def __repr__(self):
@@ -205,6 +208,24 @@ class State():
         await self._client.request(
             self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command.value)
 
+    def get_dab_station(self):
+        value = self._state.get(CommandCodes.DAB_STATION)
+        if value is None:
+            return None
+        return value.decode('utf8').rstrip()
+
+    def get_dls_pdt(self):
+        value = self._state.get(CommandCodes.DLS_PDT_INFO)
+        if value is None:
+            return None
+        return value.decode('utf8').rstrip()
+
+    def get_rds_information(self):
+        value = self._state.get(CommandCodes.RDS_INFORMATION)
+        if value is None:
+            return None
+        return value.decode('utf8').rstrip()
+
     async def update(self):
         async def _update(cc):
             try:
@@ -229,6 +250,9 @@ class State():
                 _update(CommandCodes.DECODE_MODE_STATUS_2CH),
                 _update(CommandCodes.DECODE_MODE_STATUS_MCH),
                 _update(CommandCodes.INCOMING_AUDIO_FORMAT),
+                _update(CommandCodes.DAB_STATION),
+                _update(CommandCodes.DLS_PDT_INFO),
+                _update(CommandCodes.RDS_INFORMATION),
             ])
         else:
             if self._state:
