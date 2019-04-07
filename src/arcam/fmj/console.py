@@ -63,7 +63,7 @@ async def run_state(args):
             async with state:
                 prev = repr(state)
                 await state.update()
-                while True:
+                while client.connected:
                     curr = repr(state)
                     if prev != curr:
                         print(curr)

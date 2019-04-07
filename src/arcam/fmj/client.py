@@ -6,6 +6,7 @@ from contextlib import contextmanager
 
 from . import (
     AnswerCodes,
+    CommandCodes,
     CommandPacket,
     ConnectionFailed,
     NotConnectedException,
@@ -19,6 +20,9 @@ from .utils import Throttle, async_retry
 _LOGGER = logging.getLogger(__name__)
 _REQUEST_TIMEOUT = 3
 _REQUEST_THROTTLE = 0.2
+_READ_TIMEOUT = 3
+_READ_TIMEOUT_PINGS = 2
+_WRITE_TIMEOUT = 3
 
 class Client:
     def __init__(self, host, port, loop=None) -> None:
@@ -50,28 +54,37 @@ class Client:
         self._listen.remove(listener)
 
     async def process(self):
-        while True:
-            if not self._reader:
-                raise NotConnectedException()
+        timeouts = 0
+        try:
+            while True:
+                if not self._reader:
+                    raise NotConnectedException()
 
-            try:
-                packet = await _read_packet(self._reader)
-                if packet is None:
-                    _LOGGER.debug("Server disconnected")
-                    return
+                try:
+                    packet = await _read_packet(self._reader)
+                    if packet is None:
+                        _LOGGER.debug("Server disconnected")
+                        return
 
-                _LOGGER.debug("Packet received: %s", packet)
-                for listener in self._listen:
-                    listener(packet)
-            except asyncio.CancelledError:
-                raise
-            except ConnectionError as exception:
-                raise ConnectionFailed() from exception
-            except OSError as exception:
-                raise ConnectionFailed() from exception
-            except:
-                _LOGGER.error("Error occured during packet processing", exc_info=1)
-                raise
+                    timeouts = 0
+                    _LOGGER.debug("Packet received: %s", packet)
+                    for listener in self._listen:
+                        listener(packet)
+                except asyncio.TimeoutError as exception:
+                    if timeouts < _READ_TIMEOUT_PINGS:
+                        if timeouts > 0:
+                            _LOGGER.warning("Missing response to ping")
+
+                        timeouts += 1
+                        await _write_packet(
+                            self._writer,
+                            CommandPacket(1, CommandCodes.POWER, bytes([0xF0])))
+                    else:
+                        _LOGGER.warning("Missed all pings")
+                        raise ConnectionFailed() from exception
+        finally:
+            self._reader = None
+
     @property
     def connected(self):
         return self._reader is not None and not self._reader.at_eof()
@@ -132,12 +145,7 @@ class Client:
         return result
 
     async def request(self, zn, cc, data):
-        try:
-            response = await self._request(CommandPacket(zn, cc, data))
-        except ConnectionError as exception:
-            raise ConnectionFailed() from exception
-        except OSError as exception:
-            raise ConnectionFailed() from exception
+        response = await self._request(CommandPacket(zn, cc, data))
 
         if response.ac == AnswerCodes.STATUS_UPDATE:
             return response.data

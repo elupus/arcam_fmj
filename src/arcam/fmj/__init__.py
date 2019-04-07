@@ -12,6 +12,8 @@ PROTOCOL_ETR = b'\x0D'
 PROTOCOL_EOF = b''
 
 _LOGGER = logging.getLogger(__name__)
+_WRITE_TIMEOUT = 3
+_READ_TIMEOUT = 3
 
 class ArcamException(Exception):
     pass
@@ -467,37 +469,49 @@ class CommandPacket():
             data[4:4+data[3]])
 
 async def _read_delimited(reader: asyncio.StreamReader, header_len: int) -> bytes:
-    while True:
-        start = await reader.read(1)
-        if start == PROTOCOL_EOF:
-            _LOGGER.debug("eof")
-            return None
+    try:
+        while True:
+            start = await reader.read(1)
+            if start == PROTOCOL_EOF:
+                _LOGGER.debug("eof")
+                return None
 
-        if start != PROTOCOL_STR:
-            _LOGGER.warning("unexpected str byte %s", start)
-            continue
+            if start != PROTOCOL_STR:
+                _LOGGER.warning("unexpected str byte %s", start)
+                continue
 
-        header = await reader.read(header_len-1)
-        data_len = await reader.read(1)
-        data = await reader.read(int.from_bytes(data_len, 'big'))
-        etr = await reader.read(1)
+            header = await reader.read(header_len-1)
+            data_len = await reader.read(1)
+            data = await reader.read(int.from_bytes(data_len, 'big'))
+            etr = await reader.read(1)
 
-        if etr != PROTOCOL_ETR:
-            _LOGGER.warning("unexpected etr byte %s", etr)
-            continue
+            if etr != PROTOCOL_ETR:
+                _LOGGER.warning("unexpected etr byte %s", etr)
+                continue
 
-        packet = bytes([*start, *header, *data_len, *data, *etr])
-        return packet
+            packet = bytes([*start, *header, *data_len, *data, *etr])
+            return packet
+    except TimeoutError as exception:
+        raise ConnectionFailed() from exception
+    except ConnectionError as exception:
+        raise ConnectionFailed() from exception
+    except OSError as exception:
+        raise ConnectionFailed() from exception
+
 
 async def _read_packet(reader: asyncio.StreamReader) -> ResponsePacket:
-    data = await _read_delimited(reader, 4)
+    data = await asyncio.wait_for(
+        _read_delimited(reader, 4),
+        _READ_TIMEOUT)
     if not data:
         return None
     return ResponsePacket.from_bytes(data)
 
 
 async def _read_command_packet(reader: asyncio.StreamReader) -> CommandPacket:
-    data = await _read_delimited(reader, 3)
+    data = await asyncio.wait_for(
+        _read_delimited(reader, 3),
+        _READ_TIMEOUT)
     if not data:
         return None
     return CommandPacket.from_bytes(data)
@@ -506,6 +520,13 @@ async def _read_command_packet(reader: asyncio.StreamReader) -> CommandPacket:
 async def _write_packet(writer: asyncio.StreamWriter,
                         packet: Union[CommandPacket,
                                       ResponsePacket]) -> None:
-    data = packet.to_bytes()
-    writer.write(data)
-    await writer.drain()
+    try:
+        data = packet.to_bytes()
+        writer.write(data)
+        await asyncio.wait_for(writer.drain(), _WRITE_TIMEOUT)
+    except asyncio.TimeoutError as exception:
+        raise ConnectionFailed() from exception
+    except ConnectionError as exception:
+        raise ConnectionFailed() from exception
+    except OSError as exception:
+        raise ConnectionFailed() from exception
