@@ -34,6 +34,19 @@ async def server(event_loop):
 
 @pytest.mark.asyncio
 @pytest.fixture
+async def silent_server(event_loop):
+    s = Server('localhost', 8888)
+
+    async def process(reader, writer):
+        while True:
+            if await reader.read(1) == bytes([]):
+                break
+    s.process = process
+    async with ServerContext(s):
+        yield s
+
+@pytest.mark.asyncio
+@pytest.fixture
 async def client(event_loop):
     c = Client("localhost", 8888, loop=event_loop)
     async with ClientContext(c):
@@ -64,3 +77,8 @@ async def test_state(event_loop, server, client):
     await state.update()
     assert state.get(CommandCodes.POWER) == bytes([0x00])
     assert state.get(CommandCodes.VOLUME) == bytes([0x01])
+
+@pytest.mark.asyncio
+async def test_silent_server(event_loop, silent_server, client):
+    with pytest.raises(asyncio.TimeoutError):
+        await client.request(0x01, CommandCodes.POWER, bytes([0xF0]))
