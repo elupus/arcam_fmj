@@ -65,6 +65,8 @@ class Client:
                     listener(packet)
             except asyncio.CancelledError:
                 raise
+            except (ConnectionError, OSError):
+                raise ConnectionFailed()
             except:
                 _LOGGER.error("Error occured during packet processing", exc_info=1)
                 raise
@@ -89,12 +91,15 @@ class Client:
 
     async def stop(self):
         if self._writer:
-            _LOGGER.debug("Stopping client")
-            self._writer.close()
-            if sys.version_info >= (3, 7):
-                await self._writer.wait_closed()
-            self._writer = None
-            self._reader = None
+            try:
+                _LOGGER.debug("Stopping client")
+                self._writer.close()
+                if sys.version_info >= (3, 7):
+                    await self._writer.wait_closed()
+                self._writer = None
+                self._reader = None
+            except (ConnectionError, OSError):
+                raise ConnectionFailed()
 
     @async_retry(2, asyncio.TimeoutError)
     async def _request(self, request: CommandPacket):
@@ -121,7 +126,10 @@ class Client:
         return result
 
     async def request(self, zn, cc, data):
-        response = await self._request(CommandPacket(zn, cc, data))
+        try:
+            response = await self._request(CommandPacket(zn, cc, data))
+        except (ConnectionError, OSError):
+            raise ConnectionFailed()
 
         if response.ac == AnswerCodes.STATUS_UPDATE:
             return response.data
