@@ -65,8 +65,10 @@ class Client:
                     listener(packet)
             except asyncio.CancelledError:
                 raise
-            except (ConnectionError, OSError):
-                raise ConnectionFailed()
+            except ConnectionError as exception:
+                raise ConnectionFailed() from exception
+            except OSError as exception:
+                raise ConnectionFailed() from exception
             except:
                 _LOGGER.error("Error occured during packet processing", exc_info=1)
                 raise
@@ -86,8 +88,10 @@ class Client:
         try:
             self._reader, self._writer = await asyncio.open_connection(
                 self._host, self._port, loop=self._loop)
-        except (ConnectionError, OSError):
-            raise ConnectionFailed()
+        except ConnectionError as exception:
+            raise ConnectionFailed() from exception
+        except OSError as exception:
+            raise ConnectionFailed() from exception
 
     async def stop(self):
         if self._writer:
@@ -98,8 +102,10 @@ class Client:
                     await self._writer.wait_closed()
                 self._writer = None
                 self._reader = None
-            except (ConnectionError, OSError):
-                raise ConnectionFailed()
+            except ConnectionError as exception:
+                raise ConnectionFailed() from exception
+            except OSError as exception:
+                raise ConnectionFailed() from exception
 
     @async_retry(2, asyncio.TimeoutError)
     async def _request(self, request: CommandPacket):
@@ -128,8 +134,10 @@ class Client:
     async def request(self, zn, cc, data):
         try:
             response = await self._request(CommandPacket(zn, cc, data))
-        except (ConnectionError, OSError):
-            raise ConnectionFailed()
+        except ConnectionError as exception:
+            raise ConnectionFailed() from exception
+        except OSError as exception:
+            raise ConnectionFailed() from exception
 
         if response.ac == AnswerCodes.STATUS_UPDATE:
             return response.data
