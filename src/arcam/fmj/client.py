@@ -2,7 +2,9 @@
 import asyncio
 import logging
 import sys
+from datetime import datetime, timedelta
 from contextlib import contextmanager
+from aionursery import Nursery
 
 from . import (
     AnswerCodes,
@@ -18,11 +20,14 @@ from . import (
 from .utils import Throttle, async_retry
 
 _LOGGER = logging.getLogger(__name__)
-_REQUEST_TIMEOUT = 3
+_REQUEST_TIMEOUT = timedelta(seconds=3)
 _REQUEST_THROTTLE = 0.2
 _READ_TIMEOUT = 3
 _READ_TIMEOUT_PINGS = 2
 _WRITE_TIMEOUT = 3
+
+_HEARTBEAT_INTERVAL = timedelta(seconds=5)
+_HEARTBEAT_TIMEOUT  = _HEARTBEAT_INTERVAL + _HEARTBEAT_INTERVAL
 
 class Client:
     def __init__(self, host, port, loop=None) -> None:
@@ -34,6 +39,7 @@ class Client:
         self._host = host
         self._port = port
         self._throttle = Throttle(_REQUEST_THROTTLE)
+        self._timestamp = datetime.now()
 
     @property
     def host(self):
@@ -53,37 +59,48 @@ class Client:
         yield self
         self._listen.remove(listener)
 
-    async def process(self):
-        timeouts = 0
+    async def _process_heartbeat(self):
+        while True:
+            delay = self._timestamp + _HEARTBEAT_INTERVAL - datetime.now()
+            if delay > timedelta():
+                await asyncio.sleep(delay.total_seconds())
+            else:
+                _LOGGER.info("Sending ping")
+                await _write_packet(
+                    self._writer,
+                    CommandPacket(1, CommandCodes.POWER, bytes([0xF0]))
+                )
+                self._timestamp = datetime.now()
+
+    async def _process_data(self):
         try:
             while True:
                 if not self._reader:
                     raise NotConnectedException()
 
                 try:
-                    packet = await _read_packet(self._reader)
-                    if packet is None:
-                        _LOGGER.debug("Server disconnected")
-                        return
-
-                    timeouts = 0
-                    _LOGGER.debug("Packet received: %s", packet)
-                    for listener in self._listen:
-                        listener(packet)
+                    packet = await asyncio.wait_for(
+                        _read_packet(self._reader),
+                        _HEARTBEAT_TIMEOUT.total_seconds()
+                    )
                 except asyncio.TimeoutError as exception:
-                    if timeouts < _READ_TIMEOUT_PINGS:
-                        if timeouts > 0:
-                            _LOGGER.warning("Missing response to ping")
+                    _LOGGER.warning("Missed all pings")
+                    raise ConnectionFailed() from exception
 
-                        timeouts += 1
-                        await _write_packet(
-                            self._writer,
-                            CommandPacket(1, CommandCodes.POWER, bytes([0xF0])))
-                    else:
-                        _LOGGER.warning("Missed all pings")
-                        raise ConnectionFailed() from exception
+                if packet is None:
+                    _LOGGER.debug("Server disconnected")
+                    return
+
+                _LOGGER.debug("Packet received: %s", packet)
+                for listener in self._listen:
+                    listener(packet)
         finally:
             self._reader = None
+
+    async def process(self):
+        async with Nursery() as nursery:
+            nursery.start_soon(self._process_data())
+            nursery.start_soon(self._process_heartbeat())
 
     @property
     def connected(self):
@@ -140,7 +157,8 @@ class Client:
         _LOGGER.debug("Requesting %s", request)
         with self.listen(listen):
             await _write_packet(self._writer, request)
-            await asyncio.wait_for(event.wait(), _REQUEST_TIMEOUT)
+            self._timestamp = datetime.now()
+            await asyncio.wait_for(event.wait(), _REQUEST_TIMEOUT.total_seconds())
 
         return result
 

@@ -500,18 +500,14 @@ async def _read_delimited(reader: asyncio.StreamReader, header_len: int) -> byte
 
 
 async def _read_packet(reader: asyncio.StreamReader) -> ResponsePacket:
-    data = await asyncio.wait_for(
-        _read_delimited(reader, 4),
-        _READ_TIMEOUT)
+    data = await _read_delimited(reader, 4)
     if not data:
         return None
     return ResponsePacket.from_bytes(data)
 
 
 async def _read_command_packet(reader: asyncio.StreamReader) -> CommandPacket:
-    data = await asyncio.wait_for(
-        _read_delimited(reader, 3),
-        _READ_TIMEOUT)
+    data = await _read_delimited(reader, 3)
     if not data:
         return None
     return CommandPacket.from_bytes(data)

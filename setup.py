@@ -12,13 +12,16 @@ setup(
     install_requires=[
         'asyncio',
         'attrs>18.1',
+        'aionursery'
     ],
     extras_require={
         'tests': [
             'pytest>3.6.4',
             'pytest-asyncio',
             'pytest-cov<2.6',
-            'coveralls'
+            'coveralls',
+            'pytest-mock'
+            'asynctest'
         ]
     },
     entry_points={

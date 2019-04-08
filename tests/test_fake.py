@@ -2,8 +2,10 @@
 
 import asyncio
 import logging
-
+import asynctest
+import unittest
 import pytest
+from datetime import timedelta
 
 from arcam.fmj import (
     CommandCodes,
@@ -82,3 +84,18 @@ async def test_state(event_loop, server, client):
 async def test_silent_server(event_loop, silent_server, client):
     with pytest.raises(asyncio.TimeoutError):
         await client.request(0x01, CommandCodes.POWER, bytes([0xF0]))
+
+@pytest.mark.asyncio
+@pytest.fixture
+async def speedy_client(mocker):
+    mocker.patch('arcam.fmj.client._HEARTBEAT_INTERVAL', new=timedelta(seconds=1))
+
+@pytest.mark.asyncio
+async def test_heartbeat(event_loop, speedy_client, server, client):
+    with asynctest.mock.patch.object(
+            server,
+            'process_request',
+            wraps=server.process_request) as req:
+        from arcam.fmj.client import _HEARTBEAT_INTERVAL
+        await asyncio.sleep(_HEARTBEAT_INTERVAL.total_seconds()+1.0)
+        req.assert_called_once()
