@@ -4,7 +4,7 @@ import logging
 import sys
 from datetime import datetime, timedelta
 from contextlib import contextmanager
-from aionursery import Nursery
+from aionursery import Nursery, MultiError
 
 from . import (
     AnswerCodes,
@@ -95,9 +95,13 @@ class Client:
             self._reader = None
 
     async def process(self):
-        async with Nursery() as nursery:
-            nursery.start_soon(self._process_data())
-            nursery.start_soon(self._process_heartbeat())
+        try:
+            async with Nursery() as nursery:
+                nursery.start_soon(self._process_data())
+                nursery.start_soon(self._process_heartbeat())
+        except MultiError as e:
+            if len(e.exceptions) == 1:
+                raise e.exceptions[0] from e
 
     @property
     def connected(self):
