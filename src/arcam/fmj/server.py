@@ -42,7 +42,6 @@ class Server():
             _LOGGER.debug("Client command %s -> %s", request, response)
             await _write_packet(writer, response)
 
-
     async def process_request(self, request):
         handler = self._handlers.get((request.zn, request.cc, request.data))
         if handler is None:
