@@ -20,7 +20,7 @@ setup(
             'pytest-asyncio',
             'pytest-cov<2.6',
             'coveralls',
-            'pytest-mock'
+            'pytest-mock',
             'asynctest'
         ]
     },
