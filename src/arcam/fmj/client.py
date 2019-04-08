@@ -139,25 +139,25 @@ class Client:
         if not self._writer:
             raise NotConnectedException()
 
-        result = None
-        event = asyncio.Event()
+        future = asyncio.Future()
 
         def listen(response: ResponsePacket):
             if (response.zn == request.zn and
                     response.cc == request.cc):
-                nonlocal result
-                result = response
-                event.set()
+                future.set_result(response)
 
         await self._throttle.get()
 
-        _LOGGER.debug("Requesting %s", request)
-        with self.listen(listen):
-            await _write_packet(self._writer, request)
-            self._timestamp = datetime.now()
-            await asyncio.wait_for(event.wait(), _REQUEST_TIMEOUT.total_seconds())
+        async def req():
+            _LOGGER.debug("Requesting %s", request)
+            with self.listen(listen):
+                await _write_packet(self._writer, request)
+                self._timestamp = datetime.now()
+                return await future
 
-        return result
+        return await asyncio.wait_for(
+            req(),
+            _REQUEST_TIMEOUT.total_seconds())
 
     async def request(self, zn, cc, data):
         response = await self._request(CommandPacket(zn, cc, data))
