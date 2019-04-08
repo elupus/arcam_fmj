@@ -55,6 +55,12 @@ async def client(event_loop):
         yield c
 
 @pytest.mark.asyncio
+@pytest.fixture
+async def speedy_client(mocker):
+    mocker.patch('arcam.fmj.client._HEARTBEAT_INTERVAL', new=timedelta(seconds=1))
+    mocker.patch('arcam.fmj.client._REQUEST_TIMEOUT', new=timedelta(seconds=0.5))
+
+@pytest.mark.asyncio
 async def test_power(event_loop, server, client):
     data = await client.request(0x01, CommandCodes.POWER, bytes([0xF0]))
     assert data == bytes([0x00])
@@ -81,14 +87,9 @@ async def test_state(event_loop, server, client):
     assert state.get(CommandCodes.VOLUME) == bytes([0x01])
 
 @pytest.mark.asyncio
-async def test_silent_server(event_loop, silent_server, client):
+async def test_silent_server(event_loop, speedy_client, silent_server, client):
     with pytest.raises(asyncio.TimeoutError):
         await client.request(0x01, CommandCodes.POWER, bytes([0xF0]))
-
-@pytest.mark.asyncio
-@pytest.fixture
-async def speedy_client(mocker):
-    mocker.patch('arcam.fmj.client._HEARTBEAT_INTERVAL', new=timedelta(seconds=1))
 
 @pytest.mark.asyncio
 async def test_heartbeat(event_loop, speedy_client, server, client):
