@@ -43,7 +43,7 @@ async def silent_server(event_loop):
         while True:
             if await reader.read(1) == bytes([]):
                 break
-    s.process = process
+    s.process_runner = process
     async with ServerContext(s):
         yield s
 

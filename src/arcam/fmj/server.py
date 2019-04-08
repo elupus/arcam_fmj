@@ -15,13 +15,23 @@ _LOGGER = logging.getLogger(__name__)
 
 class Server():
     def __init__(self, host: str, port: int) -> None:
-        self._server = None
+        self._server = None  # type: Optional[asyncio.Server]
         self._host = host
         self._port = port
         self._handlers = dict()
+        self._tasks = list()
 
     async def process(self, reader, writer):
         _LOGGER.debug("Client connected")
+        task = asyncio.Task.current_task()
+        self._tasks.append(task)
+        try:
+            await self.process_runner(reader, writer)
+        finally:
+            _LOGGER.debug("Client disconnected")
+            self._tasks.remove(task)
+
+    async def process_runner(self, reader, writer):
         while True:
             request = await _read_command_packet(reader)
             if request is None:
@@ -31,6 +41,7 @@ class Server():
             response = await self.process_request(request)
             _LOGGER.debug("Client command %s -> %s", request, response)
             await _write_packet(writer, response)
+
 
     async def process_request(self, request):
         handler = self._handlers.get((request.zn, request.cc, request.data))
@@ -81,6 +92,11 @@ class Server():
             self._server.close()
             await self._server.wait_closed()
             self._server = None
+        
+        _LOGGER.debug("Cancelling clients %s", self._tasks)
+        for task in self._tasks:
+            task.cancel()
+        await asyncio.wait(self._tasks)
 
 
 class ServerContext():
