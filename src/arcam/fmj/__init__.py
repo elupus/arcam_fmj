@@ -316,6 +316,7 @@ class RC5Codes(enum.Enum):
     DOLBY_D_EX = bytes([16, 118])
     POWER_ON = bytes([16, 123])
     POWER_OFF = bytes([16, 124])
+    FOLLOW_ZONE_1 = bytes([16, 20])
 
     MUTE_ON_ZONE2 = bytes([23, 4])
     MUTE_OFF_ZONE2 = bytes([23, 5])
@@ -365,6 +366,7 @@ SOURCECODE_TO_RC5CODE_ZONE2 = {
     SourceCodes.PVR: RC5Codes.SELECT_PVR_ZONE2,
     SourceCodes.USB: RC5Codes.SELECT_USB_ZONE2,
     SourceCodes.NET: RC5Codes.SELECT_NET_ZONE2,
+    SourceCodes.FOLLOW_ZONE_1: RC5Codes.FOLLOW_ZONE_1
 }
 
 class IncomingAudioFormat(enum.IntEnum):
