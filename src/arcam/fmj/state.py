@@ -1,6 +1,7 @@
 """Zone state"""
 import asyncio
 import logging
+from typing import List
 
 from . import (
     AnswerCodes,
@@ -190,6 +191,12 @@ class State():
             return None
         return SourceCodes.from_int(
             int.from_bytes(value, 'big'))
+
+    def get_source_list(self) -> List[SourceCodes]:
+        if self._zn == 1:
+            return list(SOURCECODE_TO_RC5CODE_ZONE1.keys())
+        else:
+            return list(SOURCECODE_TO_RC5CODE_ZONE2.keys())
 
     async def set_source(self, src: SourceCodes) -> None:
 
