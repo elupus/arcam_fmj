@@ -142,6 +142,21 @@ class State():
         else:
             return None
 
+    async def set_power(self, power: bool) -> None:
+        if power:
+            if self._zn == 1:
+                command = RC5Codes.POWER_ON
+            else:
+                command = RC5Codes.POWER_ON_ZONE2
+        else:
+            if self._zn == 1:
+                command = RC5Codes.POWER_OFF
+            else:
+                command = RC5Codes.POWER_OFF_ZONE2
+
+        await self._client.request(
+            self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command.value)
+
     def get_menu(self) -> MenuCodes:
         value = self._state.get(CommandCodes.MENU)
         if value:

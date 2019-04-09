@@ -314,6 +314,8 @@ class RC5Codes(enum.Enum):
     DTS_NEO_6_MUSIC = bytes([16, 112])
     MCH_STEREO = bytes([16, 69])
     DOLBY_D_EX = bytes([16, 118])
+    POWER_ON = bytes([16, 123])
+    POWER_OFF = bytes([16, 124])
 
     MUTE_ON_ZONE2 = bytes([23, 4])
     MUTE_OFF_ZONE2 = bytes([23, 5])
@@ -331,6 +333,8 @@ class RC5Codes(enum.Enum):
     SELECT_DAB_ZONE2 = bytes([23, 16])
     SELECT_USB_ZONE2 = bytes([23, 18])
     SELECT_NET_ZONE2 = bytes([23, 19])
+    POWER_ON_ZONE2 = bytes([23, 123])
+    POWER_OFF_ZONE2 = bytes([23, 124])
 
 SOURCECODE_TO_RC5CODE_ZONE1 = {
     SourceCodes.STB: RC5Codes.SELECT_STB,
