@@ -70,6 +70,10 @@ class State():
         else:
             self._state[packet.cc] = None
 
+    @property
+    def zn(self):
+        return self._zn
+
     def get(self, cc):
         return self._state[cc]
 
