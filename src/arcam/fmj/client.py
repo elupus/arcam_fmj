@@ -145,7 +145,8 @@ class Client:
         def listen(response: ResponsePacket):
             if (response.zn == request.zn and
                     response.cc == request.cc):
-                future.set_result(response)
+                if not future.cancelled():
+                    future.set_result(response)
 
         await self._throttle.get()
 
