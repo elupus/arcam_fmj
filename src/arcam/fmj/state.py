@@ -79,18 +79,16 @@ class State():
 
     def get_incoming_audio_format(self):
         value = self._state.get(CommandCodes.INCOMING_AUDIO_FORMAT)
-        if value:
-            return (IncomingAudioFormat.from_int(value[0]),
-                    IncomingAudioConfig.from_int(value[1]))
-        else:
+        if value is None:
             return None, None
+        return (IncomingAudioFormat.from_int(value[0]),
+                IncomingAudioConfig.from_int(value[1]))
 
     def get_decode_mode_2ch(self) -> DecodeMode2CH:
         value = self._state.get(CommandCodes.DECODE_MODE_STATUS_2CH)
-        if value:
-            return DecodeMode2CH.from_bytes(value)
-        else:
+        if value is None:
             return None
+        return DecodeMode2CH.from_bytes(value)
 
     async def set_decode_mode_2ch(self, mode: DecodeMode2CH):
         if mode == DecodeMode2CH.STEREO:
@@ -117,10 +115,9 @@ class State():
 
     def get_decode_mode_mch(self) -> DecodeModeMCH:
         value = self._state.get(CommandCodes.DECODE_MODE_STATUS_MCH)
-        if value:
-            return DecodeModeMCH.from_bytes(value)
-        else:
+        if value is None:
             return None
+        return DecodeModeMCH.from_bytes(value)
 
     async def set_decode_mode_mch(self, mode: DecodeModeMCH):
         if mode == DecodeModeMCH.STEREO_DOWNMIX:
@@ -141,10 +138,9 @@ class State():
 
     def get_power(self):
         value = self._state.get(CommandCodes.POWER)
-        if value:
-            return int.from_bytes(value, 'big')
-        else:
+        if value is None:
             return None
+        return int.from_bytes(value, 'big')
 
     async def set_power(self, power: bool) -> None:
         if power:
@@ -163,15 +159,15 @@ class State():
 
     def get_menu(self) -> MenuCodes:
         value = self._state.get(CommandCodes.MENU)
-        if value:
-            return MenuCodes.from_bytes(value)
+        if value is None:
+            return None
+        return MenuCodes.from_bytes(value)
 
     def get_mute(self) -> bool:
         value = self._state.get(CommandCodes.MUTE)
-        if value:
-            return int.from_bytes(value, 'big') == 0
-        else:
+        if value is None:
             return None
+        return int.from_bytes(value, 'big') == 0
 
     async def set_mute(self, mute: bool) -> None:
         if mute:
@@ -190,11 +186,10 @@ class State():
 
     def get_source(self) -> SourceCodes:
         value = self._state.get(CommandCodes.CURRENT_SOURCE)
-        if value:
-            return SourceCodes.from_int(
-                int.from_bytes(value, 'big'))
-        else:
+        if value is None:
             return None
+        return SourceCodes.from_int(
+            int.from_bytes(value, 'big'))
 
     async def set_source(self, src: SourceCodes) -> None:
 
@@ -208,10 +203,9 @@ class State():
 
     def get_volume(self) -> int:
         value = self._state.get(CommandCodes.VOLUME)
-        if value:
-            return int.from_bytes(value, 'big')
-        else:
+        if value is None:
             return None
+        return int.from_bytes(value, 'big')
 
     async def set_volume(self, volume: int) -> None:
         await self._client.request(
