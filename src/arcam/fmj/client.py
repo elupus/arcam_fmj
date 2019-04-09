@@ -56,7 +56,7 @@ class Client:
         yield self
         self._listen.remove(listener)
 
-    async def _process_heartbeat(self):
+    async def _process_heartbeat(self, writer):
         while True:
             delay = self._timestamp + _HEARTBEAT_INTERVAL - datetime.now()
             if delay > timedelta():
@@ -64,17 +64,14 @@ class Client:
             else:
                 _LOGGER.info("Sending ping")
                 await _write_packet(
-                    self._writer,
+                    writer,
                     CommandPacket(1, CommandCodes.POWER, bytes([0xF0]))
                 )
                 self._timestamp = datetime.now()
 
-    async def _process_data(self):
+    async def _process_data(self, reader):
         try:
             while True:
-                if not self._reader:
-                    raise NotConnectedException()
-
                 try:
                     packet = await asyncio.wait_for(
                         _read_packet(self._reader),
@@ -97,8 +94,8 @@ class Client:
     async def process(self):
         try:
             async with Nursery() as nursery:
-                nursery.start_soon(self._process_data())
-                nursery.start_soon(self._process_heartbeat())
+                nursery.start_soon(self._process_data(self._reader))
+                nursery.start_soon(self._process_heartbeat(self._writer))
         except MultiError as e:
             if len(e.exceptions) == 1:
                 raise e.exceptions[0] from e
@@ -142,7 +139,7 @@ class Client:
     async def _request(self, request: CommandPacket):
         if not self._writer:
             raise NotConnectedException()
-
+        writer = self._writer # keep copy around if stopped by another task
         future = asyncio.Future()
 
         def listen(response: ResponsePacket):
@@ -155,7 +152,7 @@ class Client:
         async def req():
             _LOGGER.debug("Requesting %s", request)
             with self.listen(listen):
-                await _write_packet(self._writer, request)
+                await _write_packet(writer, request)
                 self._timestamp = datetime.now()
                 return await future
 
