@@ -13,7 +13,7 @@ setup(
     long_description=long_description,
     long_description_content_type='text/x-rst',
     license='MIT',
-    packages=find_packages('src'),
+    packages=['arcam.fmj'],
     package_dir={'': 'src'},
     python_requires='>=3.6',
     author='Joakim Plate',
