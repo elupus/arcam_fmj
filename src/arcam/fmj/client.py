@@ -8,6 +8,7 @@ from aionursery import Nursery, MultiError
 
 from . import (
     AnswerCodes,
+    ArcamException,
     CommandCodes,
     CommandPacket,
     ConnectionFailed,
@@ -82,7 +83,7 @@ class Client:
                     raise ConnectionFailed() from exception
 
                 if packet is None:
-                    _LOGGER.debug("Server disconnected")
+                    _LOGGER.info("Server disconnected")
                     return
 
                 _LOGGER.debug("Packet received: %s", packet)
@@ -110,9 +111,9 @@ class Client:
 
     async def start(self):
         if self._writer:
-            raise Exception("Already started")
+            raise ArcamException("Already started")
 
-        _LOGGER.debug("Starting client to %s:%d", self._host, self._port)
+        _LOGGER.debug("Connecting to %s:%d", self._host, self._port)
         try:
             self._reader, self._writer = await asyncio.open_connection(
                 self._host, self._port, loop=self._loop)
@@ -120,11 +121,12 @@ class Client:
             raise ConnectionFailed() from exception
         except OSError as exception:
             raise ConnectionFailed() from exception
+        _LOGGER.info("Connected to %s:%d", self._host, self._port)
 
     async def stop(self):
         if self._writer:
             try:
-                _LOGGER.debug("Stopping client")
+                _LOGGER.info("Disconnecting from %s:%d", self._host, self._port)
                 self._writer.close()
                 if sys.version_info >= (3, 7):
                     await self._writer.wait_closed()
