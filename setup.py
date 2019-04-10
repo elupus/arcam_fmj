@@ -15,7 +15,7 @@ setup(
     license='MIT',
     packages=find_packages('src'),
     package_dir={'': 'src'},
-    python_requires='>3.5',
+    python_requires='>=3.6',
     author='Joakim Plate',
     install_requires=[
         'asyncio',
