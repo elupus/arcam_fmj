@@ -62,7 +62,7 @@ class Client:
             if delay > timedelta():
                 await asyncio.sleep(delay.total_seconds())
             else:
-                _LOGGER.info("Sending ping")
+                _LOGGER.debug("Sending ping")
                 await _write_packet(
                     writer,
                     CommandPacket(1, CommandCodes.POWER, bytes([0xF0]))
