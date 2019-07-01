@@ -476,27 +476,24 @@ class CommandPacket():
 
 async def _read_delimited(reader: asyncio.StreamReader, header_len: int) -> bytes:
     try:
-        while True:
-            start = await reader.read(1)
-            if start == PROTOCOL_EOF:
-                _LOGGER.debug("eof")
-                return None
+        start = await reader.read(1)
+        if start == PROTOCOL_EOF:
+            _LOGGER.debug("eof")
+            return None
 
-            if start != PROTOCOL_STR:
-                _LOGGER.warning("unexpected str byte %s", start)
-                continue
+        if start != PROTOCOL_STR:
+            raise InvalidPacket("unexpected str byte {}".format(start))
 
-            header = await reader.read(header_len-1)
-            data_len = await reader.read(1)
-            data = await reader.read(int.from_bytes(data_len, 'big'))
-            etr = await reader.read(1)
+        header = await reader.read(header_len-1)
+        data_len = await reader.read(1)
+        data = await reader.read(int.from_bytes(data_len, 'big'))
+        etr = await reader.read(1)
 
-            if etr != PROTOCOL_ETR:
-                _LOGGER.warning("unexpected etr byte %s", etr)
-                continue
+        if etr != PROTOCOL_ETR:
+            raise InvalidPacket("unexpected etr byte {}".format(etr))
 
-            packet = bytes([*start, *header, *data_len, *data, *etr])
-            return packet
+        packet = bytes([*start, *header, *data_len, *data, *etr])
+        return packet
     except TimeoutError as exception:
         raise ConnectionFailed() from exception
     except ConnectionError as exception:
@@ -505,15 +502,24 @@ async def _read_delimited(reader: asyncio.StreamReader, header_len: int) -> byte
         raise ConnectionFailed() from exception
 
 
+async def _read_delimited_retried(reader: asyncio.StreamReader, header_len: int) -> bytes:
+    while True:
+        try:
+            data = await _read_delimited(reader, header_len)
+        except InvalidPacket as e:
+            _LOGGER.warning(str(e))
+            continue
+        return data
+
 async def _read_packet(reader: asyncio.StreamReader) -> ResponsePacket:
-    data = await _read_delimited(reader, 4)
+    data = await _read_delimited_retried(reader, 4)
     if not data:
         return None
     return ResponsePacket.from_bytes(data)
 
 
 async def _read_command_packet(reader: asyncio.StreamReader) -> CommandPacket:
-    data = await _read_delimited(reader, 3)
+    data = await _read_delimited_retried(reader, 3)
     if not data:
         return None
     return CommandPacket.from_bytes(data)

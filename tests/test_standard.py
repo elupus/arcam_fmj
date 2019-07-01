@@ -9,6 +9,7 @@ from arcam.fmj import (
     InvalidPacket,
     ResponsePacket,
     _read_packet,
+    _read_delimited,
     _write_packet
 )
 
@@ -26,7 +27,7 @@ async def test_reader_invalid_data(loop):
     reader.feed_data(b'\x21\x01\x08\x00\x02\x10\x0D')
     reader.feed_eof()
     with pytest.raises(InvalidPacket):
-        await _read_packet(reader)
+        await _read_delimited(reader, 4)
 
 
 async def test_reader_short(loop):
@@ -34,7 +35,7 @@ async def test_reader_short(loop):
     reader.feed_data(b'\x21\x10\x0D')
     reader.feed_eof()
     with pytest.raises(InvalidPacket):
-        await _read_packet(reader)
+        await _read_delimited(reader, 4)
 
 
 async def test_writer_valid(loop):
