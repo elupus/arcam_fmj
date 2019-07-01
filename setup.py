@@ -16,7 +16,7 @@ setup(
     license="MIT",
     packages=["arcam.fmj"],
     package_dir={"": "src"},
-    python_requires=">=3.6",
+    python_requires=">=3.5",
     author="Joakim Plate",
     install_requires=["asyncio", "attrs>18.1", "aionursery"],
     extras_require={
