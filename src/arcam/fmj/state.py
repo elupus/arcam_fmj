@@ -75,6 +75,10 @@ class State():
     def zn(self):
         return self._zn
 
+    @property
+    def client(self):
+        return self._client
+
     def get(self, cc):
         return self._state[cc]
 
