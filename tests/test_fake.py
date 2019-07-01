@@ -5,6 +5,7 @@ import logging
 import asynctest
 import pytest
 from datetime import timedelta
+from unittest.mock import ANY
 
 from arcam.fmj import (
     CommandCodes,
@@ -123,4 +124,4 @@ async def test_heartbeat(loop, speedy_client, server, client):
             wraps=server.process_request) as req:
         from arcam.fmj.client import _HEARTBEAT_INTERVAL
         await asyncio.sleep(_HEARTBEAT_INTERVAL.total_seconds()+1.0)
-        req.assert_called_once()
+        req.assert_called_once_with(ANY)
