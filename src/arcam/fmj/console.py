@@ -3,7 +3,7 @@ import asyncio
 import logging
 import sys
 
-from . import CommandCodes, SourceCodes, IncomingAudioFormat, IncomingAudioConfig, DecodeMode2CH, DecodeModeMCH
+from . import CommandCodes, SourceCodes, IncomingAudioFormat, IncomingAudioConfig, DecodeMode2CH, DecodeModeMCH, RC5Codes, CommandNotRecognised, _LOGGER, ResponsePacket, AnswerCodes
 from .client import Client, ClientContext
 from .server import Server, ServerContext
 from .state import State
@@ -90,10 +90,10 @@ async def run_server(args):
             self.register_handler(0x01, CommandCodes.VOLUME, bytes([0xF0]), self.get_volume)
             self.register_handler(0x01, CommandCodes.VOLUME, None, self.set_volume)
             self.register_handler(0x01, CommandCodes.CURRENT_SOURCE, bytes([0xF0]), self.get_source)
-            self.register_handler(0x01, CommandCodes.CURRENT_SOURCE, None, self.set_source)
             self.register_handler(0x01, CommandCodes.INCOMING_AUDIO_FORMAT, bytes([0xF0]), self.get_incoming_audio_format)
             self.register_handler(0x01, CommandCodes.DECODE_MODE_STATUS_2CH, bytes([0xF0]), self.get_decode_mode_2ch)
             self.register_handler(0x01, CommandCodes.DECODE_MODE_STATUS_MCH, bytes([0xF0]), self.get_decode_mode_mch)
+            self.register_handler(0x01, CommandCodes.SIMULATE_RC5_IR_COMMAND, None, self.ir_command)
 
         def get_power(self, **kwargs):
             return bytes([1])
@@ -111,6 +111,32 @@ async def run_server(args):
         def set_source(self, data, **kwargs):
             self._source = data
             return self._source
+
+        def ir_command(self, data, **kwargs):
+            source_commands = {
+                RC5Codes.SELECT_AUX.value: SourceCodes.AUX,
+                RC5Codes.SELECT_AV.value: SourceCodes.AV,
+                RC5Codes.SELECT_PVR.value: SourceCodes.PVR,
+            }
+            source = source_commands.get(data)
+            if source:
+                self.set_source(bytes([source]))
+                return [
+                    ResponsePacket(
+                        zn=0x01,
+                        cc=CommandCodes.SIMULATE_RC5_IR_COMMAND,
+                        ac=AnswerCodes.STATUS_UPDATE,
+                        data=data
+                    ),
+                    ResponsePacket(
+                        zn=0x01,
+                        cc=CommandCodes.CURRENT_SOURCE,
+                        ac=AnswerCodes.STATUS_UPDATE,
+                        data=bytes([source])
+                    )
+                ]
+
+            raise CommandNotRecognised()
 
         def get_decode_mode_2ch(self, **kwargs):
             return self._decode_mode_2ch

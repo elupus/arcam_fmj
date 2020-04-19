@@ -1,6 +1,7 @@
 """Fake server"""
 import asyncio
 import logging
+from collections.abc import Iterable
 
 from . import (
     AnswerCodes,
@@ -21,6 +22,10 @@ class Server():
         self._handlers = dict()
         self._tasks = list()
 
+    async def send_status(self, response):
+        _LOGGER.debug("Client update %s -> %s", response)
+        await _write_packet(response)
+
     async def process(self, reader, writer):
         _LOGGER.debug("Client connected")
         task = asyncio.Task.current_task()
@@ -38,9 +43,10 @@ class Server():
                 _LOGGER.debug("Client disconnected")
                 return
 
-            response = await self.process_request(request)
-            _LOGGER.debug("Client command %s -> %s", request, response)
-            await _write_packet(writer, response)
+            responses = await self.process_request(request)
+            _LOGGER.debug("Client command %s -> %s", request, responses)
+            for response in responses:
+                await _write_packet(writer, response)
 
     async def process_request(self, request):
         handler = self._handlers.get((request.zn, request.cc, request.data))
@@ -54,20 +60,27 @@ class Server():
                     cc=request.cc,
                     data=request.data)
 
-                response = ResponsePacket(
-                    request.zn,
-                    request.cc,
-                    AnswerCodes.STATUS_UPDATE,
-                    data)
+                if isinstance(data, bytes):
+                    response = [
+                        ResponsePacket(
+                            request.zn,
+                            request.cc,
+                            AnswerCodes.STATUS_UPDATE,
+                            data)
+                    ]
+                else:
+                    response = data
             else:
                 raise CommandNotRecognised()
         except ResponseException as e:
-            response = ResponsePacket(
-                request.zn,
-                request.cc,
-                e.ac,
-                e.data or bytes(),
-            )
+            response = [
+                ResponsePacket(
+                    request.zn,
+                    request.cc,
+                    e.ac,
+                    e.data or bytes()
+                )
+            ]
 
         return response
 
