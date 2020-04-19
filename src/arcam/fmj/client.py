@@ -130,12 +130,11 @@ class Client:
                 self._writer.close()
                 if sys.version_info >= (3, 7):
                     await self._writer.wait_closed()
+            except (ConnectionError, OSError):
+                pass
+            finally:
                 self._writer = None
                 self._reader = None
-            except ConnectionError as exception:
-                raise ConnectionFailed() from exception
-            except OSError as exception:
-                raise ConnectionFailed() from exception
 
     @async_retry(2, asyncio.TimeoutError)
     async def _request(self, request: CommandPacket):
