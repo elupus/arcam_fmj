@@ -117,6 +117,7 @@ async def run_server(args):
                 RC5Codes.SELECT_AUX.value: SourceCodes.AUX,
                 RC5Codes.SELECT_AV.value: SourceCodes.AV,
                 RC5Codes.SELECT_PVR.value: SourceCodes.PVR,
+                RC5Codes.SELECT_DISPLAY.value: SourceCodes.DISPLAY,
             }
             source = source_commands.get(data)
             if source:
