@@ -1,7 +1,6 @@
 """Fake server"""
 import asyncio
 import logging
-from collections.abc import Iterable
 
 from . import (
     AnswerCodes,
