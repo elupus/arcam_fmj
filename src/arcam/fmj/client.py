@@ -93,13 +93,21 @@ class Client:
             self._reader = None
 
     async def process(self):
-        try:
-            async with Nursery() as nursery:
-                nursery.start_soon(self._process_data(self._reader))
-                nursery.start_soon(self._process_heartbeat(self._writer))
-        except MultiError as e:
-            if len(e.exceptions) == 1:
-                raise e.exceptions[0] from e
+        cancelled = set()
+        async def cancelled_watcher():
+            try:
+                while True:
+                    await asyncio.sleep(100)
+            except asyncio.CancelledError:
+                cancelled.add(True)
+
+        async with Nursery() as nursery:
+            nursery.start_soon(cancelled_watcher())
+            nursery.start_soon(self._process_data(self._reader))
+            nursery.start_soon(self._process_heartbeat(self._writer))
+
+        if cancelled:
+            raise asyncio.CancelledError
 
     @property
     def connected(self):
