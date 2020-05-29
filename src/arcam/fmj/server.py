@@ -21,10 +21,6 @@ class Server():
         self._handlers = dict()
         self._tasks = list()
 
-    async def send_status(self, response):
-        _LOGGER.debug("Client update %s -> %s", response)
-        await _write_packet(response)
-
     async def process(self, reader, writer):
         _LOGGER.debug("Client connected")
         task = asyncio.current_task()
