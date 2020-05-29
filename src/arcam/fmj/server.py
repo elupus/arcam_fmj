@@ -103,11 +103,12 @@ class Server():
             self._server.close()
             await self._server.wait_closed()
             self._server = None
-        
-        _LOGGER.debug("Cancelling clients %s", self._tasks)
-        for task in self._tasks:
-            task.cancel()
-        await asyncio.wait(self._tasks)
+
+        if self._tasks:
+            _LOGGER.debug("Cancelling clients %s", self._tasks)
+            for task in self._tasks:
+                task.cancel()
+            await asyncio.wait(self._tasks)
 
 
 class ServerContext():
