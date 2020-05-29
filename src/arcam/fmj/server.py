@@ -27,7 +27,7 @@ class Server():
 
     async def process(self, reader, writer):
         _LOGGER.debug("Client connected")
-        task = asyncio.Task.current_task()
+        task = asyncio.current_task()
         self._tasks.append(task)
         try:
             await self.process_runner(reader, writer)
