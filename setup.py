@@ -9,7 +9,7 @@ with open(path.join(this_directory, "README.rst"), encoding="utf-8") as f:
 
 setup(
     name="arcam-fmj",
-    version="0.5.1",
+    version="0.5.2",
     description="A python library for speaking to Arcam receivers",
     long_description=long_description,
     long_description_content_type="text/x-rst",
@@ -18,7 +18,7 @@ setup(
     package_dir={"": "src"},
     python_requires=">=3.7",
     author="Joakim Plate",
-    install_requires=["asyncio", "attrs>18.1", "aionursery"],
+    install_requires=["attrs>18.1", "aionursery"],
     extras_require={
         "tests": [
             "pytest>3.6.4",
