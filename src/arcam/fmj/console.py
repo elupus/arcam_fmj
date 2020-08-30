@@ -3,7 +3,7 @@ import asyncio
 import logging
 import sys
 
-from . import CommandCodes, SourceCodes, IncomingAudioFormat, IncomingAudioConfig, DecodeMode2CH, DecodeModeMCH, RC5Codes, CommandNotRecognised, _LOGGER, ResponsePacket, AnswerCodes
+from . import CommandCodes, CommandInvalidAtThisTime, SourceCodes, IncomingAudioFormat, IncomingAudioConfig, DecodeMode2CH, DecodeModeMCH, RC5Codes, CommandNotRecognised, _LOGGER, ResponsePacket, AnswerCodes
 from .client import Client, ClientContext
 from .server import Server, ServerContext
 from .state import State
@@ -85,6 +85,12 @@ async def run_server(args):
             self._audio_format = bytes([IncomingAudioFormat.PCM, IncomingAudioConfig.STEREO_ONLY])
             self._decode_mode_2ch = bytes([DecodeMode2CH.DOLBY_PLII_IIx_MUSIC])
             self._decode_mode_mch = bytes([DecodeModeMCH.DOLBY_PLII_IIx_MUSIC])
+            self._presets = {
+                b'\x01': b'\x03SR P1   ',
+                b'\x02': b'\x03SR Klass',
+                b'\x03' : b'\x03P3 Star ',
+            }
+
 
             self.register_handler(0x01, CommandCodes.POWER, bytes([0xF0]), self.get_power)
             self.register_handler(0x01, CommandCodes.VOLUME, bytes([0xF0]), self.get_volume)
@@ -94,6 +100,7 @@ async def run_server(args):
             self.register_handler(0x01, CommandCodes.DECODE_MODE_STATUS_2CH, bytes([0xF0]), self.get_decode_mode_2ch)
             self.register_handler(0x01, CommandCodes.DECODE_MODE_STATUS_MCH, bytes([0xF0]), self.get_decode_mode_mch)
             self.register_handler(0x01, CommandCodes.SIMULATE_RC5_IR_COMMAND, None, self.ir_command)
+            self.register_handler(0x01, CommandCodes.PRESET_DETAIL, None, self.get_preset_detail)
 
         def get_power(self, **kwargs):
             return bytes([1])
@@ -147,6 +154,13 @@ async def run_server(args):
 
         def get_incoming_audio_format(self, **kwargs):
             return self._audio_format
+        
+        def get_preset_detail(self, data, **kwargs):
+            preset = self._presets.get(data)
+            if preset:
+                return data + preset
+            else:
+                raise CommandInvalidAtThisTime()
 
     server = DummyServer(args.host, args.port)
     async with ServerContext(server):
@@ -176,3 +190,6 @@ def main():
         loop.run_until_complete(run_state(args))
     elif args.subcommand == 'server':
         loop.run_until_complete(run_server(args))
+
+if __name__ == "__main__":
+    main()
