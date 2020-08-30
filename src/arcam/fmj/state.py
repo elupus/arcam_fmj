@@ -1,17 +1,19 @@
 """Zone state"""
 import asyncio
 import logging
-from typing import List
+from typing import Dict, List
 
 from . import (
     AnswerCodes,
     CommandCodes,
+    CommandInvalidAtThisTime,
     DecodeMode2CH,
     DecodeModeMCH,
     IncomingAudioConfig,
     IncomingAudioFormat,
     MenuCodes,
     NotConnectedException,
+    PresetDetail,
     RC5Codes,
     ResponseException,
     ResponsePacket,
@@ -24,10 +26,14 @@ from .client import Client
 _LOGGER = logging.getLogger(__name__)
 
 class State():
+    _state: Dict[int, bytes]
+    _presets: Dict[int, PresetDetail]
+
     def __init__(self, client: Client, zn: int):
         self._zn = zn
         self._client = client
         self._state = dict()
+        self._presets = dict()
 
     async def start(self):
         # pylint: disable=protected-access
@@ -57,6 +63,7 @@ class State():
             'DAB_STATION': self.get_dab_station(),
             'DLS_PDT': self.get_dls_pdt(),
             'RDS_INFORMATION': self.get_rds_information(),
+            'PRESET_DETAIL': self.get_preset_details(),
         }
 
     def __repr__(self):
@@ -258,6 +265,9 @@ class State():
             return None
         return value.decode('utf8').rstrip()
 
+    def get_preset_details(self):
+        return self._presets
+
     async def update(self):
         async def _update(cc):
             try:
@@ -272,6 +282,22 @@ class State():
             except asyncio.TimeoutError:
                 _LOGGER.error("Timeout requesting %s", cc)
 
+        async def _update_presets():
+            presets = {}
+            for preset in range(1, 51):
+                try:
+                    data = await self._client.request(self._zn, CommandCodes.PRESET_DETAIL, bytes([preset]))
+                    presets[preset] = PresetDetail.from_bytes(data)
+                except CommandInvalidAtThisTime:
+                    break
+                except NotConnectedException as e:
+                    _LOGGER.debug("Not connected skipping %s", cc)
+                    return
+                except asyncio.TimeoutError:
+                    _LOGGER.error("Timeout requesting %s", cc)
+                    return
+            self._presets = presets
+
         if self._client.connected:
             await asyncio.wait([
                 _update(CommandCodes.POWER),
@@ -285,6 +311,7 @@ class State():
                 _update(CommandCodes.DAB_STATION),
                 _update(CommandCodes.DLS_PDT_INFO),
                 _update(CommandCodes.RDS_INFORMATION),
+                _update_presets(),
             ])
         else:
             if self._state:

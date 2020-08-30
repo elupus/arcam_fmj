@@ -411,6 +411,40 @@ class IncomingAudioConfig(enum.IntEnum):
         except ValueError:
             return value
 
+
+class PresetType(enum.IntEnum):
+    """List of possible audio configurations."""
+    AM_FREQUENCY = 0x00
+    FM_FREQUENCY = 0x01
+    FM_RDS_NAME = 0x02
+    DAB = 0x03
+
+    @staticmethod
+    def from_int(value: int):
+        try:
+            return PresetType(value)
+        except ValueError:
+            return value
+
+@attr.s
+class PresetDetail():
+    index = attr.ib(type=int)
+    type = attr.ib(type=PresetType)
+    name = attr.ib(type=str)
+
+    @staticmethod
+    def from_bytes(data: bytes) -> 'PresetDetail':
+        type = PresetType.from_int(data[1])
+        if type == PresetType.FM_RDS_NAME or type == PresetType.DAB:
+            name = data[2:].decode('utf8').rstrip()
+        elif type == PresetType.FM_FREQUENCY:
+            name = f"{data[2]}.{data[3]:2} MHz"
+        elif type == PresetType.AM_FREQUENCY:
+            name = f"{data[2]}{data[3]:2} kHz"
+        else:
+            name = str(data[2:])
+        return PresetDetail(data[0], type, name)
+
 @attr.s
 class ResponsePacket():
     """Represent a response from device."""
