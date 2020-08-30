@@ -63,6 +63,7 @@ class State():
             'DAB_STATION': self.get_dab_station(),
             'DLS_PDT': self.get_dls_pdt(),
             'RDS_INFORMATION': self.get_rds_information(),
+            'TUNER_PRESET': self.get_tuner_preset(),
             'PRESET_DETAIL': self.get_preset_details(),
         }
 
@@ -265,6 +266,15 @@ class State():
             return None
         return value.decode('utf8').rstrip()
 
+    async def set_tuner_preset(self, preset):
+        await self._client.request(self._zn, CommandCodes.TUNER_PRESET, bytes([preset]))
+
+    def get_tuner_preset(self):
+        value = self._state.get(CommandCodes.TUNER_PRESET)
+        if value is None or value == b'\xff':
+            return None
+        return int.from_bytes(value, 'big')
+
     def get_preset_details(self):
         return self._presets
 
@@ -311,6 +321,7 @@ class State():
                 _update(CommandCodes.DAB_STATION),
                 _update(CommandCodes.DLS_PDT_INFO),
                 _update(CommandCodes.RDS_INFORMATION),
+                _update(CommandCodes.TUNER_PRESET),
                 _update_presets(),
             ])
         else:

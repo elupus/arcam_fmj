@@ -85,6 +85,7 @@ async def run_server(args):
             self._audio_format = bytes([IncomingAudioFormat.PCM, IncomingAudioConfig.STEREO_ONLY])
             self._decode_mode_2ch = bytes([DecodeMode2CH.DOLBY_PLII_IIx_MUSIC])
             self._decode_mode_mch = bytes([DecodeModeMCH.DOLBY_PLII_IIx_MUSIC])
+            self._tuner_preset = b'\0xff'
             self._presets = {
                 b'\x01': b'\x03SR P1   ',
                 b'\x02': b'\x03SR Klass',
@@ -104,6 +105,8 @@ async def run_server(args):
             self.register_handler(0x01, CommandCodes.DECODE_MODE_STATUS_MCH, bytes([0xF0]), self.get_decode_mode_mch)
             self.register_handler(0x01, CommandCodes.SIMULATE_RC5_IR_COMMAND, None, self.ir_command)
             self.register_handler(0x01, CommandCodes.PRESET_DETAIL, None, self.get_preset_detail)
+            self.register_handler(0x01, CommandCodes.TUNER_PRESET, bytes([0xF0]), self.get_tuner_preset)
+            self.register_handler(0x01, CommandCodes.TUNER_PRESET, None, self.set_tuner_preset)
 
         def get_power(self, **kwargs):
             return bytes([1])
@@ -157,7 +160,14 @@ async def run_server(args):
 
         def get_incoming_audio_format(self, **kwargs):
             return self._audio_format
-        
+
+        def get_tuner_preset(self, **kwargs):
+            return self._tuner_preset
+
+        def set_tuner_preset(self, data, **kwargs):
+            self._tuner_preset = data
+            return self._tuner_preset
+
         def get_preset_detail(self, data, **kwargs):
             preset = self._presets.get(data)
             if preset:
