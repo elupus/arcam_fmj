@@ -89,6 +89,9 @@ async def run_server(args):
                 b'\x01': b'\x03SR P1   ',
                 b'\x02': b'\x03SR Klass',
                 b'\x03' : b'\x03P3 Star ',
+                b'\x04': b'\x02SR P4   ',
+                b'\x05': b'\x02SR P4   ',
+                b'\x06': b'\x01jP',
             }
 
 
