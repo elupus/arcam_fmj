@@ -309,10 +309,10 @@ class State():
                 except CommandInvalidAtThisTime:
                     break
                 except NotConnectedException as e:
-                    _LOGGER.debug("Not connected skipping %s", cc)
+                    _LOGGER.debug("Not connected skipping preset %s", preset)
                     return
                 except asyncio.TimeoutError:
-                    _LOGGER.error("Timeout requesting %s", cc)
+                    _LOGGER.error("Timeout requesting preset %s", preset)
                     return
             self._presets = presets
 
