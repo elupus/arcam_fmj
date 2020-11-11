@@ -1,9 +1,12 @@
 """Client code"""
 import asyncio
+from asyncio.events import AbstractEventLoop
+from asyncio.streams import StreamReader, StreamWriter
 import logging
 import sys
 from datetime import datetime, timedelta
 from contextlib import contextmanager
+from typing import ByteString, Callable, Optional, Set
 from aionursery import Nursery, MultiError
 
 from . import (
@@ -28,12 +31,12 @@ _HEARTBEAT_INTERVAL = timedelta(seconds=5)
 _HEARTBEAT_TIMEOUT  = _HEARTBEAT_INTERVAL + _HEARTBEAT_INTERVAL
 
 class Client:
-    def __init__(self, host, port, loop=None) -> None:
-        self._reader = None
-        self._writer = None
-        self._loop = loop if loop else asyncio.get_event_loop()
+    def __init__(self, host: str, port: int, loop: Optional[AbstractEventLoop]=None) -> None:
+        self._reader: Optional[StreamReader] = None
+        self._writer: Optional[StreamWriter] = None
+        self._loop = loop if loop else asyncio.get_running_loop()
         self._task = None
-        self._listen = set()
+        self._listen: Set[Callable] = set()
         self._host = host
         self._port = port
         self._throttle = Throttle(_REQUEST_THROTTLE)
@@ -52,12 +55,12 @@ class Client:
         return self._loop
 
     @contextmanager
-    def listen(self, listener):
+    def listen(self, listener: Callable):
         self._listen.add(listener)
         yield self
         self._listen.remove(listener)
 
-    async def _process_heartbeat(self, writer):
+    async def _process_heartbeat(self, writer: StreamWriter):
         while True:
             delay = self._timestamp + _HEARTBEAT_INTERVAL - datetime.now()
             if delay > timedelta():
@@ -70,12 +73,12 @@ class Client:
                 )
                 self._timestamp = datetime.now()
 
-    async def _process_data(self, reader):
+    async def _process_data(self, reader: StreamReader):
         try:
             while True:
                 try:
                     packet = await asyncio.wait_for(
-                        _read_packet(self._reader),
+                        _read_packet(reader),
                         _HEARTBEAT_TIMEOUT.total_seconds()
                     )
                 except asyncio.TimeoutError as exception:
@@ -149,11 +152,11 @@ class Client:
                 self._reader = None
 
     @async_retry(2, asyncio.TimeoutError)
-    async def _request(self, request: CommandPacket):
+    async def _request(self, request: CommandPacket) -> ResponsePacket:
         if not self._writer:
             raise NotConnectedException()
         writer = self._writer # keep copy around if stopped by another task
-        future = asyncio.Future()
+        future: 'asyncio.Future[ResponsePacket]' = asyncio.Future()
 
         def listen(response: ResponsePacket):
             if (response.zn == request.zn and
@@ -163,7 +166,7 @@ class Client:
 
         await self._throttle.get()
 
-        async def req():
+        async def req() -> ResponsePacket:
             _LOGGER.debug("Requesting %s", request)
             with self.listen(listen):
                 await _write_packet(writer, request)
@@ -174,7 +177,7 @@ class Client:
             req(),
             _REQUEST_TIMEOUT.total_seconds())
 
-    async def send(self, zn, cc, data):
+    async def send(self, zn: int, cc: int, data: bytes) -> None:
         if not self._writer:
             raise NotConnectedException()
         writer = self._writer
@@ -182,7 +185,7 @@ class Client:
         await self._throttle.get()
         await _write_packet(writer, request)
 
-    async def request(self, zn, cc, data):
+    async def request(self, zn: int, cc: int, data: bytes):
         response = await self._request(CommandPacket(zn, cc, data))
 
         if response.ac == AnswerCodes.STATUS_UPDATE:
@@ -194,13 +197,12 @@ class Client:
 class ClientContext:
     def __init__(self, client: Client):
         self._client = client
-        self._task = None
+        self._task: Optional[asyncio.Task] = None
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> Client:
         await self._client.start()
-        self._task = asyncio.ensure_future(
-            self._client.process(),
-            loop=self._client.loop
+        self._task = asyncio.create_task(
+            self._client.process()
         )
         return self._client
 

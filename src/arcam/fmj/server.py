@@ -1,6 +1,7 @@
 """Fake server"""
 import asyncio
 import logging
+from typing import Callable, Dict, List, Optional, Tuple, Union
 
 from . import (
     AnswerCodes,
@@ -15,15 +16,16 @@ _LOGGER = logging.getLogger(__name__)
 
 class Server():
     def __init__(self, host: str, port: int) -> None:
-        self._server = None  # type: Optional[asyncio.Server]
+        self._server: Optional[asyncio.AbstractServer] = None
         self._host = host
         self._port = port
-        self._handlers = dict()
-        self._tasks = list()
+        self._handlers: Dict[Union[Tuple[int, int], Tuple[int, int, int]], Callable] = dict()
+        self._tasks: List[asyncio.Task] = list()
 
-    async def process(self, reader, writer):
+    async def process(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
         _LOGGER.debug("Client connected")
         task = asyncio.current_task()
+        assert task
         self._tasks.append(task)
         try:
             await self.process_runner(reader, writer)
@@ -31,7 +33,7 @@ class Server():
             _LOGGER.debug("Client disconnected")
             self._tasks.remove(task)
 
-    async def process_runner(self, reader, writer):
+    async def process_runner(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
         while True:
             request = await _read_command_packet(reader)
             if request is None:

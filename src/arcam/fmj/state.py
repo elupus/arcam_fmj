@@ -1,7 +1,7 @@
 """Zone state"""
 import asyncio
 import logging
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 
 from . import (
     AnswerCodes,
@@ -97,7 +97,7 @@ class State():
         return (IncomingAudioFormat.from_int(value[0]),
                 IncomingAudioConfig.from_int(value[1]))
 
-    def get_decode_mode_2ch(self) -> Optional[DecodeMode2CH]:
+    def get_decode_mode_2ch(self) -> Optional[Union[DecodeMode2CH, int]]:
         value = self._state.get(CommandCodes.DECODE_MODE_STATUS_2CH)
         if value is None:
             return None
@@ -126,7 +126,7 @@ class State():
         await self._client.request(
             self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command.value)
 
-    def get_decode_mode_mch(self) -> Optional[DecodeModeMCH]:
+    def get_decode_mode_mch(self) -> Optional[Union[DecodeModeMCH, int]]:
         value = self._state.get(CommandCodes.DECODE_MODE_STATUS_MCH)
         if value is None:
             return None
@@ -178,7 +178,7 @@ class State():
             await self._client.send(
                 self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command.value)
 
-    def get_menu(self) -> Optional[MenuCodes]:
+    def get_menu(self) -> Optional[Union[MenuCodes, int]]:
         value = self._state.get(CommandCodes.MENU)
         if value is None:
             return None
@@ -205,7 +205,7 @@ class State():
         await self._client.request(
             self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command.value)
 
-    def get_source(self) -> Optional[SourceCodes]:
+    def get_source(self) -> Optional[Union[SourceCodes, int]]:
         value = self._state.get(CommandCodes.CURRENT_SOURCE)
         if value is None:
             return None

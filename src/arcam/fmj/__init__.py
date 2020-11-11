@@ -3,7 +3,7 @@ import asyncio
 import enum
 import logging
 import sys
-from typing import Union
+from typing import Iterable, Optional, SupportsBytes, Type, TypeVar, Union
 
 import attr
 
@@ -82,7 +82,20 @@ class InvalidDataLength(ResponseException):
 class InvalidPacket(ArcamException):
     pass
 
-class AnswerCodes(enum.IntEnum):
+_T = TypeVar("_T", bound="IntOrTypeEnum")
+class IntOrTypeEnum(enum.IntEnum):
+    @classmethod
+    def from_int(cls: Type[_T], value: int) -> Union[_T, int]:
+        try:
+            return cls(value)
+        except ValueError:
+            return value
+
+    @classmethod
+    def from_bytes(cls: Type[_T], bytes: Union[Iterable[int], SupportsBytes], byteorder: str = 'big', *, signed: bool = False) -> Union[_T, int]:
+        return cls.from_int(int.from_bytes(bytes, byteorder=byteorder, signed=signed))
+
+class AnswerCodes(IntOrTypeEnum):
     STATUS_UPDATE = 0x00
     ZONE_INVALID = 0x82
     COMMAND_NOT_RECOGNISED = 0x83
@@ -90,15 +103,8 @@ class AnswerCodes(enum.IntEnum):
     COMMAND_INVALID_AT_THIS_TIME = 0x85
     INVALID_DATA_LENGTH = 0x86
 
-    @staticmethod
-    def from_int(value: int):
-        try:
-            return AnswerCodes(value)
-        except ValueError:
-            return value
 
-
-class CommandCodes(enum.IntEnum):
+class CommandCodes(IntOrTypeEnum):
     # System Commands
     POWER = 0x00
     DISPLAY_BRIGHTNESS = 0x01
@@ -182,14 +188,7 @@ class CommandCodes(enum.IntEnum):
     REBOOT = 0x26
 
 
-    @staticmethod
-    def from_int(value: int):
-        try:
-            return CommandCodes(value)
-        except ValueError:
-            return value
-
-class SourceCodes(enum.IntEnum):
+class SourceCodes(IntOrTypeEnum):
     FOLLOW_ZONE_1 = 0x00
     CD = 0x01
     BD = 0x02
@@ -206,19 +205,8 @@ class SourceCodes(enum.IntEnum):
     STB = 0x10
     GAME = 0x11
 
-    @staticmethod
-    def from_int(value: int):
-        try:
-            return SourceCodes(value)
-        except ValueError:
-            return value
 
-    @staticmethod
-    def from_bytes(value: bytes):
-        return SourceCodes.from_int(int.from_bytes(value, 'big'))
-
-
-class MenuCodes(enum.IntEnum):
+class MenuCodes(IntOrTypeEnum):
     NONE = 0x00
     SETUP = 0x02
     TRIM = 0x03
@@ -230,19 +218,8 @@ class MenuCodes(enum.IntEnum):
     NETWORK = 0x09
     USB = 0x0A
 
-    @staticmethod
-    def from_int(value: int):
-        try:
-            return MenuCodes(value)
-        except ValueError:
-            return value
 
-    @staticmethod
-    def from_bytes(value: bytes):
-        return MenuCodes.from_int(int.from_bytes(value, 'big'))
-
-
-class DecodeMode2CH(enum.IntEnum):
+class DecodeMode2CH(IntOrTypeEnum):
     STEREO = 0x01
     DOLBY_PLII_IIx_MOVIE = 0x02
     DOLBY_PLII_IIx_MUSIC = 0x03
@@ -252,35 +229,13 @@ class DecodeMode2CH(enum.IntEnum):
     DTS_NEO_6_MUSIC = 0x08
     MCH_STEREO = 0x09
 
-    @staticmethod
-    def from_int(value: int):
-        try:
-            return DecodeMode2CH(value)
-        except ValueError:
-            return value
 
-    @staticmethod
-    def from_bytes(value: bytes):
-        return DecodeMode2CH.from_int(int.from_bytes(value, 'big'))
-
-
-class DecodeModeMCH(enum.IntEnum):
+class DecodeModeMCH(IntOrTypeEnum):
     STEREO_DOWNMIX = 0x01
     MULTI_CHANNEL = 0x02
     DOLBY_D_EX_OR_DTS_ES = 0x03
     DOLBY_PLII_IIx_MOVIE = 0x04
     DOLBY_PLII_IIx_MUSIC = 0x05
-
-    @staticmethod
-    def from_int(value: int):
-        try:
-            return DecodeModeMCH(value)
-        except ValueError:
-            return value
-
-    @staticmethod
-    def from_bytes(value: bytes):
-        return DecodeModeMCH.from_int(int.from_bytes(value, 'big'))
 
 class RC5Codes(enum.Enum):
     SELECT_STB = bytes([16, 1])
@@ -369,7 +324,7 @@ SOURCECODE_TO_RC5CODE_ZONE2 = {
     SourceCodes.FOLLOW_ZONE_1: RC5Codes.FOLLOW_ZONE_1
 }
 
-class IncomingAudioFormat(enum.IntEnum):
+class IncomingAudioFormat(IntOrTypeEnum):
     PCM = 0x00
     ANALOGUE_DIRECT = 0x01
     DOLBY_DIGITAL = 0x02
@@ -390,46 +345,26 @@ class IncomingAudioFormat(enum.IntEnum):
     UNSUPPORTED = 0x14
     UNDETECTED = 0x15
 
-    @staticmethod
-    def from_int(value: int):
-        try:
-            return IncomingAudioFormat(value)
-        except ValueError:
-            return value
 
-class IncomingAudioConfig(enum.IntEnum):
+class IncomingAudioConfig(IntOrTypeEnum):
     """List of possible audio configurations."""
     MONO = 0x01
     CENTER_ONLY = 0x01
     STEREO_ONLY = 0x02
     # Incomplete list...
 
-    @staticmethod
-    def from_int(value: int):
-        try:
-            return IncomingAudioConfig(value)
-        except ValueError:
-            return value
 
-
-class PresetType(enum.IntEnum):
+class PresetType(IntOrTypeEnum):
     """List of possible audio configurations."""
     AM_FREQUENCY = 0x00
     FM_FREQUENCY = 0x01
     FM_RDS_NAME = 0x02
     DAB = 0x03
 
-    @staticmethod
-    def from_int(value: int):
-        try:
-            return PresetType(value)
-        except ValueError:
-            return value
-
 @attr.s
 class PresetDetail():
     index = attr.ib(type=int)
-    type = attr.ib(type=PresetType)
+    type = attr.ib(type=Union[PresetType, int])
     name = attr.ib(type=str)
 
     @staticmethod
@@ -456,10 +391,10 @@ class ResponsePacket():
     @staticmethod
     def from_bytes(data: bytes) -> 'ResponsePacket':
         if len(data) < 6:
-            raise InvalidPacket("Packet to short {}".format(data))
+            raise InvalidPacket("Packet to short {!r}".format(data))
 
         if data[4] != len(data)-6:
-            raise InvalidPacket("Invalid length in data {}".format(data))
+            raise InvalidPacket("Invalid length in data {!r}".format(data))
 
         return ResponsePacket(
             data[1],
@@ -498,17 +433,17 @@ class CommandPacket():
     @staticmethod
     def from_bytes(data: bytes) -> 'CommandPacket':
         if len(data) < 5:
-            raise InvalidPacket("Packet to short {}".format(data))
+            raise InvalidPacket("Packet to short {!r}".format(data))
 
         if data[3] != len(data)-5:
-            raise InvalidPacket("Invalid length in data {}".format(data))
+            raise InvalidPacket("Invalid length in data {!r}".format(data))
 
         return CommandPacket(
             data[1],
             CommandCodes.from_int(data[2]),
             data[4:4+data[3]])
 
-async def _read_delimited(reader: asyncio.StreamReader, header_len: int) -> bytes:
+async def _read_delimited(reader: asyncio.StreamReader, header_len: int) -> Optional[bytes]:
     try:
         start = await reader.read(1)
         if start == PROTOCOL_EOF:
@@ -516,7 +451,7 @@ async def _read_delimited(reader: asyncio.StreamReader, header_len: int) -> byte
             return None
 
         if start != PROTOCOL_STR:
-            raise InvalidPacket("unexpected str byte {}".format(start))
+            raise InvalidPacket("unexpected str byte {!r}".format(start))
 
         header = await reader.read(header_len-1)
         data_len = await reader.read(1)
@@ -524,7 +459,7 @@ async def _read_delimited(reader: asyncio.StreamReader, header_len: int) -> byte
         etr = await reader.read(1)
 
         if etr != PROTOCOL_ETR:
-            raise InvalidPacket("unexpected etr byte {}".format(etr))
+            raise InvalidPacket("unexpected etr byte {!r}".format(etr))
 
         packet = bytes([*start, *header, *data_len, *data, *etr])
         return packet
@@ -536,7 +471,7 @@ async def _read_delimited(reader: asyncio.StreamReader, header_len: int) -> byte
         raise ConnectionFailed() from exception
 
 
-async def _read_delimited_retried(reader: asyncio.StreamReader, header_len: int) -> bytes:
+async def _read_delimited_retried(reader: asyncio.StreamReader, header_len: int) -> Optional[bytes]:
     while True:
         try:
             data = await _read_delimited(reader, header_len)
@@ -545,14 +480,14 @@ async def _read_delimited_retried(reader: asyncio.StreamReader, header_len: int)
             continue
         return data
 
-async def _read_packet(reader: asyncio.StreamReader) -> ResponsePacket:
+async def _read_packet(reader: asyncio.StreamReader) -> Optional[ResponsePacket]:
     data = await _read_delimited_retried(reader, 4)
     if not data:
         return None
     return ResponsePacket.from_bytes(data)
 
 
-async def _read_command_packet(reader: asyncio.StreamReader) -> CommandPacket:
+async def _read_command_packet(reader: asyncio.StreamReader) -> Optional[CommandPacket]:
     data = await _read_delimited_retried(reader, 3)
     if not data:
         return None
