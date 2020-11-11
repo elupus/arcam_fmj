@@ -1,7 +1,7 @@
 """Zone state"""
 import asyncio
 import logging
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from . import (
     AnswerCodes,
@@ -26,7 +26,7 @@ from .client import Client
 _LOGGER = logging.getLogger(__name__)
 
 class State():
-    _state: Dict[int, bytes]
+    _state: Dict[int, Optional[bytes]]
     _presets: Dict[int, PresetDetail]
 
     def __init__(self, client: Client, zn: int):
@@ -97,7 +97,7 @@ class State():
         return (IncomingAudioFormat.from_int(value[0]),
                 IncomingAudioConfig.from_int(value[1]))
 
-    def get_decode_mode_2ch(self) -> DecodeMode2CH:
+    def get_decode_mode_2ch(self) -> Optional[DecodeMode2CH]:
         value = self._state.get(CommandCodes.DECODE_MODE_STATUS_2CH)
         if value is None:
             return None
@@ -126,7 +126,7 @@ class State():
         await self._client.request(
             self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command.value)
 
-    def get_decode_mode_mch(self) -> DecodeModeMCH:
+    def get_decode_mode_mch(self) -> Optional[DecodeModeMCH]:
         value = self._state.get(CommandCodes.DECODE_MODE_STATUS_MCH)
         if value is None:
             return None
@@ -149,7 +149,7 @@ class State():
         await self._client.request(
             self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command.value)
 
-    def get_power(self):
+    def get_power(self) -> Optional[bool]:
         value = self._state.get(CommandCodes.POWER)
         if value is None:
             return None
@@ -178,13 +178,13 @@ class State():
             await self._client.send(
                 self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command.value)
 
-    def get_menu(self) -> MenuCodes:
+    def get_menu(self) -> Optional[MenuCodes]:
         value = self._state.get(CommandCodes.MENU)
         if value is None:
             return None
         return MenuCodes.from_bytes(value)
 
-    def get_mute(self) -> bool:
+    def get_mute(self) -> Optional[bool]:
         value = self._state.get(CommandCodes.MUTE)
         if value is None:
             return None
@@ -205,7 +205,7 @@ class State():
         await self._client.request(
             self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command.value)
 
-    def get_source(self) -> SourceCodes:
+    def get_source(self) -> Optional[SourceCodes]:
         value = self._state.get(CommandCodes.CURRENT_SOURCE)
         if value is None:
             return None
@@ -228,7 +228,7 @@ class State():
         await self._client.request(
             self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command.value)
 
-    def get_volume(self) -> int:
+    def get_volume(self) -> Optional[int]:
         value = self._state.get(CommandCodes.VOLUME)
         if value is None:
             return None
@@ -256,19 +256,19 @@ class State():
         await self._client.request(
             self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command.value)
 
-    def get_dab_station(self):
+    def get_dab_station(self) -> Optional[str]:
         value = self._state.get(CommandCodes.DAB_STATION)
         if value is None:
             return None
         return value.decode('utf8').rstrip()
 
-    def get_dls_pdt(self):
+    def get_dls_pdt(self) -> Optional[str]:
         value = self._state.get(CommandCodes.DLS_PDT_INFO)
         if value is None:
             return None
         return value.decode('utf8').rstrip()
 
-    def get_rds_information(self):
+    def get_rds_information(self) -> Optional[str]:
         value = self._state.get(CommandCodes.RDS_INFORMATION)
         if value is None:
             return None
@@ -277,7 +277,7 @@ class State():
     async def set_tuner_preset(self, preset):
         await self._client.request(self._zn, CommandCodes.TUNER_PRESET, bytes([preset]))
 
-    def get_tuner_preset(self):
+    def get_tuner_preset(self) -> Optional[int]:
         value = self._state.get(CommandCodes.TUNER_PRESET)
         if value is None or value == b'\xff':
             return None
