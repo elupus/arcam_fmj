@@ -174,6 +174,14 @@ class Client:
             req(),
             _REQUEST_TIMEOUT.total_seconds())
 
+    async def send(self, zn, cc, data):
+        if not self._writer:
+            raise NotConnectedException()
+        writer = self._writer
+        request = CommandPacket(zn, cc, data)
+        await self._throttle.get()
+        await _write_packet(writer, request)
+
     async def request(self, zn, cc, data):
         response = await self._request(CommandPacket(zn, cc, data))
 
@@ -181,6 +189,7 @@ class Client:
             return response.data
 
         raise ResponseException.from_response(response)
+
 
 class ClientContext:
     def __init__(self, client: Client):

@@ -153,7 +153,7 @@ class State():
         value = self._state.get(CommandCodes.POWER)
         if value is None:
             return None
-        return int.from_bytes(value, 'big')
+        return int.from_bytes(value, 'big') == 0x01
 
     async def set_power(self, power: bool) -> None:
         if power:
@@ -161,14 +161,22 @@ class State():
                 command = RC5Codes.POWER_ON
             else:
                 command = RC5Codes.POWER_ON_ZONE2
+
+            await self._client.request(
+                self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command.value)
         else:
             if self._zn == 1:
                 command = RC5Codes.POWER_OFF
             else:
                 command = RC5Codes.POWER_OFF_ZONE2
 
-        await self._client.request(
-            self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command.value)
+            # seed with a response, since device might not
+            # respond in timely fashion, so let's just
+            # assume we succeded until response come
+            # back.
+            self._state[CommandCodes.POWER] = bytes([0])
+            await self._client.send(
+                self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command.value)
 
     def get_menu(self) -> MenuCodes:
         value = self._state.get(CommandCodes.MENU)
