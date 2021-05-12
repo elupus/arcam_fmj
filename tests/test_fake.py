@@ -49,7 +49,7 @@ async def silent_server(loop, request):
 
 @pytest.fixture
 async def client(loop, request):
-    c = Client("localhost", 8888, loop=loop)
+    c = Client("localhost", 8888)
     async with ClientContext(c):
         yield c
 
@@ -95,20 +95,21 @@ async def test_silent_server_request(loop, speedy_client, silent_server, client)
 async def test_silent_server_disconnect(loop, speedy_client, silent_server):
     from arcam.fmj.client import _HEARTBEAT_TIMEOUT
 
-    c = Client("localhost", 8888, loop=loop)
+    c = Client("localhost", 8888)
     connected = True
     with pytest.raises(ConnectionFailed):
         async with ClientContext(c):
-            await asyncio.sleep(_HEARTBEAT_TIMEOUT.total_seconds()+1.0)
+            await asyncio.sleep(_HEARTBEAT_TIMEOUT.total_seconds()+0.5)
             connected = c.connected
     assert not connected
 
 
 async def test_heartbeat(loop, speedy_client, server, client):
+    from arcam.fmj.client import _HEARTBEAT_INTERVAL
+
     with unittest.mock.patch.object(
             server,
             'process_request',
             wraps=server.process_request) as req:
-        from arcam.fmj.client import _HEARTBEAT_INTERVAL
-        await asyncio.sleep(_HEARTBEAT_INTERVAL.total_seconds()+1.0)
+        await asyncio.sleep(_HEARTBEAT_INTERVAL.total_seconds()+0.5)
         req.assert_called_once_with(ANY)

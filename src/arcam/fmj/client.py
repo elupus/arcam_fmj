@@ -1,13 +1,11 @@
 """Client code"""
 import asyncio
-from asyncio.events import AbstractEventLoop
 from asyncio.streams import StreamReader, StreamWriter
 import logging
 import sys
 from datetime import datetime, timedelta
 from contextlib import contextmanager
-from typing import ByteString, Callable, Optional, Set
-from aionursery import Nursery, MultiError
+from typing import Callable, Optional, Set
 
 from . import (
     AnswerCodes,
@@ -31,10 +29,9 @@ _HEARTBEAT_INTERVAL = timedelta(seconds=5)
 _HEARTBEAT_TIMEOUT  = _HEARTBEAT_INTERVAL + _HEARTBEAT_INTERVAL
 
 class Client:
-    def __init__(self, host: str, port: int, loop: Optional[AbstractEventLoop]=None) -> None:
+    def __init__(self, host: str, port: int) -> None:
         self._reader: Optional[StreamReader] = None
         self._writer: Optional[StreamWriter] = None
-        self._loop = loop if loop else asyncio.get_running_loop()
         self._task = None
         self._listen: Set[Callable] = set()
         self._host = host
@@ -49,10 +46,6 @@ class Client:
     @property
     def port(self):
         return self._port
-
-    @property
-    def loop(self):
-        return self._loop
 
     @contextmanager
     def listen(self, listener: Callable):
@@ -96,25 +89,15 @@ class Client:
             self._reader = None
 
     async def process(self):
-        cancelled = set()
-        async def cancelled_watcher():
-            try:
-                while True:
-                    await asyncio.sleep(100)
-            except asyncio.CancelledError:
-                cancelled.add(True)
-
+        _process_heartbeat = asyncio.create_task(self._process_heartbeat(self._writer))
         try:
-            async with Nursery() as nursery:
-                nursery.start_soon(cancelled_watcher())
-                nursery.start_soon(self._process_data(self._reader))
-                nursery.start_soon(self._process_heartbeat(self._writer))
-        except MultiError as e:
-            if len(e.exceptions) == 1:
-                raise e.exceptions[0] from e
-
-        if cancelled:
-            raise asyncio.CancelledError
+            await self._process_data(self._reader)
+        finally:
+            _process_heartbeat.cancel()
+            try:
+                await _process_heartbeat
+            except asyncio.CancelledError:
+                pass
 
     @property
     def connected(self):
@@ -131,7 +114,7 @@ class Client:
         _LOGGER.debug("Connecting to %s:%d", self._host, self._port)
         try:
             self._reader, self._writer = await asyncio.open_connection(
-                self._host, self._port, loop=self._loop)
+                self._host, self._port)
         except ConnectionError as exception:
             raise ConnectionFailed() from exception
         except OSError as exception:
