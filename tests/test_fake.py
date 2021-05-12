@@ -20,29 +20,19 @@ _LOGGER = logging.getLogger(__name__)
 
 # pylint: disable=redefined-outer-name
 
-async def run_context(loop, request, context):
-
-    def fun():
-        loop.run_until_complete(context.__aexit__(None, None, None))
-
-    request.addfinalizer(fun)
-    await context.__aenter__()
-
-
 @pytest.fixture
 async def server(loop, request):
     s = Server('localhost', 8888)
-    context = ServerContext(s)
-    await run_context(loop, request, context)
-    s.register_handler(
-        0x01, CommandCodes.POWER, bytes([0xF0]),
-        lambda **kwargs: bytes([0x00])
-    )
-    s.register_handler(
-        0x01, CommandCodes.VOLUME, bytes([0xF0]),
-        lambda **kwargs: bytes([0x01])
-    )
-    return s
+    async with ServerContext(s):
+        s.register_handler(
+            0x01, CommandCodes.POWER, bytes([0xF0]),
+            lambda **kwargs: bytes([0x00])
+        )
+        s.register_handler(
+            0x01, CommandCodes.VOLUME, bytes([0xF0]),
+            lambda **kwargs: bytes([0x01])
+        )
+        yield s
 
 
 @pytest.fixture
@@ -53,17 +43,15 @@ async def silent_server(loop, request):
             if await reader.read(1) == bytes([]):
                 break
     s.process_runner = process
-    context = ServerContext(s)
-    await run_context(loop, request, context)
-    return s
+    async with ServerContext(s):
+        yield s
 
 
 @pytest.fixture
 async def client(loop, request):
     c = Client("localhost", 8888, loop=loop)
-    context = ClientContext(c)
-    await run_context(loop, request, context)
-    return c
+    async with ClientContext(c):
+        yield c
 
 
 @pytest.fixture
