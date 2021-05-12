@@ -2,6 +2,7 @@ import asyncio
 import aiohttp
 import functools
 import logging
+import re
 from datetime import datetime, timedelta
 from defusedxml import ElementTree
 
@@ -54,14 +55,25 @@ def get_uniqueid_from_udn(data):
         return None
 
 
+def get_possibly_invalid_xml(data):
+    try:
+        return ElementTree.fromstring(data)
+    except ElementTree.ParseError:
+        _LOGGER.info("Device provide corrupt xml, trying with ampersand replacement")
+        data = re.sub(r'&(?![A-Za-z]+[0-9]*;|#[0-9]+;|#x[0-9a-fA-F]+;)', r'&amp;', data)
+        return ElementTree.fromstring(data)
+
+def get_udn_from_xml(xml):
+    return xml.findtext("d:device/d:UDN", None, {"d": "urn:schemas-upnp-org:device-1-0"})
+
 async def get_uniqueid_from_device_description(session, url):
     """Retrieve and extract unique id from url."""
     try:
         async with session.get(url) as req:
             req.raise_for_status()
             data = await req.text()
-            xml = ElementTree.fromstring(data)
-            udn = xml.findtext("d:device/d:UDN", None, {"d": "urn:schemas-upnp-org:device-1-0"})
+            xml = get_possibly_invalid_xml(data)
+            udn = get_udn_from_xml(xml)
             return get_uniqueid_from_udn(udn)
     except (aiohttp.ClientError, asyncio.TimeoutError, ElementTree.ParseError):
         _log_exception("Unable to get device description from %s", url)
