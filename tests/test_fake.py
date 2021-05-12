@@ -113,3 +113,25 @@ async def test_heartbeat(loop, speedy_client, server, client):
             wraps=server.process_request) as req:
         await asyncio.sleep(_HEARTBEAT_INTERVAL.total_seconds()+0.5)
         req.assert_called_once_with(ANY)
+
+
+async def test_cancellation(loop, silent_server):
+    from arcam.fmj.client import _HEARTBEAT_TIMEOUT
+
+    e = asyncio.Event()
+    c = Client("localhost", 8888)
+
+    async def runner():
+        await c.start()
+        try:
+            e.set()
+            await c.process()
+        finally:
+            await c.stop()
+
+    task = asyncio.create_task(runner())
+    await asyncio.wait_for(e.wait(), 5)
+    task.cancel()
+
+    with pytest.raises(asyncio.CancelledError):
+        await task
