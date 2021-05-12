@@ -1,5 +1,5 @@
 import pytest
-from asynctest import MagicMock
+from unittest.mock import MagicMock
 from arcam.fmj.client import Client
 from arcam.fmj.state import State
 from arcam.fmj import AnswerCodes, CommandCodes, RC5Codes, ResponsePacket

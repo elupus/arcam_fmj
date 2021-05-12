@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-import asynctest
+import unittest
 import pytest
 from datetime import timedelta
 from unittest.mock import ANY
@@ -117,7 +117,7 @@ async def test_silent_server_disconnect(loop, speedy_client, silent_server):
 
 
 async def test_heartbeat(loop, speedy_client, server, client):
-    with asynctest.mock.patch.object(
+    with unittest.mock.patch.object(
             server,
             'process_request',
             wraps=server.process_request) as req:
