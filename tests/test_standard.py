@@ -10,7 +10,8 @@ from arcam.fmj import (
     ResponsePacket,
     _read_packet,
     _read_delimited,
-    _write_packet
+    _write_packet,
+    IntOrTypeEnum
 )
 
 
@@ -56,3 +57,16 @@ async def test_writer_valid(loop):
     writer.write.assert_has_calls([
         call(b'\x21\x01\x08\x02\x10\x10\x0D'),
     ])
+
+
+async def test_intenum(loop):
+    class TestClass1(IntOrTypeEnum):
+        TEST = 55
+
+    res = TestClass1.from_int(55)
+    assert res.name == "TEST"
+    assert res.value == 55
+
+    res = TestClass1.from_int(1)
+    assert res.name == "CODE_1"
+    assert res.value == 1

@@ -82,18 +82,34 @@ class InvalidDataLength(ResponseException):
 class InvalidPacket(ArcamException):
     pass
 
+
 _T = TypeVar("_T", bound="IntOrTypeEnum")
 class IntOrTypeEnum(enum.IntEnum):
-    @classmethod
-    def from_int(cls: Type[_T], value: int) -> Union[_T, int]:
-        try:
-            return cls(value)
-        except ValueError:
-            return value
 
     @classmethod
-    def from_bytes(cls: Type[_T], bytes: Union[Iterable[int], SupportsBytes], byteorder: str = 'big', *, signed: bool = False) -> Union[_T, int]:
+    def _missing_(cls, value):
+        if isinstance(value, int):
+            return cls._create_pseudo_member_(value)
+        return None
+
+    @classmethod
+    def _create_pseudo_member_(cls, value):
+        pseudo_member = cls._value2member_map_.get(value, None)
+        if pseudo_member is None:
+            new_member = int.__new__(cls, value)
+            new_member._name_ = f"CODE_{value}"
+            new_member._value_ = value
+            pseudo_member = cls._value2member_map_.setdefault(value, new_member)
+        return pseudo_member
+
+    @classmethod
+    def from_int(cls: Type[_T], value: int) -> _T:
+        return cls(value)
+
+    @classmethod
+    def from_bytes(cls: Type[_T], bytes: Union[Iterable[int], SupportsBytes], byteorder: str = 'big', *, signed: bool = False) -> _T:
         return cls.from_int(int.from_bytes(bytes, byteorder=byteorder, signed=signed))
+
 
 class AnswerCodes(IntOrTypeEnum):
     STATUS_UPDATE = 0x00
