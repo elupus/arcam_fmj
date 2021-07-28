@@ -7,11 +7,8 @@ for other projects as well.
 
 Status
 ______
-.. image:: https://travis-ci.org/elupus/arcam_fmj.svg?branch=master
-    :target: https://travis-ci.org/elupus/arcam_fmj
-
-.. image:: https://coveralls.io/repos/github/elupus/arcam_fmj/badge.svg?branch=master
-    :target: https://coveralls.io/github/elupus/arcam_fmj?branch=master
+.. image:: https://github.com/elupus/arcam_fmj/actions/workflows/python-package.yml/badge.svg
+    :target: https://github.com/elupus/arcam_fmj/actions
 
 Module
 ======
