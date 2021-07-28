@@ -84,6 +84,7 @@ class InvalidPacket(ArcamException):
 
 APIVERSION_450_SERIES = {380, 450, 750}
 APIVERSION_860_SERIES = {860, 850, 550, 390, 250}
+APIVERSION_DAB_SERIES = {450, 750}
 
 _T = TypeVar("_T", bound="IntOrTypeEnum")
 class IntOrTypeEnum(enum.IntEnum):
@@ -224,7 +225,7 @@ class SourceCodes(IntOrTypeEnum):
     AUX = 0x08
     DISPLAY = 0x09
     FM = 0x0B
-    DAB = 0x0C
+    DAB = 0x0C, APIVERSION_DAB_SERIES
     NET = 0x0E
     USB = 0x0F
     STB = 0x10
