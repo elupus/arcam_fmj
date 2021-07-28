@@ -62,11 +62,19 @@ async def test_writer_valid(loop):
 async def test_intenum(loop):
     class TestClass1(IntOrTypeEnum):
         TEST = 55
+        TEST_VERSION = 23, {1}
 
     res = TestClass1.from_int(55)
     assert res.name == "TEST"
     assert res.value == 55
+    assert res.version == None
+
+    res = TestClass1.from_int(23)
+    assert res.name == "TEST_VERSION"
+    assert res.value == 23
+    assert res.version == {1}
 
     res = TestClass1.from_int(1)
     assert res.name == "CODE_1"
     assert res.value == 1
+    assert res.version == None

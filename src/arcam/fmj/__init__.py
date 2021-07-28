@@ -3,7 +3,7 @@ import asyncio
 import enum
 import logging
 import sys
-from typing import Iterable, Optional, SupportsBytes, Type, TypeVar, Union
+from typing import Iterable, Optional, SupportsBytes, Type, TypeVar, Union, overload
 
 import attr
 
@@ -82,6 +82,8 @@ class InvalidDataLength(ResponseException):
 class InvalidPacket(ArcamException):
     pass
 
+APIVERSION_450_SERIES = {380, 450, 750}
+APIVERSION_860_SERIES = {860, 850, 550, 390, 250}
 
 _T = TypeVar("_T", bound="IntOrTypeEnum")
 class IntOrTypeEnum(enum.IntEnum):
@@ -96,11 +98,18 @@ class IntOrTypeEnum(enum.IntEnum):
     def _create_pseudo_member_(cls, value):
         pseudo_member = cls._value2member_map_.get(value, None)
         if pseudo_member is None:
-            new_member = int.__new__(cls, value)
-            new_member._name_ = f"CODE_{value}"
-            new_member._value_ = value
-            pseudo_member = cls._value2member_map_.setdefault(value, new_member)
+            obj = int.__new__(cls, value)
+            obj._name_ = f"CODE_{value}"
+            obj._value_ = value
+            obj.version = None
+            pseudo_member = cls._value2member_map_.setdefault(value, obj)
         return pseudo_member
+
+    def __new__(cls, value: int, version: Optional[tuple] = None):
+             obj = int.__new__(cls, value)
+             obj._value_ = value
+             obj.version = version
+             return obj
 
     @classmethod
     def from_int(cls: Type[_T], value: int) -> _T:
@@ -237,21 +246,28 @@ class MenuCodes(IntOrTypeEnum):
 
 class DecodeMode2CH(IntOrTypeEnum):
     STEREO = 0x01
-    DOLBY_PLII_IIx_MOVIE = 0x02
-    DOLBY_PLII_IIx_MUSIC = 0x03
-    DOLBY_PLII_IIx_GAME = 0x05
-    DOLBY_PL = 0x06
+    DOLBY_PLII_IIx_MOVIE = 0x02, APIVERSION_450_SERIES
+    DOLBY_PLII_IIx_MUSIC = 0x03, APIVERSION_450_SERIES
+    DOLBY_PLII_IIx_GAME = 0x05, APIVERSION_450_SERIES
+    DOLBY_PL = 0x06, APIVERSION_450_SERIES
     DTS_NEO_6_CINEMA = 0x07
     DTS_NEO_6_MUSIC = 0x08
     MCH_STEREO = 0x09
+
+    DTS_NEURAL_X = 0x0A, APIVERSION_860_SERIES
+    DTS_VIRTUAL_X = 0x0C, APIVERSION_860_SERIES
 
 
 class DecodeModeMCH(IntOrTypeEnum):
     STEREO_DOWNMIX = 0x01
     MULTI_CHANNEL = 0x02
     DOLBY_D_EX_OR_DTS_ES = 0x03
-    DOLBY_PLII_IIx_MOVIE = 0x04
-    DOLBY_PLII_IIx_MUSIC = 0x05
+    DOLBY_PLII_IIx_MOVIE = 0x04, APIVERSION_450_SERIES
+    DOLBY_PLII_IIx_MUSIC = 0x05, APIVERSION_450_SERIES
+
+    DOLBY_SURROUND = 0x06, APIVERSION_860_SERIES
+    DTS_VIRTUAL_X = 0x0C, APIVERSION_860_SERIES
+
 
 class RC5Codes(enum.Enum):
     SELECT_STB = bytes([16, 1])
