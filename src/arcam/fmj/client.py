@@ -5,9 +5,11 @@ import logging
 import sys
 from datetime import datetime, timedelta
 from contextlib import contextmanager
-from typing import Callable, Optional, Set
+from typing import Callable, Optional, Set, Union, overload
 
 from . import (
+    AmxDuetRequest,
+    AmxDuetResponse,
     AnswerCodes,
     ArcamException,
     CommandCodes,
@@ -16,8 +18,8 @@ from . import (
     NotConnectedException,
     ResponseException,
     ResponsePacket,
-    _read_packet,
-    _write_packet
+    read_response,
+    write_packet
 )
 from .utils import Throttle, async_retry
 
@@ -60,7 +62,7 @@ class Client:
                 await asyncio.sleep(delay.total_seconds())
             else:
                 _LOGGER.debug("Sending ping")
-                await _write_packet(
+                await write_packet(
                     writer,
                     CommandPacket(1, CommandCodes.POWER, bytes([0xF0]))
                 )
@@ -71,7 +73,7 @@ class Client:
             while True:
                 try:
                     packet = await asyncio.wait_for(
-                        _read_packet(reader),
+                        read_response(reader),
                         _HEARTBEAT_TIMEOUT.total_seconds()
                     )
                 except asyncio.TimeoutError as exception:
@@ -134,25 +136,32 @@ class Client:
                 self._writer = None
                 self._reader = None
 
+    @overload
+    async def request_raw(self, request: CommandPacket) -> ResponsePacket:
+        ...
+
+    @overload
+    async def request_raw(self, request: AmxDuetRequest) -> AmxDuetResponse:
+        ...
+
     @async_retry(2, asyncio.TimeoutError)
-    async def _request(self, request: CommandPacket) -> ResponsePacket:
+    async def request_raw(self, request: Union[CommandPacket, AmxDuetRequest]) -> Union[ResponsePacket, AmxDuetResponse]:
         if not self._writer:
             raise NotConnectedException()
         writer = self._writer # keep copy around if stopped by another task
-        future: 'asyncio.Future[ResponsePacket]' = asyncio.Future()
+        future: 'asyncio.Future[Union[ResponsePacket, AmxDuetResponse]]' = asyncio.Future()
 
-        def listen(response: ResponsePacket):
-            if (response.zn == request.zn and
-                    response.cc == request.cc):
+        def listen(response: Union[ResponsePacket, AmxDuetResponse]):
+            if response.respons_to(request):
                 if not (future.cancelled() or future.done()):
                     future.set_result(response)
 
         await self._throttle.get()
 
-        async def req() -> ResponsePacket:
+        async def req() -> Union[ResponsePacket, AmxDuetResponse]:
             _LOGGER.debug("Requesting %s", request)
             with self.listen(listen):
-                await _write_packet(writer, request)
+                await write_packet(writer, request)
                 self._timestamp = datetime.now()
                 return await future
 
@@ -166,10 +175,10 @@ class Client:
         writer = self._writer
         request = CommandPacket(zn, cc, data)
         await self._throttle.get()
-        await _write_packet(writer, request)
+        await write_packet(writer, request)
 
     async def request(self, zn: int, cc: int, data: bytes):
-        response = await self._request(CommandPacket(zn, cc, data))
+        response = await self.request_raw(CommandPacket(zn, cc, data))
 
         if response.ac == AnswerCodes.STATUS_UPDATE:
             return response.data

@@ -4,12 +4,15 @@ import logging
 from typing import Callable, Dict, List, Optional, Tuple, Union
 
 from . import (
+    AmxDuetRequest,
+    AmxDuetResponse,
     AnswerCodes,
     CommandNotRecognised,
+    CommandPacket,
     ResponseException,
     ResponsePacket,
-    _read_command_packet,
-    _write_packet
+    read_command,
+    write_packet
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -19,8 +22,14 @@ class Server():
         self._server: Optional[asyncio.AbstractServer] = None
         self._host = host
         self._port = port
-        self._handlers: Dict[Union[Tuple[int, int], Tuple[int, int, int]], Callable] = dict()
+        self._handlers: Dict[Union[Tuple[int, int], Tuple[int, int, bytes]], Callable] = dict()
         self._tasks: List[asyncio.Task] = list()
+        self._amxduet = AmxDuetResponse({
+            "Device-SDKClass": "Receiver",
+            "Device-Make": "ARCAM",
+            "Device-Model": "AV860",
+            "Device-Revision": "x.y.z"
+        })
 
     async def process(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
         _LOGGER.debug("Client connected")
@@ -35,7 +44,7 @@ class Server():
 
     async def process_runner(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
         while True:
-            request = await _read_command_packet(reader)
+            request = await read_command(reader)
             if request is None:
                 _LOGGER.debug("Client disconnected")
                 return
@@ -43,9 +52,12 @@ class Server():
             responses = await self.process_request(request)
             _LOGGER.debug("Client command %s -> %s", request, responses)
             for response in responses:
-                await _write_packet(writer, response)
+                await write_packet(writer, response)
 
-    async def process_request(self, request):
+    async def process_request(self, request: Union[CommandPacket, AmxDuetRequest]):
+        if isinstance(request, AmxDuetRequest):
+            return [self._amxduet]
+
         handler = self._handlers.get((request.zn, request.cc, request.data))
         if handler is None:
             handler = self._handlers.get((request.zn, request.cc))

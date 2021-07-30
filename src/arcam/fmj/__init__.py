@@ -2,8 +2,9 @@
 import asyncio
 import enum
 import logging
-import sys
-from typing import Iterable, Optional, SupportsBytes, Type, TypeVar, Union, overload
+import re
+from asyncio.exceptions import IncompleteReadError
+from typing import Iterable, Optional, SupportsBytes, Type, TypeVar, Union
 
 import attr
 
@@ -82,9 +83,9 @@ class InvalidDataLength(ResponseException):
 class InvalidPacket(ArcamException):
     pass
 
-APIVERSION_450_SERIES = {380, 450, 750}
-APIVERSION_860_SERIES = {860, 850, 550, 390, 250}
-APIVERSION_DAB_SERIES = {450, 750}
+APIVERSION_450_SERIES = {"AVR380", "AVR450", "AVR750"}
+APIVERSION_860_SERIES = {"AV860", "AVR850", "AVR550", "AVR390", "SR250"}
+APIVERSION_DAB_SERIES = {"AVR450", "AVR750"}
 
 _T = TypeVar("_T", bound="IntOrTypeEnum")
 class IntOrTypeEnum(enum.IntEnum):
@@ -421,6 +422,12 @@ class ResponsePacket():
     ac = attr.ib(type=int)
     data = attr.ib(type=bytes)
 
+    def respons_to(self, request: Union['AmxDuetRequest', 'CommandPacket']):
+        if not isinstance(request, CommandPacket):
+            return False
+        return (self.zn == request.zn and
+            self.cc == request.cc)
+
     @staticmethod
     def from_bytes(data: bytes) -> 'ResponsePacket':
         if len(data) < 6:
@@ -476,60 +483,153 @@ class CommandPacket():
             CommandCodes.from_int(data[2]),
             data[4:4+data[3]])
 
-async def _read_delimited(reader: asyncio.StreamReader, header_len: int) -> Optional[bytes]:
+@attr.s
+class AmxDuetRequest():
+    
+    @staticmethod
+    def from_bytes(data: bytes) -> 'AmxDuetRequest':
+        if not data == b"AMX\r":
+            raise InvalidPacket("Packet is not a amx request {!r}".format(data))
+        return AmxDuetRequest()
+
+    def to_bytes(self):
+        return b"AMX\r"
+
+@attr.s
+class AmxDuetResponse():
+
+    values = attr.ib(type=dict)
+
+    @property
+    def device_class(self) -> Optional[str]:
+        return self.values.get("Device-SDKClass")
+
+    @property
+    def device_make(self) -> Optional[str]:
+        return self.values.get("Device-Make")
+
+    @property
+    def device_model(self) -> Optional[str]:
+        return self.values.get("Device-Model")
+
+    @property
+    def device_revision(self) -> Optional[str]:
+        return self.values.get("Device-Revision")
+
+    def respons_to(self, packet: Union[AmxDuetRequest, CommandPacket]):
+        if not isinstance(packet, AmxDuetRequest):
+            return False
+        return True
+
+    @staticmethod
+    def from_bytes(data: bytes) -> 'AmxDuetResponse':
+        if not data.startswith(b"AMXB"):
+            raise InvalidPacket("Packet is not a amx response {!r}".format(data))
+
+        tags = re.findall(r"<(.+?)=(.+?)>", data[4:].decode("ASCII"))
+        return AmxDuetResponse(dict(tags))
+
+    def to_bytes(self):
+        res = "AMXB" + "".join([
+            f"<{key}={value}>"
+            for key, value in self.values.items() 
+        ]) + "\r"
+        return res.encode("ASCII")
+
+
+async def _read_delimited(reader: asyncio.StreamReader, header_len) -> Optional[bytes]:
     try:
         start = await reader.read(1)
         if start == PROTOCOL_EOF:
             _LOGGER.debug("eof")
             return None
 
-        if start != PROTOCOL_STR:
+        if start == PROTOCOL_STR:
+            header = await reader.read(header_len-1)
+            data_len = await reader.read(1)
+            data = await reader.read(int.from_bytes(data_len, 'big'))
+            etr = await reader.read(1)
+
+            if etr != PROTOCOL_ETR:
+                raise InvalidPacket("unexpected etr byte {!r}".format(etr))
+
+            packet = bytes([*start, *header, *data_len, *data, *etr])
+        elif start == b"\x01":
+            """Sometime the AMX header seem to be sent as \x01^AMX"""
+            header = await reader.read(4)
+            if header != b"^AMX":
+                raise InvalidPacket("Unexpected AMX header: {!r}".format(header))
+        
+            data = await reader.readuntil(PROTOCOL_ETR)
+            packet =  bytes([*b"AMX", *data])
+        elif start == b"A":
+            header = await reader.read(2)
+            if header != b"MX":
+                raise InvalidPacket("Unexpected AMX header")
+
+            data = await reader.readuntil(PROTOCOL_ETR)
+            packet =  bytes([*start, *header, *data])
+        else:
             raise InvalidPacket("unexpected str byte {!r}".format(start))
 
-        header = await reader.read(header_len-1)
-        data_len = await reader.read(1)
-        data = await reader.read(int.from_bytes(data_len, 'big'))
-        etr = await reader.read(1)
-
-        if etr != PROTOCOL_ETR:
-            raise InvalidPacket("unexpected etr byte {!r}".format(etr))
-
-        packet = bytes([*start, *header, *data_len, *data, *etr])
         return packet
+
     except TimeoutError as exception:
         raise ConnectionFailed() from exception
     except ConnectionError as exception:
         raise ConnectionFailed() from exception
     except OSError as exception:
         raise ConnectionFailed() from exception
+    except IncompleteReadError as exception:
+        raise ConnectionFailed() from exception
 
 
-async def _read_delimited_retried(reader: asyncio.StreamReader, header_len: int) -> Optional[bytes]:
+async def _read_response(reader: asyncio.StreamReader) -> Optional[Union[ResponsePacket, AmxDuetResponse]]:
+    data = await _read_delimited(reader, 4)
+    if not data:
+        return None
+
+    if data.startswith(b"AMX"):
+        return AmxDuetResponse.from_bytes(data)
+    else:
+        return ResponsePacket.from_bytes(data)
+
+
+async def read_response(reader: asyncio.StreamReader) -> Optional[Union[ResponsePacket, AmxDuetResponse]]:
     while True:
         try:
-            data = await _read_delimited(reader, header_len)
+            data = await _read_response(reader)
         except InvalidPacket as e:
             _LOGGER.warning(str(e))
             continue
         return data
 
-async def _read_packet(reader: asyncio.StreamReader) -> Optional[ResponsePacket]:
-    data = await _read_delimited_retried(reader, 4)
+
+async def _read_command(reader: asyncio.StreamReader) -> Optional[Union[CommandPacket, AmxDuetRequest]]:
+    data = await _read_delimited(reader, 3)
     if not data:
         return None
-    return ResponsePacket.from_bytes(data)
+    if data.startswith(b"AMX"):
+        return AmxDuetRequest.from_bytes(data)
+    else:
+        return CommandPacket.from_bytes(data)
 
 
-async def _read_command_packet(reader: asyncio.StreamReader) -> Optional[CommandPacket]:
-    data = await _read_delimited_retried(reader, 3)
-    if not data:
-        return None
-    return CommandPacket.from_bytes(data)
+async def read_command(reader: asyncio.StreamReader) -> Optional[Union[CommandPacket, AmxDuetRequest]]:
+    while True:
+        try:
+            data = await _read_command(reader)
+        except InvalidPacket as e:
+            _LOGGER.warning(str(e))
+            continue
+        return data
 
 
-async def _write_packet(writer: asyncio.StreamWriter,
-                        packet: Union[CommandPacket,
-                                      ResponsePacket]) -> None:
+async def write_packet(writer: asyncio.StreamWriter,
+                       packet: Union[CommandPacket,
+                                     ResponsePacket,
+                                     AmxDuetRequest,
+                                     AmxDuetResponse]) -> None:
     try:
         data = packet.to_bytes()
         writer.write(data)

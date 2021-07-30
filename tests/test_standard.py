@@ -5,12 +5,12 @@ from unittest.mock import MagicMock, call
 import pytest
 
 from arcam.fmj import (
+    AmxDuetResponse,
     CommandPacket,
     InvalidPacket,
     ResponsePacket,
-    _read_packet,
-    _read_delimited,
-    _write_packet,
+    _read_response,
+    write_packet,
     IntOrTypeEnum
 )
 
@@ -19,7 +19,7 @@ async def test_reader_valid(loop):
     reader = asyncio.StreamReader(loop=loop)
     reader.feed_data(b'\x21\x01\x08\x00\x02\x10\x10\x0D')
     reader.feed_eof()
-    packet = await _read_packet(reader)
+    packet = await _read_response(reader)
     assert packet == ResponsePacket(1, 8, 0, b'\x10\x10')
 
 
@@ -28,7 +28,7 @@ async def test_reader_invalid_data(loop):
     reader.feed_data(b'\x21\x01\x08\x00\x02\x10\x0D')
     reader.feed_eof()
     with pytest.raises(InvalidPacket):
-        await _read_delimited(reader, 4)
+        await _read_response(reader)
 
 
 async def test_reader_invalid_data_recover(loop):
@@ -36,7 +36,9 @@ async def test_reader_invalid_data_recover(loop):
     reader.feed_data(b'\x21\x01\x08\x00\x02\x10\x0D\x00')
     reader.feed_data(b'\x21\x01\x08\x00\x02\x10\x10\x0D')
     reader.feed_eof()
-    packet = await _read_packet(reader)
+    with pytest.raises(InvalidPacket):
+        packet = await _read_response(reader)
+    packet = await _read_response(reader)
     assert packet == ResponsePacket(1, 8, 0, b'\x10\x10')
 
 
@@ -45,7 +47,7 @@ async def test_reader_short(loop):
     reader.feed_data(b'\x21\x10\x0D')
     reader.feed_eof()
     with pytest.raises(InvalidPacket):
-        await _read_delimited(reader, 4)
+        await _read_response(reader)
 
 
 async def test_writer_valid(loop):
@@ -53,7 +55,7 @@ async def test_writer_valid(loop):
     writer.write.return_value = None
     writer.drain.return_value = asyncio.Future()
     writer.drain.return_value.set_result(None)
-    await _write_packet(writer, CommandPacket(1, 8, b'\x10\x10'))
+    await write_packet(writer, CommandPacket(1, 8, b'\x10\x10'))
     writer.write.assert_has_calls([
         call(b'\x21\x01\x08\x02\x10\x10\x0D'),
     ])
@@ -78,3 +80,14 @@ async def test_intenum(loop):
     assert res.name == "CODE_1"
     assert res.value == 1
     assert res.version == None
+
+
+async def test_amx(loop):
+    src = b"AMXB<Device-SDKClass=Receiver><Device-Make=ARCAM><Device-Model=AV860><Device-Revision=x.y.z>"
+    res = AmxDuetResponse.from_bytes(src)
+    assert res.device_class == "Receiver"
+    assert res.device_make == "ARCAM"
+    assert res.device_model == "AV860"
+    assert res.device_revision == "x.y.z"
+
+    assert res.to_bytes() == src

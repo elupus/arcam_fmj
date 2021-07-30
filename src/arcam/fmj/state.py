@@ -1,9 +1,11 @@
 """Zone state"""
 import asyncio
 import logging
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 
 from . import (
+    AmxDuetRequest,
+    AmxDuetResponse,
     AnswerCodes,
     CommandCodes,
     CommandInvalidAtThisTime,
@@ -34,6 +36,7 @@ class State():
         self._client = client
         self._state = dict()
         self._presets = dict()
+        self._amxduet: Optional[AmxDuetResponse] = None
 
     async def start(self):
         # pylint: disable=protected-access
@@ -68,9 +71,13 @@ class State():
         }
 
     def __repr__(self):
-        return "State ({})".format(self.to_dict())
+        return "State ({}) Amx ({})".format(self.to_dict(), self._amxduet.values)
 
-    def _listen(self, packet: ResponsePacket):
+    def _listen(self, packet: Union[ResponsePacket, AmxDuetResponse]):
+        if isinstance(packet, AmxDuetResponse):
+            self._amxduet = packet
+            return
+
         if packet.zn != self._zn:
             return
 
@@ -316,7 +323,21 @@ class State():
                     return
             self._presets = presets
 
+        async def _update_amxduet():
+            try:
+                data = await self._client.request_raw(AmxDuetRequest())
+                self._amxduet = data
+            except ResponseException as e:
+                _LOGGER.debug("Response error skipping %s", e.ac)
+            except NotConnectedException as e:
+                _LOGGER.debug("Not connected skipping amx")
+            except asyncio.TimeoutError:
+                _LOGGER.error("Timeout requesting amx")
+
         if self._client.connected:
+            if self._amxduet is None:
+                await _update_amxduet()
+
             await asyncio.wait([
                 _update(CommandCodes.POWER),
                 _update(CommandCodes.VOLUME),
