@@ -83,7 +83,7 @@ async def test_intenum(loop):
 
 
 async def test_amx(loop):
-    src = b"AMXB<Device-SDKClass=Receiver><Device-Make=ARCAM><Device-Model=AV860><Device-Revision=x.y.z>"
+    src = b"AMXB<Device-SDKClass=Receiver><Device-Make=ARCAM><Device-Model=AV860><Device-Revision=x.y.z>\r"
     res = AmxDuetResponse.from_bytes(src)
     assert res.device_class == "Receiver"
     assert res.device_make == "ARCAM"

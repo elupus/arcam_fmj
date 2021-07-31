@@ -4,7 +4,7 @@ import enum
 import logging
 import re
 from asyncio.exceptions import IncompleteReadError
-from typing import Iterable, Optional, SupportsBytes, Type, TypeVar, Union
+from typing import Dict, Iterable, Optional, SupportsBytes, Tuple, Type, TypeVar, Union
 
 import attr
 
@@ -86,6 +86,10 @@ class InvalidPacket(ArcamException):
 APIVERSION_450_SERIES = {"AVR380", "AVR450", "AVR750"}
 APIVERSION_860_SERIES = {"AV860", "AVR850", "AVR550", "AVR390", "SR250"}
 APIVERSION_DAB_SERIES = {"AVR450", "AVR750"}
+
+class ApiModel(enum.Enum):
+    API450_SERIES = 1
+    API860_SERIES = 2
 
 _T = TypeVar("_T", bound="IntOrTypeEnum")
 class IntOrTypeEnum(enum.IntEnum):
@@ -271,91 +275,95 @@ class DecodeModeMCH(IntOrTypeEnum):
     DTS_VIRTUAL_X = 0x0C, APIVERSION_860_SERIES
 
 
-class RC5Codes(enum.Enum):
-    SELECT_STB = bytes([16, 1])
-    SELECT_AV = bytes([16, 2])
-    SELECT_TUNER = bytes([16, 3])
-    SELECT_BD = bytes([16, 4])
-    SELECT_GAME = bytes([16, 5])
-    SELECT_VCR = bytes([16, 6])
-    SELECT_CD = bytes([16, 7])
-    SELECT_AUX = bytes([16, 8])
-    SELECT_DISPLAY = bytes([16, 9])
-    SELECT_SAT = bytes([16, 0])
-    SELECT_PVR = bytes([16, 34])
-    SELECT_USB = bytes([16, 18])
-    SELECT_NET = bytes([16, 11])
-    SELECT_DAB = bytes([16, 72])
-    SELECT_FM = bytes([16, 54])
-    INC_VOLUME = bytes([16, 16])
-    DEC_VOLUME = bytes([16, 17])
-    MUTE_ON = bytes([16, 119])
-    MUTE_OFF = bytes([16, 120])
-    DIRECT_MODE_ON = bytes([16, 78])
-    DIRECT_MODE_OFF = bytes([16, 79])
-    DOLBY_PLII_IIx_GAME = bytes([16, 102])
-    DOLBY_PLII_IIx_MOVIE = bytes([16, 103])
-    DOLBY_PLII_IIx_MUSIC = bytes([16, 104])
-    MULTI_CHANNEL = bytes([16, 106])
-    STEREO = bytes([16, 107])
-    DOLBY_PL = bytes([16, 110])
-    DTS_NEO_6_CINEMA = bytes([16, 111])
-    DTS_NEO_6_MUSIC = bytes([16, 112])
-    MCH_STEREO = bytes([16, 69])
-    DOLBY_D_EX = bytes([16, 118])
-    POWER_ON = bytes([16, 123])
-    POWER_OFF = bytes([16, 124])
-    FOLLOW_ZONE_1 = bytes([16, 20])
-
-    MUTE_ON_ZONE2 = bytes([23, 4])
-    MUTE_OFF_ZONE2 = bytes([23, 5])
-    INC_VOLUME_ZONE2 = bytes([23, 1])
-    DEC_VOLUME_ZONE2 = bytes([23, 2])
-
-    SELECT_CD_ZONE2 = bytes([23, 6])
-    SELECT_BD_ZONE2 = bytes([23, 7])
-    SELECT_STB_ZONE2 = bytes([23, 8])
-    SELECT_AV_ZONE2 = bytes([23, 9])
-    SELECT_GAME_ZONE2 = bytes([23, 11])
-    SELECT_AUX_ZONE2 = bytes([23, 13])
-    SELECT_PVR_ZONE2 = bytes([23, 15])
-    SELECT_FM_ZONE2 = bytes([23, 14])
-    SELECT_DAB_ZONE2 = bytes([23, 16])
-    SELECT_USB_ZONE2 = bytes([23, 18])
-    SELECT_NET_ZONE2 = bytes([23, 19])
-    POWER_ON_ZONE2 = bytes([23, 123])
-    POWER_OFF_ZONE2 = bytes([23, 124])
-
-SOURCECODE_TO_RC5CODE_ZONE1 = {
-    SourceCodes.STB: RC5Codes.SELECT_STB,
-    SourceCodes.AV: RC5Codes.SELECT_AV,
-    SourceCodes.DAB: RC5Codes.SELECT_DAB,
-    SourceCodes.FM: RC5Codes.SELECT_FM,
-    SourceCodes.BD: RC5Codes.SELECT_BD,
-    SourceCodes.GAME: RC5Codes.SELECT_GAME,
-    SourceCodes.VCR: RC5Codes.SELECT_VCR,
-    SourceCodes.CD: RC5Codes.SELECT_CD,
-    SourceCodes.AUX: RC5Codes.SELECT_AUX,
-    SourceCodes.DISPLAY: RC5Codes.SELECT_DISPLAY,
-    SourceCodes.SAT: RC5Codes.SELECT_SAT,
-    SourceCodes.PVR: RC5Codes.SELECT_PVR,
-    SourceCodes.USB: RC5Codes.SELECT_USB,
-    SourceCodes.NET: RC5Codes.SELECT_NET,
+RC5CODE_DECODE_MODE_MCH = {
+    (ApiModel.API450_SERIES, 1): {
+        DecodeModeMCH.STEREO_DOWNMIX: bytes([16, 107]),
+        DecodeModeMCH.MULTI_CHANNEL: bytes([16, 106]),
+        DecodeModeMCH.DOLBY_D_EX_OR_DTS_ES: bytes([16, 118]),
+        DecodeModeMCH.DOLBY_PLII_IIx_MOVIE: bytes([16, 103]),
+        DecodeModeMCH.DOLBY_PLII_IIx_MUSIC: bytes([16, 104]),
+    },
+    (ApiModel.API450_SERIES, 2): {}
 }
 
-SOURCECODE_TO_RC5CODE_ZONE2 = {
-    SourceCodes.STB: RC5Codes.SELECT_STB_ZONE2,
-    SourceCodes.AV: RC5Codes.SELECT_AV_ZONE2,
-    SourceCodes.DAB: RC5Codes.SELECT_DAB_ZONE2,
-    SourceCodes.FM: RC5Codes.SELECT_FM_ZONE2,
-    SourceCodes.BD: RC5Codes.SELECT_BD_ZONE2,
-    SourceCodes.GAME: RC5Codes.SELECT_GAME_ZONE2,
-    SourceCodes.CD: RC5Codes.SELECT_CD_ZONE2,
-    SourceCodes.AUX: RC5Codes.SELECT_AUX_ZONE2,
-    SourceCodes.PVR: RC5Codes.SELECT_PVR_ZONE2,
-    SourceCodes.USB: RC5Codes.SELECT_USB_ZONE2,
-    SourceCodes.NET: RC5Codes.SELECT_NET_ZONE2,
-    SourceCodes.FOLLOW_ZONE_1: RC5Codes.FOLLOW_ZONE_1
+RC5CODE_DECODE_MODE_2CH = {
+    (ApiModel.API450_SERIES, 1): {
+        DecodeMode2CH.STEREO: bytes([16, 107]),
+        DecodeMode2CH.DOLBY_PLII_IIx_MOVIE: bytes([16, 103]),
+        DecodeMode2CH.DOLBY_PLII_IIx_MUSIC: bytes([16, 104]),
+        DecodeMode2CH.DOLBY_PLII_IIx_GAME: bytes([16, 102]),
+        DecodeMode2CH.DOLBY_PL: bytes([16, 110]),
+        DecodeMode2CH.DTS_NEO_6_CINEMA: bytes([16, 111]),
+        DecodeMode2CH.DTS_NEO_6_MUSIC: bytes([16, 112]),
+        DecodeMode2CH.MCH_STEREO: bytes([16, 69]),
+    },
+    (ApiModel.API450_SERIES, 2): {}
+}
+
+RC5CODE_SOURCE = {
+    (ApiModel.API450_SERIES, 1): {
+        SourceCodes.STB: bytes([16, 1]),
+        SourceCodes.AV: bytes([16, 2]),
+        SourceCodes.DAB: bytes([16, 72]),
+        SourceCodes.FM: bytes([16, 54]),
+        SourceCodes.BD: bytes([16, 4]),
+        SourceCodes.GAME: bytes([16, 5]),
+        SourceCodes.VCR: bytes([16, 6]),
+        SourceCodes.CD: bytes([16, 7]),
+        SourceCodes.AUX: bytes([16, 8]),
+        SourceCodes.DISPLAY: bytes([16, 9]),
+        SourceCodes.SAT: bytes([16, 0]),
+        SourceCodes.PVR: bytes([16, 34]),
+        SourceCodes.USB: bytes([16, 18]),
+        SourceCodes.NET: bytes([16, 11]),
+    },
+    (ApiModel.API450_SERIES, 2): {
+        SourceCodes.STB: bytes([23, 8]),
+        SourceCodes.AV: bytes([23, 9]),
+        SourceCodes.DAB: bytes([23, 16]),
+        SourceCodes.FM: bytes([23, 14]),
+        SourceCodes.BD: bytes([23, 7]),
+        SourceCodes.GAME: bytes([23, 11]),
+        SourceCodes.CD: bytes([23, 6]),
+        SourceCodes.AUX: bytes([23, 13]),
+        SourceCodes.PVR: bytes([23, 15]),
+        SourceCodes.USB: bytes([23, 18]),
+        SourceCodes.NET: bytes([23, 19]),
+        SourceCodes.FOLLOW_ZONE_1: bytes([16, 20])
+    }
+}
+
+RC5CODE_POWER = {
+    (ApiModel.API450_SERIES, 1): {
+        True: bytes([16, 123]),
+        False: bytes([16, 124])
+    },
+    (ApiModel.API450_SERIES, 2): {
+        True: bytes([23, 123]),
+        False: bytes([23, 124])
+    }
+}
+
+RC5CODE_MUTE = {
+    (ApiModel.API450_SERIES, 1): {
+        True: bytes([16, 119]),
+        False: bytes([16, 120]),
+    },
+    (ApiModel.API450_SERIES, 2): {
+        True: bytes([23, 4]),
+        False: bytes([23, 5]),
+    }
+}
+
+RC5CODE_VOLUME = {
+    (ApiModel.API450_SERIES, 1): {
+        True: bytes([16, 16]),
+        False: bytes([16, 17]),
+    },
+    (ApiModel.API450_SERIES, 2): {
+        True: bytes([23, 1]),
+        False: bytes([23, 2]),
+    }
 }
 
 class IncomingAudioFormat(IntOrTypeEnum):

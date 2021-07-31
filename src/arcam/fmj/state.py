@@ -1,12 +1,15 @@
 """Zone state"""
 import asyncio
 import logging
-from typing import Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, TypeVar, Union
 
 from . import (
+    APIVERSION_450_SERIES,
+    APIVERSION_860_SERIES,
     AmxDuetRequest,
     AmxDuetResponse,
     AnswerCodes,
+    ApiModel,
     CommandCodes,
     CommandInvalidAtThisTime,
     DecodeMode2CH,
@@ -16,16 +19,20 @@ from . import (
     MenuCodes,
     NotConnectedException,
     PresetDetail,
-    RC5Codes,
     ResponseException,
     ResponsePacket,
     SourceCodes,
-    SOURCECODE_TO_RC5CODE_ZONE1,
-    SOURCECODE_TO_RC5CODE_ZONE2,
+    RC5CODE_SOURCE,
+    RC5CODE_POWER,
+    RC5CODE_MUTE,
+    RC5CODE_VOLUME,
+    RC5CODE_DECODE_MODE_2CH,
+    RC5CODE_DECODE_MODE_MCH,
 )
 from .client import Client
 
 _LOGGER = logging.getLogger(__name__)
+_T = TypeVar("_T")
 
 class State():
     _state: Dict[int, Optional[bytes]]
@@ -37,6 +44,7 @@ class State():
         self._state = dict()
         self._presets = dict()
         self._amxduet: Optional[AmxDuetResponse] = None
+        self._api_model = ApiModel.API450_SERIES
 
     async def start(self):
         # pylint: disable=protected-access
@@ -94,6 +102,16 @@ class State():
     def client(self):
         return self._client
 
+    def get_rc5code(self, table: Dict[Tuple[ApiModel, int], Dict[_T, bytes]], value: _T) -> bytes:
+        lookup = table.get((self._api_model, self._zn))
+        if not lookup:
+            raise ValueError("Unkown mapping for model {} and zone {}".format(self._api_model, self._zn))
+
+        command = lookup.get(value)
+        if not command:
+            raise ValueError("Unkown command for model {} and zone {} and value {}".format(self._api_model, self._zn, value))
+        return command
+
     def get(self, cc):
         return self._state[cc]
 
@@ -111,27 +129,9 @@ class State():
         return DecodeMode2CH.from_bytes(value)
 
     async def set_decode_mode_2ch(self, mode: DecodeMode2CH):
-        if mode == DecodeMode2CH.STEREO:
-            command = RC5Codes.STEREO
-        elif mode == DecodeMode2CH.DOLBY_PLII_IIx_MOVIE:
-            command = RC5Codes.DOLBY_PLII_IIx_MOVIE
-        elif mode == DecodeMode2CH.DOLBY_PLII_IIx_MUSIC:
-            command = RC5Codes.DOLBY_PLII_IIx_MUSIC
-        elif mode == DecodeMode2CH.DOLBY_PLII_IIx_GAME:
-            command = RC5Codes.DOLBY_PLII_IIx_GAME
-        elif mode == DecodeMode2CH.DOLBY_PL:
-            command = RC5Codes.DOLBY_PL
-        elif mode == DecodeMode2CH.DTS_NEO_6_CINEMA:
-            command = RC5Codes.DTS_NEO_6_CINEMA
-        elif mode == DecodeMode2CH.DTS_NEO_6_MUSIC:
-            command = RC5Codes.DTS_NEO_6_MUSIC
-        elif mode == DecodeMode2CH.MCH_STEREO:
-            command = RC5Codes.MCH_STEREO
-        else:
-            raise ValueError("Unkown mapping for mode {}".format(mode))
-
+        command = self.get_rc5code(RC5CODE_DECODE_MODE_2CH, mode)
         await self._client.request(
-            self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command.value)
+            self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command)
 
     def get_decode_mode_mch(self) -> Optional[DecodeModeMCH]:
         value = self._state.get(CommandCodes.DECODE_MODE_STATUS_MCH)
@@ -140,21 +140,9 @@ class State():
         return DecodeModeMCH.from_bytes(value)
 
     async def set_decode_mode_mch(self, mode: DecodeModeMCH):
-        if mode == DecodeModeMCH.STEREO_DOWNMIX:
-            command = RC5Codes.STEREO
-        elif mode == DecodeModeMCH.MULTI_CHANNEL:
-            command = RC5Codes.MULTI_CHANNEL
-        elif mode == DecodeModeMCH.DOLBY_D_EX_OR_DTS_ES:
-            command = RC5Codes.DOLBY_D_EX
-        elif mode == DecodeModeMCH.DOLBY_PLII_IIx_MOVIE:
-            command = RC5Codes.DOLBY_PLII_IIx_MOVIE
-        elif mode == DecodeModeMCH.DOLBY_PLII_IIx_MUSIC:
-            command = RC5Codes.DOLBY_PLII_IIx_MUSIC
-        else:
-            raise ValueError("Unkown mapping for mode {}".format(mode))
-
+        command = self.get_rc5code(RC5CODE_DECODE_MODE_MCH, mode)
         await self._client.request(
-            self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command.value)
+            self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command)
 
     def get_power(self) -> Optional[bool]:
         value = self._state.get(CommandCodes.POWER)
@@ -163,27 +151,18 @@ class State():
         return int.from_bytes(value, 'big') == 0x01
 
     async def set_power(self, power: bool) -> None:
+        command = self.get_rc5code(RC5CODE_POWER, power)
         if power:
-            if self._zn == 1:
-                command = RC5Codes.POWER_ON
-            else:
-                command = RC5Codes.POWER_ON_ZONE2
-
             await self._client.request(
-                self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command.value)
+                self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command)
         else:
-            if self._zn == 1:
-                command = RC5Codes.POWER_OFF
-            else:
-                command = RC5Codes.POWER_OFF_ZONE2
-
             # seed with a response, since device might not
             # respond in timely fashion, so let's just
             # assume we succeded until response come
             # back.
             self._state[CommandCodes.POWER] = bytes([0])
             await self._client.send(
-                self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command.value)
+                self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command)
 
     def get_menu(self) -> Optional[MenuCodes]:
         value = self._state.get(CommandCodes.MENU)
@@ -198,19 +177,9 @@ class State():
         return int.from_bytes(value, 'big') == 0
 
     async def set_mute(self, mute: bool) -> None:
-        if mute:
-            if self._zn == 1:
-                command = RC5Codes.MUTE_ON
-            else:
-                command = RC5Codes.MUTE_ON_ZONE2
-        else:
-            if self._zn == 1:
-                command = RC5Codes.MUTE_OFF
-            else:
-                command = RC5Codes.MUTE_OFF_ZONE2
-
+        command = self.get_rc5code(RC5CODE_MUTE, mute)
         await self._client.request(
-            self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command.value)
+            self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command)
 
     def get_source(self) -> Optional[SourceCodes]:
         value = self._state.get(CommandCodes.CURRENT_SOURCE)
@@ -220,20 +189,12 @@ class State():
             int.from_bytes(value, 'big'))
 
     def get_source_list(self) -> List[SourceCodes]:
-        if self._zn == 1:
-            return list(SOURCECODE_TO_RC5CODE_ZONE1.keys())
-        else:
-            return list(SOURCECODE_TO_RC5CODE_ZONE2.keys())
+        return list(RC5CODE_SOURCE[(self._api_model, self._zn)].keys())
 
     async def set_source(self, src: SourceCodes) -> None:
-
-        if self._zn == 1:
-            command = SOURCECODE_TO_RC5CODE_ZONE1[src]
-        else:
-            command = SOURCECODE_TO_RC5CODE_ZONE2[src]
-
+        command = self.get_rc5code(RC5CODE_SOURCE, src)
         await self._client.request(
-            self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command.value)
+            self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command)
 
     def get_volume(self) -> Optional[int]:
         value = self._state.get(CommandCodes.VOLUME)
@@ -246,22 +207,16 @@ class State():
             self._zn, CommandCodes.VOLUME, bytes([volume]))
 
     async def inc_volume(self) -> None:
-        if self._zn == 1:
-            command = RC5Codes.INC_VOLUME
-        else:
-            command = RC5Codes.INC_VOLUME_ZONE2
+        command = self.get_rc5code(RC5CODE_VOLUME, True)
 
         await self._client.request(
-            self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command.value)
+            self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command)
 
     async def dec_volume(self) -> None:
-        if self._zn == 1:
-            command = RC5Codes.DEC_VOLUME
-        else:
-            command = RC5Codes.DEC_VOLUME_ZONE2
+        command = self.get_rc5code(RC5CODE_VOLUME, False)
 
         await self._client.request(
-            self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command.value)
+            self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command)
 
     def get_dab_station(self) -> Optional[str]:
         value = self._state.get(CommandCodes.DAB_STATION)
@@ -327,6 +282,13 @@ class State():
             try:
                 data = await self._client.request_raw(AmxDuetRequest())
                 self._amxduet = data
+
+                if data.device_model in APIVERSION_450_SERIES:
+                    self._api_model = ApiModel.API450_SERIES
+
+                # if data.device_model in APIVERSION_860_SERIES:
+                #    self._api_model = ApiModel.API860_SERIES
+
             except ResponseException as e:
                 _LOGGER.debug("Response error skipping %s", e.ac)
             except NotConnectedException as e:
