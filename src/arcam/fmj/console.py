@@ -3,7 +3,7 @@ import asyncio
 import logging
 import sys
 
-from . import CommandCodes, CommandInvalidAtThisTime, SourceCodes, IncomingAudioFormat, IncomingAudioConfig, DecodeMode2CH, DecodeModeMCH, RC5Codes, CommandNotRecognised, _LOGGER, ResponsePacket, AnswerCodes
+from . import ApiModel, CommandCodes, CommandInvalidAtThisTime, SourceCodes, IncomingAudioFormat, IncomingAudioConfig, DecodeMode2CH, DecodeModeMCH, CommandNotRecognised, _LOGGER, ResponsePacket, AnswerCodes, RC5CODE_SOURCE
 from .client import Client, ClientContext
 from .server import Server, ServerContext
 from .state import State
@@ -80,6 +80,7 @@ async def run_server(args):
         def __init__(self, host, port):
             super().__init__(host, port)
 
+            self._api_version = ApiModel.API450_SERIES
             self._volume = bytes([10])
             self._source = bytes([SourceCodes.PVR])
             self._audio_format = bytes([IncomingAudioFormat.PCM, IncomingAudioConfig.STEREO_ONLY])
@@ -95,6 +96,10 @@ async def run_server(args):
                 b'\x06': b'\x01jP',
             }
 
+            self._source_rc5 = {
+                value: key
+                for key, value in RC5CODE_SOURCE.get((self._api_version, 1)).items()
+            }
 
             self.register_handler(0x01, CommandCodes.POWER, bytes([0xF0]), self.get_power)
             self.register_handler(0x01, CommandCodes.VOLUME, bytes([0xF0]), self.get_volume)
@@ -126,13 +131,7 @@ async def run_server(args):
             return self._source
 
         def ir_command(self, data, **kwargs):
-            source_commands = {
-                RC5Codes.SELECT_AUX.value: SourceCodes.AUX,
-                RC5Codes.SELECT_AV.value: SourceCodes.AV,
-                RC5Codes.SELECT_PVR.value: SourceCodes.PVR,
-                RC5Codes.SELECT_DISPLAY.value: SourceCodes.DISPLAY,
-            }
-            source = source_commands.get(data)
+            source = self._source_rc5.get(data)
             if source:
                 self.set_source(bytes([source]))
                 return [
