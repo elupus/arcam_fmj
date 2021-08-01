@@ -134,6 +134,7 @@ class State():
         return (IncomingAudioFormat.from_int(value[0]),
                 IncomingAudioConfig.from_int(value[1]))
 
+
     def get_decode_mode_2ch(self) -> Optional[DecodeMode2CH]:
         value = self._state.get(CommandCodes.DECODE_MODE_STATUS_2CH)
         if value is None:
@@ -155,6 +156,45 @@ class State():
         command = self.get_rc5code(RC5CODE_DECODE_MODE_MCH, mode)
         await self._client.request(
             self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command)
+
+    def get_2ch(self):
+        """Return if source is 2 channel or not."""
+        audio_format, _ = self.get_incoming_audio_format()
+        return bool(
+            audio_format
+            in (
+                IncomingAudioFormat.PCM,
+                IncomingAudioFormat.ANALOGUE_DIRECT,
+                IncomingAudioFormat.UNDETECTED,
+                None,
+            )
+        )
+
+    def get_decode_mode(self) -> Optional[Union[DecodeModeMCH, DecodeMode2CH]]:
+        if self.get_2ch():
+            return self.get_decode_mode_2ch()
+        else:
+            return self.get_decode_mode_mch()
+
+    def get_decode_modes(self) -> Optional[Union[List[DecodeModeMCH], List[DecodeMode2CH]]]:
+        if self.get_2ch():
+            return list(RC5CODE_DECODE_MODE_2CH[(self._api_model, self._zn)])
+        else:
+            return list(RC5CODE_DECODE_MODE_MCH[(self._api_model, self._zn)])
+ 
+    async def set_decode_mode(self, mode: Union[str, DecodeModeMCH, DecodeMode2CH]):
+        if self.get_2ch():
+            if isinstance(mode, str):
+                mode = DecodeMode2CH[mode]
+            elif not isinstance(mode, DecodeMode2CH):
+                raise ValueError("Decode mode not supported at this time")
+            await self.set_decode_mode_2ch(mode)
+        else:
+            if isinstance(mode, str):
+                mode = DecodeModeMCH[mode]
+            elif not isinstance(mode, DecodeModeMCH):
+                raise ValueError("Decode mode not supported at this time")
+            await self.set_decode_mode_mch(mode)
 
     def get_power(self) -> Optional[bool]:
         value = self._state.get(CommandCodes.POWER)
