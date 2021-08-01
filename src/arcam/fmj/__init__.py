@@ -267,7 +267,10 @@ class DecodeMode2CH(IntOrTypeEnum):
 class DecodeModeMCH(IntOrTypeEnum):
     STEREO_DOWNMIX = 0x01
     MULTI_CHANNEL = 0x02
+
+    # This is used for DTS_NEURAL_X on 860 series
     DOLBY_D_EX_OR_DTS_ES = 0x03
+
     DOLBY_PLII_IIx_MOVIE = 0x04, APIVERSION_450_SERIES
     DOLBY_PLII_IIx_MUSIC = 0x05, APIVERSION_450_SERIES
 
@@ -283,7 +286,18 @@ RC5CODE_DECODE_MODE_MCH = {
         DecodeModeMCH.DOLBY_PLII_IIx_MOVIE: bytes([16, 103]),
         DecodeModeMCH.DOLBY_PLII_IIx_MUSIC: bytes([16, 104]),
     },
-    (ApiModel.API450_SERIES, 2): {}
+    (ApiModel.API450_SERIES, 2): {},
+    (ApiModel.API860_SERIES, 1): {
+        DecodeModeMCH.STEREO_DOWNMIX: bytes([16, 107]),
+        DecodeModeMCH.MULTI_CHANNEL: bytes([16, 106]),
+
+        # We map to DTS_NEURAL_X
+        DecodeModeMCH.DOLBY_D_EX_OR_DTS_ES: bytes([16, 113]),
+
+        DecodeModeMCH.DOLBY_SURROUND: bytes([16, 110]),
+        DecodeModeMCH.DTS_VIRTUAL_X: bytes([16, 115]),
+    },
+    (ApiModel.API860_SERIES, 2): {},
 }
 
 RC5CODE_DECODE_MODE_2CH = {
@@ -297,7 +311,18 @@ RC5CODE_DECODE_MODE_2CH = {
         DecodeMode2CH.DTS_NEO_6_MUSIC: bytes([16, 112]),
         DecodeMode2CH.MCH_STEREO: bytes([16, 69]),
     },
-    (ApiModel.API450_SERIES, 2): {}
+    (ApiModel.API450_SERIES, 2): {},
+    (ApiModel.API860_SERIES, 1): {
+        DecodeMode2CH.STEREO: bytes([16, 107]),
+        DecodeMode2CH.DTS_NEURAL_X: bytes([16, 113]),
+        DecodeMode2CH.DTS_VIRTUAL_X: bytes([16, 115]),
+        DecodeMode2CH.DOLBY_PL: bytes([16, 110]),
+        DecodeMode2CH.DTS_NEO_6_CINEMA: bytes([16, 111]),
+        DecodeMode2CH.DTS_NEO_6_MUSIC: bytes([16, 112]),
+        DecodeMode2CH.MCH_STEREO: bytes([16, 69]),
+    },
+    (ApiModel.API860_SERIES, 2): {},
+
 }
 
 RC5CODE_SOURCE = {
@@ -330,6 +355,38 @@ RC5CODE_SOURCE = {
         SourceCodes.USB: bytes([23, 18]),
         SourceCodes.NET: bytes([23, 19]),
         SourceCodes.FOLLOW_ZONE_1: bytes([16, 20])
+    },
+    (ApiModel.API860_SERIES, 1): {
+        SourceCodes.STB: bytes([16, 100]),
+        SourceCodes.AV: bytes([16, 94]),
+        SourceCodes.DAB: bytes([16, 72]),
+        SourceCodes.FM: bytes([16, 28]),
+        SourceCodes.BD: bytes([16, 98]),
+        SourceCodes.GAME: bytes([16, 97]),
+        SourceCodes.VCR: bytes([16, 119]),
+        SourceCodes.CD: bytes([16, 118]),
+        SourceCodes.AUX: bytes([16, 99]),
+        SourceCodes.DISPLAY: bytes([16, 58]),
+        SourceCodes.SAT: bytes([16, 27]),
+        SourceCodes.PVR: bytes([16, 96]),
+        SourceCodes.USB: bytes([16, 93]),
+        SourceCodes.NET: bytes([16, 92]),
+    },
+    (ApiModel.API860_SERIES, 2): {
+        SourceCodes.STB: bytes([23, 8]),
+        SourceCodes.AV: bytes([23, 9]),
+        SourceCodes.DAB: bytes([23, 16]),
+        SourceCodes.FM: bytes([23, 14]),
+        SourceCodes.BD: bytes([23, 7]),
+        SourceCodes.GAME: bytes([23, 11]),
+        SourceCodes.CD: bytes([23, 6]),
+        SourceCodes.AUX: bytes([23, 13]),
+        SourceCodes.PVR: bytes([23, 15]),
+        SourceCodes.USB: bytes([23, 18]),
+        SourceCodes.NET: bytes([23, 19]),
+        SourceCodes.SAT: bytes([16, 20]),
+        SourceCodes.VCR: bytes([16, 21]),
+        SourceCodes.FOLLOW_ZONE_1: bytes([16, 20])
     }
 }
 
@@ -339,6 +396,14 @@ RC5CODE_POWER = {
         False: bytes([16, 124])
     },
     (ApiModel.API450_SERIES, 2): {
+        True: bytes([23, 123]),
+        False: bytes([23, 124])
+    },
+    (ApiModel.API860_SERIES, 1): {
+        True: bytes([16, 123]),
+        False: bytes([16, 124])
+    },
+    (ApiModel.API860_SERIES, 2): {
         True: bytes([23, 123]),
         False: bytes([23, 124])
     }
@@ -352,6 +417,14 @@ RC5CODE_MUTE = {
     (ApiModel.API450_SERIES, 2): {
         True: bytes([23, 4]),
         False: bytes([23, 5]),
+    },
+    (ApiModel.API860_SERIES, 1): {
+        True: bytes([16, 26]),
+        False: bytes([16, 120]),
+    },
+    (ApiModel.API860_SERIES, 2): {
+        True: bytes([23, 4]),
+        False: bytes([23, 5]),
     }
 }
 
@@ -361,6 +434,14 @@ RC5CODE_VOLUME = {
         False: bytes([16, 17]),
     },
     (ApiModel.API450_SERIES, 2): {
+        True: bytes([23, 1]),
+        False: bytes([23, 2]),
+    },
+    (ApiModel.API860_SERIES, 1): {
+        True: bytes([16, 16]),
+        False: bytes([16, 17]),
+    },
+    (ApiModel.API860_SERIES, 2): {
         True: bytes([23, 1]),
         False: bytes([23, 2]),
     }

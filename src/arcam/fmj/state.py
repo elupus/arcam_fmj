@@ -286,8 +286,8 @@ class State():
                 if data.device_model in APIVERSION_450_SERIES:
                     self._api_model = ApiModel.API450_SERIES
 
-                # if data.device_model in APIVERSION_860_SERIES:
-                #    self._api_model = ApiModel.API860_SERIES
+                if data.device_model in APIVERSION_860_SERIES:
+                    self._api_model = ApiModel.API860_SERIES
 
             except ResponseException as e:
                 _LOGGER.debug("Response error skipping %s", e.ac)
