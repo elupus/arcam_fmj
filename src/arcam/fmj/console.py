@@ -3,7 +3,7 @@ import asyncio
 import logging
 import sys
 
-from . import ApiModel, CommandCodes, CommandInvalidAtThisTime, SourceCodes, IncomingAudioFormat, IncomingAudioConfig, DecodeMode2CH, DecodeModeMCH, CommandNotRecognised, _LOGGER, ResponsePacket, AnswerCodes, RC5CODE_SOURCE
+from . import APIVERSION_450_SERIES, APIVERSION_860_SERIES, ApiModel, CommandCodes, CommandInvalidAtThisTime, SourceCodes, IncomingAudioFormat, IncomingAudioConfig, DecodeMode2CH, DecodeModeMCH, CommandNotRecognised, _LOGGER, ResponsePacket, AnswerCodes, RC5CODE_SOURCE
 from .client import Client, ClientContext
 from .server import Server, ServerContext
 from .state import State
@@ -40,6 +40,7 @@ parser_client.add_argument('--data', nargs='+', default=[0xF0], type=auto_int)
 parser_server = subparsers.add_parser('server')
 parser_server.add_argument('--host', default='localhost')
 parser_server.add_argument('--port', default=50000)
+parser_server.add_argument('--model', default="AVR450")
 
 
 async def run_client(args):
@@ -77,10 +78,16 @@ async def run_state(args):
 async def run_server(args):
     class DummyServer(Server):
 
-        def __init__(self, host, port):
-            super().__init__(host, port)
+        def __init__(self, host, port, model):
+            super().__init__(host, port, model)
 
-            self._api_version = ApiModel.API450_SERIES
+            if model in APIVERSION_450_SERIES:
+                self._api_version = ApiModel.API450_SERIES
+            elif model in APIVERSION_860_SERIES:
+                self._api_version = ApiModel.API860_SERIES
+            else:
+                raise ValueError("Unexpected model")
+
             self._volume = bytes([10])
             self._source = bytes([SourceCodes.PVR])
             self._audio_format = bytes([IncomingAudioFormat.PCM, IncomingAudioConfig.STEREO_ONLY])
@@ -174,7 +181,7 @@ async def run_server(args):
             else:
                 raise CommandInvalidAtThisTime()
 
-    server = DummyServer(args.host, args.port)
+    server = DummyServer(args.host, args.port, args.model)
     async with ServerContext(server):
         while True:
             await asyncio.sleep(delay=1)

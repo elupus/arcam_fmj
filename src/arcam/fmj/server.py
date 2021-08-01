@@ -18,7 +18,7 @@ from . import (
 _LOGGER = logging.getLogger(__name__)
 
 class Server():
-    def __init__(self, host: str, port: int) -> None:
+    def __init__(self, host: str, port: int, model: str) -> None:
         self._server: Optional[asyncio.AbstractServer] = None
         self._host = host
         self._port = port
@@ -27,7 +27,7 @@ class Server():
         self._amxduet = AmxDuetResponse({
             "Device-SDKClass": "Receiver",
             "Device-Make": "ARCAM",
-            "Device-Model": "AV860",
+            "Device-Model": model,
             "Device-Revision": "x.y.z"
         })
 
