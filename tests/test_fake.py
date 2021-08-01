@@ -22,7 +22,7 @@ _LOGGER = logging.getLogger(__name__)
 
 @pytest.fixture
 async def server(loop, request):
-    s = Server('localhost', 8888)
+    s = Server('localhost', 8888, "AVR450")
     async with ServerContext(s):
         s.register_handler(
             0x01, CommandCodes.POWER, bytes([0xF0]),
@@ -37,7 +37,7 @@ async def server(loop, request):
 
 @pytest.fixture
 async def silent_server(loop, request):
-    s = Server('localhost', 8888)
+    s = Server('localhost', 8888, "AVR450")
     async def process(reader, writer):
         while True:
             if await reader.read(1) == bytes([]):
