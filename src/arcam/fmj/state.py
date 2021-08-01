@@ -102,6 +102,18 @@ class State():
     def client(self):
         return self._client
 
+    @property
+    def model(self):
+        if self._amxduet:
+            return self._amxduet.device_model
+        return None
+
+    @property
+    def revision(self):
+        if self._amxduet:
+            return self._amxduet.device_revision
+        return None
+
     def get_rc5code(self, table: Dict[Tuple[ApiModel, int], Dict[_T, bytes]], value: _T) -> bytes:
         lookup = table.get((self._api_model, self._zn))
         if not lookup:
