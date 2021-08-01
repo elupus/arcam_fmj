@@ -278,7 +278,7 @@ class DecodeModeMCH(IntOrTypeEnum):
     DTS_VIRTUAL_X = 0x0C, APIVERSION_860_SERIES
 
 
-RC5CODE_DECODE_MODE_MCH = {
+RC5CODE_DECODE_MODE_MCH: Dict[Tuple[ApiModel, int], Dict[DecodeModeMCH, bytes]] = {
     (ApiModel.API450_SERIES, 1): {
         DecodeModeMCH.STEREO_DOWNMIX: bytes([16, 107]),
         DecodeModeMCH.MULTI_CHANNEL: bytes([16, 106]),
@@ -300,7 +300,7 @@ RC5CODE_DECODE_MODE_MCH = {
     (ApiModel.API860_SERIES, 2): {},
 }
 
-RC5CODE_DECODE_MODE_2CH = {
+RC5CODE_DECODE_MODE_2CH: Dict[Tuple[ApiModel, int], Dict[DecodeMode2CH, bytes]]  = {
     (ApiModel.API450_SERIES, 1): {
         DecodeMode2CH.STEREO: bytes([16, 107]),
         DecodeMode2CH.DOLBY_PLII_IIx_MOVIE: bytes([16, 103]),
