@@ -408,7 +408,7 @@ RC5CODE_SOURCE = {
         SourceCodes.NET: bytes([16, 92]),
         SourceCodes.USB: bytes([16, 93]),
         SourceCodes.GAME: bytes([16, 97]),
-        SourceCodes.ARC_ERC: bytes([16, 125]),
+        SourceCodes.ARC_ERC: bytes([16, 125])
     },
     (ApiModel.APISA_SERIES, 2): {
         SourceCodes.PHONO: bytes([16, 117]),
@@ -422,7 +422,7 @@ RC5CODE_SOURCE = {
         SourceCodes.NET: bytes([16, 92]),
         SourceCodes.USB: bytes([16, 93]),
         SourceCodes.GAME: bytes([16, 97]),
-        SourceCodes.ARC_ERC: bytes([16, 125]),
+        SourceCodes.ARC_ERC: bytes([16, 125])
     }
 }
 
