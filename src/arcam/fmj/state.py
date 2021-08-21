@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional, Tuple, TypeVar, Union
 from . import (
     APIVERSION_450_SERIES,
     APIVERSION_860_SERIES,
+    APIVERSION_SA_SERIES,
     AmxDuetRequest,
     AmxDuetResponse,
     AnswerCodes,
@@ -340,6 +341,9 @@ class State():
 
                 if data.device_model in APIVERSION_860_SERIES:
                     self._api_model = ApiModel.API860_SERIES
+
+                if data.device_model in APIVERSION_SA_SERIES:
+                    self._api_model = ApiModel.APISA_SERIES
 
             except ResponseException as e:
                 _LOGGER.debug("Response error skipping %s", e.ac)
