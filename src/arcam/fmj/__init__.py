@@ -86,10 +86,12 @@ class InvalidPacket(ArcamException):
 APIVERSION_450_SERIES = {"AVR380", "AVR450", "AVR750"}
 APIVERSION_860_SERIES = {"AV860", "AVR850", "AVR550", "AVR390", "SR250"}
 APIVERSION_DAB_SERIES = {"AVR450", "AVR750"}
+APIVERSION_SA_SERIES = {"SA10", "SA20", "SA30"}
 
 class ApiModel(enum.Enum):
     API450_SERIES = 1
     API860_SERIES = 2
+    APISA_SERIES = 3
 
 _T = TypeVar("_T", bound="IntOrTypeEnum")
 class IntOrTypeEnum(enum.IntEnum):
@@ -235,6 +237,7 @@ class SourceCodes(IntOrTypeEnum):
     USB = 0x0F
     STB = 0x10
     GAME = 0x11
+    PHONO = 0x12
 
 
 class MenuCodes(IntOrTypeEnum):
@@ -298,6 +301,8 @@ RC5CODE_DECODE_MODE_MCH: Dict[Tuple[ApiModel, int], Dict[DecodeModeMCH, bytes]] 
         DecodeModeMCH.DTS_VIRTUAL_X: bytes([16, 115]),
     },
     (ApiModel.API860_SERIES, 2): {},
+    (ApiModel.APISA_SERIES, 1): {},
+    (ApiModel.APISA_SERIES, 2): {},
 }
 
 RC5CODE_DECODE_MODE_2CH: Dict[Tuple[ApiModel, int], Dict[DecodeMode2CH, bytes]]  = {
@@ -322,6 +327,8 @@ RC5CODE_DECODE_MODE_2CH: Dict[Tuple[ApiModel, int], Dict[DecodeMode2CH, bytes]] 
         DecodeMode2CH.MCH_STEREO: bytes([16, 69]),
     },
     (ApiModel.API860_SERIES, 2): {},
+    (ApiModel.APISA_SERIES, 1): {},
+    (ApiModel.APISA_SERIES, 2): {},
 
 }
 
@@ -387,6 +394,26 @@ RC5CODE_SOURCE = {
         SourceCodes.SAT: bytes([16, 20]),
         SourceCodes.VCR: bytes([16, 21]),
         SourceCodes.FOLLOW_ZONE_1: bytes([16, 20])
+    },
+    (ApiModel.APISA_SERIES, 1): {
+        SourceCodes.PHONO: bytes([16, 117]),
+        SourceCodes.CD: bytes([16, 118]),
+        SourceCodes.BD: bytes([16, 98]),
+        SourceCodes.SAT: bytes([16, 27]),
+        SourceCodes.PVR: bytes([16, 96]),
+        SourceCodes.AV: bytes([16, 94]),
+        SourceCodes.AUX: bytes([16, 99]),
+        SourceCodes.STB: bytes([16, 100])
+    },
+    (ApiModel.APISA_SERIES, 2): {
+        SourceCodes.PHONO: bytes([16, 117]),
+        SourceCodes.CD: bytes([16, 118]),
+        SourceCodes.BD: bytes([16, 98]),
+        SourceCodes.SAT: bytes([16, 27]),
+        SourceCodes.PVR: bytes([16, 96]),
+        SourceCodes.AV: bytes([16, 94]),
+        SourceCodes.AUX: bytes([16, 99]),
+        SourceCodes.STB: bytes([16, 100])
     }
 }
 
@@ -404,6 +431,14 @@ RC5CODE_POWER = {
         False: bytes([16, 124])
     },
     (ApiModel.API860_SERIES, 2): {
+        True: bytes([23, 123]),
+        False: bytes([23, 124])
+    },
+    (ApiModel.APISA_SERIES, 1): {
+        True: bytes([16, 123]),
+        False: bytes([16, 124])
+    },
+    (ApiModel.APISA_SERIES, 2): {
         True: bytes([23, 123]),
         False: bytes([23, 124])
     }
@@ -425,6 +460,14 @@ RC5CODE_MUTE = {
     (ApiModel.API860_SERIES, 2): {
         True: bytes([23, 4]),
         False: bytes([23, 5]),
+    },
+    (ApiModel.APISA_SERIES, 1): {
+        True: bytes([16, 26]),
+        False: bytes([16, 120]),
+    },
+    (ApiModel.APISA_SERIES, 2): {
+        True: bytes([16, 26]),
+        False: bytes([16, 120]),
     }
 }
 
@@ -444,6 +487,14 @@ RC5CODE_VOLUME = {
     (ApiModel.API860_SERIES, 2): {
         True: bytes([23, 1]),
         False: bytes([23, 2]),
+    },
+    (ApiModel.APISA_SERIES, 1): {
+        True: bytes([16, 16]),
+        False: bytes([16, 17]),
+    },
+    (ApiModel.APISA_SERIES, 2): {
+        True: bytes([16, 16]),
+        False: bytes([16, 17]),
     }
 }
 
