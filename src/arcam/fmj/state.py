@@ -23,6 +23,7 @@ from . import (
     ResponseException,
     ResponsePacket,
     SourceCodes,
+    NONRC5_CODE_POWER,
     RC5CODE_SOURCE,
     RC5CODE_POWER,
     RC5CODE_MUTE,
@@ -39,13 +40,13 @@ class State():
     _state: Dict[int, Optional[bytes]]
     _presets: Dict[int, PresetDetail]
 
-    def __init__(self, client: Client, zn: int):
+    def __init__(self, client: Client, zn: int, api_model: ApiModel = ApiModel.API450_SERIES):
         self._zn = zn
         self._client = client
         self._state = dict()
         self._presets = dict()
         self._amxduet: Optional[AmxDuetResponse] = None
-        self._api_model = ApiModel.API450_SERIES
+        self._api_model = api_model
 
     async def start(self):
         # pylint: disable=protected-access
@@ -115,7 +116,7 @@ class State():
             return self._amxduet.device_revision
         return None
 
-    def get_rc5code(self, table: Dict[Tuple[ApiModel, int], Dict[_T, bytes]], value: _T) -> bytes:
+    def get_code_from_dict(self, table: Dict[Tuple[ApiModel, int], Dict[_T, bytes]], value: _T) -> bytes:
         lookup = table.get((self._api_model, self._zn))
         if not lookup:
             raise ValueError("Unkown mapping for model {} and zone {}".format(self._api_model, self._zn))
@@ -143,7 +144,7 @@ class State():
         return DecodeMode2CH.from_bytes(value)
 
     async def set_decode_mode_2ch(self, mode: DecodeMode2CH):
-        command = self.get_rc5code(RC5CODE_DECODE_MODE_2CH, mode)
+        command = self.get_code_from_dict(RC5CODE_DECODE_MODE_2CH, mode)
         await self._client.request(
             self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command)
 
@@ -154,7 +155,7 @@ class State():
         return DecodeModeMCH.from_bytes(value)
 
     async def set_decode_mode_mch(self, mode: DecodeModeMCH):
-        command = self.get_rc5code(RC5CODE_DECODE_MODE_MCH, mode)
+        command = self.get_code_from_dict(RC5CODE_DECODE_MODE_MCH, mode)
         await self._client.request(
             self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command)
 
@@ -203,11 +204,14 @@ class State():
             return None
         return int.from_bytes(value, 'big') == 0x01
 
-    async def set_power(self, power: bool) -> None:
-        command = self.get_rc5code(RC5CODE_POWER, power)
+    async def set_power(self, power: bool, use_rc5: bool = True) -> None:
+        correct_command_code = CommandCodes.SIMULATE_RC5_IR_COMMAND if use_rc5 else CommandCodes.POWER
+        correct_dict = RC5CODE_POWER if use_rc5 else NONRC5_CODE_POWER
+        command = self.get_code_from_dict(correct_dict, power)
+
         if power:
             await self._client.request(
-                self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command)
+                self._zn, correct_command_code, command)
         else:
             # seed with a response, since device might not
             # respond in timely fashion, so let's just
@@ -215,7 +219,7 @@ class State():
             # back.
             self._state[CommandCodes.POWER] = bytes([0])
             await self._client.send(
-                self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command)
+                self._zn, correct_command_code, command)
 
     def get_menu(self) -> Optional[MenuCodes]:
         value = self._state.get(CommandCodes.MENU)
@@ -230,7 +234,7 @@ class State():
         return int.from_bytes(value, 'big') == 0
 
     async def set_mute(self, mute: bool) -> None:
-        command = self.get_rc5code(RC5CODE_MUTE, mute)
+        command = self.get_code_from_dict(RC5CODE_MUTE, mute)
         await self._client.request(
             self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command)
 
@@ -245,7 +249,7 @@ class State():
         return list(RC5CODE_SOURCE[(self._api_model, self._zn)].keys())
 
     async def set_source(self, src: SourceCodes) -> None:
-        command = self.get_rc5code(RC5CODE_SOURCE, src)
+        command = self.get_code_from_dict(RC5CODE_SOURCE, src)
         await self._client.request(
             self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command)
 
@@ -260,13 +264,13 @@ class State():
             self._zn, CommandCodes.VOLUME, bytes([volume]))
 
     async def inc_volume(self) -> None:
-        command = self.get_rc5code(RC5CODE_VOLUME, True)
+        command = self.get_code_from_dict(RC5CODE_VOLUME, True)
 
         await self._client.request(
             self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command)
 
     async def dec_volume(self) -> None:
-        command = self.get_rc5code(RC5CODE_VOLUME, False)
+        command = self.get_code_from_dict(RC5CODE_VOLUME, False)
 
         await self._client.request(
             self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command)
