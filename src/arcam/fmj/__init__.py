@@ -282,23 +282,8 @@ class DecodeModeMCH(IntOrTypeEnum):
     DTS_VIRTUAL_X = 0x0C, APIVERSION_860_SERIES
 
 
-NONRC5_CODE_POWER = {
-    (ApiModel.API450_SERIES, 1): {
-    },
-    (ApiModel.API450_SERIES, 2): {
-    },
-    (ApiModel.API860_SERIES, 1): {
-    },
-    (ApiModel.API860_SERIES, 2): {
-    },
-    (ApiModel.APISA_SERIES, 1): {
-        True: bytes([0x01]),
-        False: bytes([0x00])
-    },
-    (ApiModel.APISA_SERIES, 2): {
-        True: bytes([0x01]),
-        False: bytes([0x00])
-    }
+POWER_WRITE_SUPPORTED = {
+    ApiModel.APISA_SERIES
 }
 
 RC5CODE_DECODE_MODE_MCH: Dict[Tuple[ApiModel, int], Dict[DecodeModeMCH, bytes]] = {
