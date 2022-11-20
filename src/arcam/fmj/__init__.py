@@ -85,13 +85,45 @@ class InvalidPacket(ArcamException):
 
 APIVERSION_450_SERIES = {"AVR380", "AVR450", "AVR750"}
 APIVERSION_860_SERIES = {"AV860", "AVR850", "AVR550", "AVR390", "SR250"}
-APIVERSION_DAB_SERIES = {"AVR450", "AVR750"}
 APIVERSION_SA_SERIES = {"SA10", "SA20", "SA30"}
+APIVERSION_HDA_SERIES = {"AVR5", "AVR10", "AVR20", "AVR30", "AV40", "AVR11", "AVR21", "ARV31", "AV41"}
+APIVERSION_HDA_PREMIUM_SERIES = {"AVR10", "AVR20", "AVR30", "AV40", "AVR11", "AVR21", "ARV31", "AV41"}
+APIVERSION_HDA_MULTI_ZONE_SERIES = {"AVR20", "AVR30", "AV40", "AVR21", "ARV31", "AV41"}
+
+APIVERSION_DAB_SERIES = {"AVR450", "AVR750"}
+APIVERSION_DAB_SERIES.update("AV860", "AVR850", "AVR550", "AVR390")
+APIVERSION_DAB_SERIES.update(APIVERSION_HDA_SERIES)
+
+APIVERSION_ZONE2_SERIES = set()
+APIVERSION_ZONE2_SERIES.update(APIVERSION_450_SERIES)
+APIVERSION_ZONE2_SERIES.update(APIVERSION_860_SERIES)
+APIVERSION_ZONE2_SERIES.update(APIVERSION_HDA_MULTI_ZONE_SERIES)
+
+APIVERSION_DOLBY_PL_SERIES = APIVERSION_450_SERIES
+
+APIVERSION_DOLBY_SURROUND_SERIES = set()
+APIVERSION_DOLBY_SURROUND_SERIES.update(APIVERSION_860_SERIES)
+APIVERSION_DOLBY_SURROUND_SERIES.update(APIVERSION_HDA_SERIES)
+
+APIVERSION_DOLBY_ATMOS_SERIES = set()
+APIVERSION_DOLBY_ATMOS_SERIES.update(APIVERSION_860_SERIES)
+APIVERSION_DOLBY_ATMOS_SERIES.update(APIVERSION_HDA_SERIES)
+
+APIVERSION_DOLBY_VIRT_H_SERIES = APIVERSION_HDA_SERIES
+
+APIVERSION_DTS_X_SERIES = APIVERSION_DOLBY_SURROUND_SERIES
+
+APIVERSION_AURO_SERIES = APIVERSION_HDA_PREMIUM_SERIES
+
+APIVERSION_IMAX_SERIES = set()
+APIVERSION_IMAX_SERIES.update(APIVERSION_860_SERIES)
+APIVERSION_IMAX_SERIES.update(APIVERSION_HDA_PREMIUM_SERIES)
 
 class ApiModel(enum.Enum):
     API450_SERIES = 1
     API860_SERIES = 2
     APISA_SERIES = 3
+    APIHDA_SERIES = 4
 
 _T = TypeVar("_T", bound="IntOrTypeEnum")
 class IntOrTypeEnum(enum.IntEnum):
@@ -155,7 +187,7 @@ class CommandCodes(IntOrTypeEnum):
     # Input Commands
     VIDEO_SELECTION = 0x0A
     SELECT_ANALOG_DIGITAL = 0x0B
-    VIDEO_INPUT_TYPE = 0x0C
+    VIDEO_INPUT_TYPE = 0x0C # IMAX_ENHANCED on 860 and HDA Series (not AVR5)
 
 
     # Output Commands
@@ -176,7 +208,8 @@ class CommandCodes(IntOrTypeEnum):
     DAB_PROGRAM_TYPE_CATEGORY = 0x19  # Set/Request
     DLS_PDT_INFO = 0x1A  # Request
     PRESET_DETAIL = 0x1B # Request
-
+    NETWORK_PLAYBACK_STATUS = 0x1C, APIVERSION_HDA_SERIES # Request
+    
 
     # Network Command
 
@@ -185,7 +218,7 @@ class CommandCodes(IntOrTypeEnum):
     TREBLE_EQUALIZATION = 0x35
     BASS_EQUALIZATION = 0x36
     ROOM_EQUALIZATION = 0x37
-    DOLBY_VOLUME = 0x38
+    DOLBY_VOLUME = 0x38 # DOLBY_AUDIO on HDA series
     DOLBY_LEVELER = 0x39
     DOLBY_VOLUME_CALIBRATION_OFFSET = 0x3A
     BALANCE = 0x3B
@@ -211,7 +244,7 @@ class CommandCodes(IntOrTypeEnum):
     VIDEO_MPEG_NOISE_REDUCTION = 0x4D  # Set/Request
     ZONE_1_OSD_ON_OFF = 0x4E  # Set/Request
     VIDEO_OUTPUT_SWITCHING = 0x4F  # Set/Request
-    VIDEO_OUTPUT_FRAME_RATE = 0x50  # Set/Request
+    VIDEO_OUTPUT_FRAME_RATE = 0x50  # Set/Request BLUETOOTH_STATUS on HDA series
 
     # 2.0 Commands
     INPUT_NAME = 0x20  # Set/Request
@@ -219,6 +252,20 @@ class CommandCodes(IntOrTypeEnum):
     DAB_SCAN = 0x24
     HEARTBEAT = 0x25
     REBOOT = 0x26
+    SETUP = 0x27, APIVERSION_HDA_SERIES
+    ROOM_EQ_NAMES = 0x34, APIVERSION_HDA_SERIES
+    NOW_PLAYING_INFO = 0x64, APIVERSION_HDA_SERIES
+    INPUT_CONFIG = 0x28, APIVERSION_HDA_SERIES
+    GENERAL_SETUP = 0x29, APIVERSION_HDA_SERIES
+    SPEAKER_TYPES = 0x2A, APIVERSION_HDA_SERIES
+    SPEAKER_DISTANCES = 0x2B, APIVERSION_HDA_SERIES
+    SPEAKER_LEVELS = 0x2C, APIVERSION_HDA_SERIES
+    VIDEO_INPUTS = 0x2D, APIVERSION_HDA_SERIES
+    HDMI_SETTINGS = 0x2E, APIVERSION_HDA_SERIES
+    ZONE_SETTINGS = 0x2F, APIVERSION_HDA_MULTI_ZONE_SERIES
+    NETWORK_MENU_INFO = 0x30, APIVERSION_HDA_SERIES
+    BLUETOOTH_MENU_INFO = 0x32, APIVERSION_HDA_SERIES
+    ENGINEERING_MENU_INFO = 0x33, APIVERSION_HDA_SERIES
 
 
 class SourceCodes(IntOrTypeEnum):
@@ -228,7 +275,7 @@ class SourceCodes(IntOrTypeEnum):
     AV = 0x03
     SAT = 0x04
     PVR = 0x05
-    VCR = 0x06
+    VCR = 0x06 # UHD on HDA Series
     AUX = 0x08
     DISPLAY = 0x09
     FM = 0x0B
@@ -237,7 +284,7 @@ class SourceCodes(IntOrTypeEnum):
     USB = 0x0F
     STB = 0x10
     GAME = 0x11
-    PHONO = 0x12
+    PHONO = 0x12 # BT on HDA Series
     ARC_ERC = 0x13
 
 
@@ -256,30 +303,40 @@ class MenuCodes(IntOrTypeEnum):
 
 class DecodeMode2CH(IntOrTypeEnum):
     STEREO = 0x01
-    DOLBY_PLII_IIx_MOVIE = 0x02, APIVERSION_450_SERIES
-    DOLBY_PLII_IIx_MUSIC = 0x03, APIVERSION_450_SERIES
-    DOLBY_PLII_IIx_GAME = 0x05, APIVERSION_450_SERIES
-    DOLBY_PL = 0x06, APIVERSION_450_SERIES
+    DOLBY_PLII_IIx_MOVIE = 0x02, APIVERSION_DOLBY_PL_SERIES
+    DOLBY_PLII_IIx_MUSIC = 0x03, APIVERSION_DOLBY_PL_SERIES
+    DOLBY_SURROUND = 0x04, APIVERSION_DOLBY_SURROUND_SERIES
+    DOLBY_PLII_IIx_GAME = 0x05, APIVERSION_DOLBY_PL_SERIES
+    DOLBY_PL = 0x06, APIVERSION_DOLBY_PL_SERIES
     DTS_NEO_6_CINEMA = 0x07
     DTS_NEO_6_MUSIC = 0x08
     MCH_STEREO = 0x09
 
-    DTS_NEURAL_X = 0x0A, APIVERSION_860_SERIES
-    DTS_VIRTUAL_X = 0x0C, APIVERSION_860_SERIES
+    DTS_NEURAL_X = 0x0A, APIVERSION_DTS_X_SERIES
+    DTS_VIRTUAL_X = 0x0C, APIVERSION_DTS_X_SERIES
 
+    DOLBY_VIRTUAL_HEIGHT = 0x0D, APIVERSION_DOLBY_VIRT_H_SERIES
+    AURO_NATIVE = 0x0E, APIVERSION_AURO_SERIES
+    AURO_MATIC_3D = 0x0F, APIVERSION_AURO_SERIES
+    AURO_2D = 0x10, APIVERSION_AURO_SERIES
 
 class DecodeModeMCH(IntOrTypeEnum):
     STEREO_DOWNMIX = 0x01
     MULTI_CHANNEL = 0x02
 
-    # This is used for DTS_NEURAL_X on 860 series
+    # This is used for DTS_NEURAL_X on 860 series and HDA series
     DOLBY_D_EX_OR_DTS_ES = 0x03
 
-    DOLBY_PLII_IIx_MOVIE = 0x04, APIVERSION_450_SERIES
-    DOLBY_PLII_IIx_MUSIC = 0x05, APIVERSION_450_SERIES
+    DOLBY_PLII_IIx_MOVIE = 0x04, APIVERSION_DOLBY_PL_SERIES
+    DOLBY_PLII_IIx_MUSIC = 0x05, APIVERSION_DOLBY_PL_SERIES
 
-    DOLBY_SURROUND = 0x06, APIVERSION_860_SERIES
-    DTS_VIRTUAL_X = 0x0C, APIVERSION_860_SERIES
+    DOLBY_SURROUND = 0x06, APIVERSION_DOLBY_SURROUND_SERIES
+    DTS_VIRTUAL_X = 0x0C, APIVERSION_DTS_X_SERIES
+
+    DOLBY_VIRTUAL_HEIGHT = 0x0D, APIVERSION_DOLBY_VIRT_H_SERIES
+    AURO_NATIVE = 0x0E, APIVERSION_AURO_SERIES
+    AURO_MATIC_3D = 0x0F, APIVERSION_AURO_SERIES
+    AURO_2D = 0x10, APIVERSION_AURO_SERIES
 
 
 POWER_WRITE_SUPPORTED = {
@@ -306,6 +363,22 @@ RC5CODE_DECODE_MODE_MCH: Dict[Tuple[ApiModel, int], Dict[DecodeModeMCH, bytes]] 
         DecodeModeMCH.DTS_VIRTUAL_X: bytes([16, 115]),
     },
     (ApiModel.API860_SERIES, 2): {},
+    (ApiModel.APIHDA_SERIES, 1): {
+        DecodeModeMCH.STEREO_DOWNMIX: bytes([16, 107]),
+        DecodeModeMCH.MULTI_CHANNEL: bytes([16, 106]),
+
+        # We map to DTS_NEURAL_X
+        DecodeModeMCH.DOLBY_D_EX_OR_DTS_ES: bytes([16, 113]),
+
+        DecodeModeMCH.DOLBY_SURROUND: bytes([16, 110]),
+
+        DecodeModeMCH.DOLBY_VIRTUAL_HEIGHT: bytes([16, 115]),
+        DecodeModeMCH.AURO_NATIVE: bytes([16, 103]),
+        DecodeModeMCH.AURO_MATIC_3D: bytes([16, 71]),
+        DecodeModeMCH.AURO_2D: bytes([16, 104]),
+
+    },
+    (ApiModel.APIHDA_SERIES, 2): {},
     (ApiModel.APISA_SERIES, 1): {},
     (ApiModel.APISA_SERIES, 2): {},
 }
@@ -332,6 +405,19 @@ RC5CODE_DECODE_MODE_2CH: Dict[Tuple[ApiModel, int], Dict[DecodeMode2CH, bytes]] 
         DecodeMode2CH.MCH_STEREO: bytes([16, 69]),
     },
     (ApiModel.API860_SERIES, 2): {},
+    (ApiModel.APIHDA_SERIES, 1): {
+        DecodeMode2CH.STEREO: bytes([16, 107]),
+        DecodeMode2CH.DOLBY_SURROUND: bytes([16, 110]),
+        DecodeMode2CH.DTS_NEO_6_CINEMA: bytes([16, 111]),
+        DecodeMode2CH.DTS_NEO_6_MUSIC: bytes([16, 112]),
+        DecodeMode2CH.MCH_STEREO: bytes([16, 69]),
+        DecodeMode2CH.DTS_NEURAL_X: bytes([16, 113]),
+        DecodeMode2CH.DOLBY_VIRTUAL_HEIGHT: bytes([16, 115]),
+        DecodeModeMCH.AURO_NATIVE: bytes([16, 103]),
+        DecodeModeMCH.AURO_MATIC_3D: bytes([16, 71]),
+        DecodeModeMCH.AURO_2D: bytes([16, 104]),
+    },
+    (ApiModel.APIHDA_SERIES, 2): {},
     (ApiModel.APISA_SERIES, 1): {},
     (ApiModel.APISA_SERIES, 2): {},
 
@@ -396,8 +482,42 @@ RC5CODE_SOURCE = {
         SourceCodes.PVR: bytes([23, 15]),
         SourceCodes.USB: bytes([23, 18]),
         SourceCodes.NET: bytes([23, 19]),
-        SourceCodes.SAT: bytes([16, 20]),
-        SourceCodes.VCR: bytes([16, 21]),
+        SourceCodes.SAT: bytes([23, 20]),
+        SourceCodes.VCR: bytes([23, 21]),
+        SourceCodes.FOLLOW_ZONE_1: bytes([16, 20])
+    },
+    (ApiModel.APIHDA_SERIES, 1): {
+        SourceCodes.STB: bytes([16, 100]),
+        SourceCodes.AV: bytes([16, 94]),
+        SourceCodes.DAB: bytes([16, 72]),
+        SourceCodes.FM: bytes([16, 28]),
+        SourceCodes.BD: bytes([16, 98]),
+        SourceCodes.GAME: bytes([16, 97]),
+        SourceCodes.VCR: bytes([16, 125]), # UHD
+        SourceCodes.CD: bytes([16, 118]),
+        SourceCodes.AUX: bytes([16, 99]),
+        SourceCodes.DISPLAY: bytes([16, 58]),
+        SourceCodes.SAT: bytes([16, 27]),
+        SourceCodes.PVR: bytes([16, 96]),
+        SourceCodes.USB: bytes([16, 93]), # Not in docs but seems plausible
+        SourceCodes.NET: bytes([16, 92]),
+        SourceCodes.PHONO: bytes([16, 122]), # BT
+    },
+    (ApiModel.APIHDA_SERIES, 2): {
+        SourceCodes.STB: bytes([23, 8]),
+        SourceCodes.AV: bytes([23, 9]),
+        SourceCodes.DAB: bytes([23, 16]),
+        SourceCodes.FM: bytes([23, 14]),
+        SourceCodes.BD: bytes([23, 7]),
+        SourceCodes.GAME: bytes([23, 11]),
+        SourceCodes.CD: bytes([23, 6]),
+        SourceCodes.AUX: bytes([23, 13]),
+        SourceCodes.PVR: bytes([23, 15]),
+        SourceCodes.USB: bytes([23, 18]),
+        SourceCodes.NET: bytes([23, 19]),
+        SourceCodes.SAT: bytes([23, 20]),
+        SourceCodes.VCR: bytes([23, 23]), # UHD
+        SourceCodes.PHONO: bytes([23, 22]), # BT
         SourceCodes.FOLLOW_ZONE_1: bytes([16, 20])
     },
     (ApiModel.APISA_SERIES, 1): {
@@ -447,6 +567,14 @@ RC5CODE_POWER = {
         True: bytes([23, 123]),
         False: bytes([23, 124])
     },
+    (ApiModel.APIHDA_SERIES, 1): {
+        True: bytes([16, 123]),
+        False: bytes([16, 124])
+    },
+    (ApiModel.APIHDA_SERIES, 2): {
+        True: bytes([23, 123]),
+        False: bytes([23, 124])
+    },
     (ApiModel.APISA_SERIES, 1): {
         True: bytes([16, 123]),
         False: bytes([16, 124])
@@ -474,6 +602,14 @@ RC5CODE_MUTE = {
         True: bytes([23, 4]),
         False: bytes([23, 5]),
     },
+    (ApiModel.APIHDA_SERIES, 1): {
+        True: bytes([16, 26]),
+        False: bytes([16, 120]),
+    },
+    (ApiModel.APIHDA_SERIES, 2): {
+        True: bytes([23, 4]),
+        False: bytes([23, 5]),
+    },
     (ApiModel.APISA_SERIES, 1): {
         True: bytes([16, 26]),
         False: bytes([16, 120]),
@@ -498,6 +634,14 @@ RC5CODE_VOLUME = {
         False: bytes([16, 17]),
     },
     (ApiModel.API860_SERIES, 2): {
+        True: bytes([23, 1]),
+        False: bytes([23, 2]),
+    },
+    (ApiModel.APIHDA_SERIES, 1): {
+        True: bytes([16, 16]),
+        False: bytes([16, 17]),
+    },
+    (ApiModel.APIHDA_SERIES, 2): {
         True: bytes([23, 1]),
         False: bytes([23, 2]),
     },
@@ -532,6 +676,10 @@ class IncomingAudioFormat(IntOrTypeEnum):
     PCM_ZERO = 0x13
     UNSUPPORTED = 0x14
     UNDETECTED = 0x15
+    DOLBY_ATMOS = 0x16, APIVERSION_DOLBY_ATMOS_SERIES
+    DTS_X = 0x17, APIVERSION_DTS_X_SERIES
+    IMAX_ENHANCED = 0x18, APIVERSION_IMAX_SERIES
+    AURO_3D = 0x19, APIVERSION_AURO_SERIES
 
 
 class IncomingAudioConfig(IntOrTypeEnum):
