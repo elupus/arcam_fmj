@@ -3,7 +3,7 @@ import asyncio
 import logging
 import sys
 
-from . import APIVERSION_450_SERIES, APIVERSION_860_SERIES, ApiModel, CommandCodes, CommandInvalidAtThisTime, SourceCodes, IncomingAudioFormat, IncomingAudioConfig, DecodeMode2CH, DecodeModeMCH, CommandNotRecognised, _LOGGER, ResponsePacket, AnswerCodes, RC5CODE_SOURCE, RC5CODE_DECODE_MODE_2CH, RC5CODE_DECODE_MODE_MCH
+from . import APIVERSION_450_SERIES, APIVERSION_860_SERIES, APIVERSION_HDA_SERIES, ApiModel, CommandCodes, CommandInvalidAtThisTime, SourceCodes, IncomingAudioFormat, IncomingAudioConfig, DecodeMode2CH, DecodeModeMCH, CommandNotRecognised, _LOGGER, ResponsePacket, AnswerCodes, RC5CODE_SOURCE, RC5CODE_DECODE_MODE_2CH, RC5CODE_DECODE_MODE_MCH
 from .client import Client, ClientContext
 from .server import Server, ServerContext
 from .state import State
@@ -85,6 +85,8 @@ async def run_server(args):
                 self._api_version = ApiModel.API450_SERIES
             elif model in APIVERSION_860_SERIES:
                 self._api_version = ApiModel.API860_SERIES
+            elif model in APIVERSION_HDA_SERIES:
+                self._api_version = ApiModel.APIHDA_SERIES
             else:
                 raise ValueError("Unexpected model")
 

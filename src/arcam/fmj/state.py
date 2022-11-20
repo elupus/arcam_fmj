@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional, Tuple, TypeVar, Union
 from . import (
     APIVERSION_450_SERIES,
     APIVERSION_860_SERIES,
+    APIVERSION_HDA_SERIES,
     APIVERSION_SA_SERIES,
     AmxDuetRequest,
     AmxDuetResponse,
@@ -328,7 +329,8 @@ class State():
             for preset in range(1, 51):
                 try:
                     data = await self._client.request(self._zn, CommandCodes.PRESET_DETAIL, bytes([preset]))
-                    presets[preset] = PresetDetail.from_bytes(data)
+                    if data != b'\x00':
+                        presets[preset] = PresetDetail.from_bytes(data)
                 except CommandInvalidAtThisTime:
                     break
                 except NotConnectedException as e:
@@ -349,6 +351,9 @@ class State():
 
                 if data.device_model in APIVERSION_860_SERIES:
                     self._api_model = ApiModel.API860_SERIES
+
+                if data.device_model in APIVERSION_HDA_SERIES:
+                    self._api_model = ApiModel.APIHDA_SERIES
 
                 if data.device_model in APIVERSION_SA_SERIES:
                     self._api_model = ApiModel.APISA_SERIES

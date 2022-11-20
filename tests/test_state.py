@@ -7,9 +7,11 @@ from arcam.fmj import AnswerCodes, ApiModel, CommandCodes, ResponsePacket
 TEST_PARAMS = [
     (1, ApiModel.API450_SERIES),
     (1, ApiModel.API860_SERIES),
+    (1, ApiModel.APIHDA_SERIES),
     (1, ApiModel.APISA_SERIES),
     (2, ApiModel.API450_SERIES),
     (2, ApiModel.API860_SERIES),
+    (2, ApiModel.APIHDA_SERIES),
     (2, ApiModel.APISA_SERIES)
 ]
 
@@ -19,12 +21,16 @@ PARAMS_TO_RC5COMMAND = {
     (1, ApiModel.API450_SERIES, False): bytes([16, 124]),
     (1, ApiModel.API860_SERIES, True): bytes([16, 123]),
     (1, ApiModel.API860_SERIES, False): bytes([16, 124]),
+    (1, ApiModel.APIHDA_SERIES, True): bytes([16, 123]),
+    (1, ApiModel.APIHDA_SERIES, False): bytes([16, 124]),
     (1, ApiModel.APISA_SERIES, True): bytes([16, 123]),
     (1, ApiModel.APISA_SERIES, False): bytes([16, 124]),
     (2, ApiModel.API450_SERIES, True): bytes([23, 123]),
     (2, ApiModel.API450_SERIES, False): bytes([23, 124]),
     (2, ApiModel.API860_SERIES, True): bytes([23, 123]),
     (2, ApiModel.API860_SERIES, False): bytes([23, 124]),
+    (2, ApiModel.APIHDA_SERIES, True): bytes([23, 123]),
+    (2, ApiModel.APIHDA_SERIES, False): bytes([23, 124]),
     (2, ApiModel.APISA_SERIES, True): bytes([16, 123]),
     (2, ApiModel.APISA_SERIES, False): bytes([16, 124])
 }
