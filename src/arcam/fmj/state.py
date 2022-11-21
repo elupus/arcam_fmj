@@ -42,7 +42,7 @@ class State():
     _state: Dict[int, Optional[bytes]]
     _presets: Dict[int, PresetDetail]
 
-    def __init__(self, client: Client, zn: int, api_model: ApiModel = ApiModel.API450_SERIES):
+    def __init__(self, client: Client, zn: int, api_model: ApiModel = ApiModel.API450_SERIES) -> None:
         self._zn = zn
         self._client = client
         self._state = dict()
@@ -50,22 +50,22 @@ class State():
         self._amxduet: Optional[AmxDuetResponse] = None
         self._api_model = api_model
 
-    async def start(self):
+    async def start(self) -> None:
         # pylint: disable=protected-access
         self._client._listen.add(self._listen)
 
-    async def stop(self):
+    async def stop(self) -> None:
         # pylint: disable=protected-access
         self._client._listen.remove(self._listen)
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> "State":
         await self.start()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.stop()
 
-    def to_dict(self):
+    def to_dict(self) -> Dict[str, Any]:
         return {
             'POWER': self.get_power(),
             'VOLUME': self.get_volume(),
@@ -82,10 +82,10 @@ class State():
             'PRESET_DETAIL': self.get_preset_details(),
         }
 
-    def __repr__(self):
-        return "State ({}) Amx ({})".format(self.to_dict(), self._amxduet.values)
+    def __repr__(self) -> str:
+        return "State ({}) Amx ({})".format(self.to_dict(), self._amxduet.values if self._amxduet else {})
 
-    def _listen(self, packet: Union[ResponsePacket, AmxDuetResponse]):
+    def _listen(self, packet: Union[ResponsePacket, AmxDuetResponse]) -> None:
         if isinstance(packet, AmxDuetResponse):
             self._amxduet = packet
             return
@@ -99,21 +99,21 @@ class State():
             self._state[packet.cc] = None
 
     @property
-    def zn(self):
+    def zn(self) -> int:
         return self._zn
 
     @property
-    def client(self):
+    def client(self) -> Client:
         return self._client
 
     @property
-    def model(self):
+    def model(self) -> Optional[str]:
         if self._amxduet:
             return self._amxduet.device_model
         return None
 
     @property
-    def revision(self):
+    def revision(self) -> Optional[str]:
         if self._amxduet:
             return self._amxduet.device_revision
         return None
@@ -131,7 +131,7 @@ class State():
     def get(self, cc):
         return self._state[cc]
 
-    def get_incoming_audio_format(self):
+    def get_incoming_audio_format(self) -> Union[Tuple[IncomingAudioFormat, IncomingAudioConfig], Tuple[None, None]]:
         value = self._state.get(CommandCodes.INCOMING_AUDIO_FORMAT)
         if value is None:
             return None, None
@@ -145,7 +145,7 @@ class State():
             return None
         return DecodeMode2CH.from_bytes(value)
 
-    async def set_decode_mode_2ch(self, mode: DecodeMode2CH):
+    async def set_decode_mode_2ch(self, mode: DecodeMode2CH) -> None:
         command = self.get_rc5code(RC5CODE_DECODE_MODE_2CH, mode)
         await self._client.request(
             self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command)
@@ -156,12 +156,12 @@ class State():
             return None
         return DecodeModeMCH.from_bytes(value)
 
-    async def set_decode_mode_mch(self, mode: DecodeModeMCH):
+    async def set_decode_mode_mch(self, mode: DecodeModeMCH) -> None:
         command = self.get_rc5code(RC5CODE_DECODE_MODE_MCH, mode)
         await self._client.request(
             self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command)
 
-    def get_2ch(self):
+    def get_2ch(self) -> bool:
         """Return if source is 2 channel or not."""
         audio_format, _ = self.get_incoming_audio_format()
         return bool(
@@ -186,7 +186,7 @@ class State():
         else:
             return list(RC5CODE_DECODE_MODE_MCH[(self._api_model, self._zn)])
  
-    async def set_decode_mode(self, mode: Union[str, DecodeModeMCH, DecodeMode2CH]):
+    async def set_decode_mode(self, mode: Union[str, DecodeModeMCH, DecodeMode2CH]) -> None:
         if self.get_2ch():
             if isinstance(mode, str):
                 mode = DecodeMode2CH[mode]
@@ -299,7 +299,7 @@ class State():
             return None
         return value.decode('utf8').rstrip()
 
-    async def set_tuner_preset(self, preset):
+    async def set_tuner_preset(self, preset: int) -> None:
         await self._client.request(self._zn, CommandCodes.TUNER_PRESET, bytes([preset]))
 
     def get_tuner_preset(self) -> Optional[int]:
@@ -308,10 +308,10 @@ class State():
             return None
         return int.from_bytes(value, 'big')
 
-    def get_preset_details(self):
+    def get_preset_details(self) -> Dict[int, PresetDetail]:
         return self._presets
 
-    async def update(self):
+    async def update(self) -> None:
         async def _update(cc):
             try:
                 data = await self._client.request(self._zn, cc, bytes([0xF0]))
@@ -325,7 +325,7 @@ class State():
             except asyncio.TimeoutError:
                 _LOGGER.error("Timeout requesting %s", cc)
 
-        async def _update_presets():
+        async def _update_presets() -> None:
             presets = {}
             for preset in range(1, 51):
                 try:
@@ -345,7 +345,7 @@ class State():
                     return
             self._presets = presets
 
-        async def _update_amxduet():
+        async def _update_amxduet() -> None:
             try:
                 data = await self._client.request_raw(AmxDuetRequest())
                 self._amxduet = data

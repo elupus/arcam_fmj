@@ -126,7 +126,7 @@ class Client:
             raise ConnectionFailed() from exception
         _LOGGER.info("Connected to %s:%d", self._host, self._port)
 
-    async def stop(self):
+    async def stop(self) -> None:
         if self._writer:
             try:
                 _LOGGER.info("Disconnecting from %s:%d", self._host, self._port)
