@@ -14,6 +14,7 @@ from . import (
     ApiModel,
     CommandCodes,
     CommandInvalidAtThisTime,
+    CommandNotRecognised,
     DecodeMode2CH,
     DecodeModeMCH,
     IncomingAudioConfig,
@@ -333,6 +334,9 @@ class State():
                         presets[preset] = PresetDetail.from_bytes(data)
                 except CommandInvalidAtThisTime:
                     break
+                except CommandNotRecognised:
+                    _LOGGER.debug("Presets not supported skipping %s", preset)
+                    break
                 except NotConnectedException as e:
                     _LOGGER.debug("Not connected skipping preset %s", preset)
                     return
@@ -369,7 +373,7 @@ class State():
             if self._amxduet is None:
                 await _update_amxduet()
 
-            await asyncio.wait([
+            await asyncio.gather(*[
                 _update(CommandCodes.POWER),
                 _update(CommandCodes.VOLUME),
                 _update(CommandCodes.MUTE),
