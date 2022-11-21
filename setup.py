@@ -16,6 +16,9 @@ setup(
     license="MIT",
     packages=["arcam.fmj"],
     package_dir={"": "src"},
+    package_data = {
+        'arcam.fmj': ['py.typed'],
+    },
     python_requires=">=3.8",
     author="Joakim Plate",
     install_requires=["attrs>18.1"],
