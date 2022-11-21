@@ -5,6 +5,7 @@ import logging
 import re
 from datetime import datetime, timedelta
 from defusedxml import ElementTree
+from typing import Optional, Any
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -27,12 +28,12 @@ def async_retry(attempts=2, allowed_exceptions=()):
     return decorator
 
 class Throttle:
-    def __init__(self, delay):
+    def __init__(self, delay: float) -> None:
         self._timestamp = datetime.now()
         self._lock = asyncio.Lock()
         self._delay = timedelta(seconds=delay)
 
-    async def get(self):
+    async def get(self) -> None:
         async with self._lock:
             timestamp = datetime.now()
             delay = (self._timestamp - timestamp).total_seconds()
@@ -46,7 +47,7 @@ def _log_exception(msg, *args):
     _LOGGER.error(msg, *args, exc_info=_LOGGER.getEffectiveLevel() == logging.DEBUG)
 
 
-def get_uniqueid_from_udn(data):
+def get_uniqueid_from_udn(data) -> Optional[str]:
     """Extract a unique id from udn."""
     try:
         return data[5:].split("-")[4]
@@ -55,7 +56,7 @@ def get_uniqueid_from_udn(data):
         return None
 
 
-def get_possibly_invalid_xml(data):
+def get_possibly_invalid_xml(data) -> Any:
     try:
         return ElementTree.fromstring(data)
     except ElementTree.ParseError:
@@ -63,10 +64,10 @@ def get_possibly_invalid_xml(data):
         data = re.sub(r'&(?![A-Za-z]+[0-9]*;|#[0-9]+;|#x[0-9a-fA-F]+;)', r'&amp;', data)
         return ElementTree.fromstring(data)
 
-def get_udn_from_xml(xml):
+def get_udn_from_xml(xml: Any) -> Optional[str]:
     return xml.findtext("d:device/d:UDN", None, {"d": "urn:schemas-upnp-org:device-1-0"})
 
-async def get_uniqueid_from_device_description(session, url):
+async def get_uniqueid_from_device_description(session: aiohttp.ClientSession, url: str):
     """Retrieve and extract unique id from url."""
     try:
         async with session.get(url) as req:
@@ -80,7 +81,7 @@ async def get_uniqueid_from_device_description(session, url):
         return None
 
 
-async def get_uniqueid_from_host(session, host):
+async def get_uniqueid_from_host(session: aiohttp.ClientSession, host: str):
     """Try to deduce a unique id from a host based on ssdp/upnp."""
     return await get_uniqueid_from_device_description(
         session, f"http://{host}:8080/dd.xml"

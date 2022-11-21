@@ -42,11 +42,11 @@ class Client:
         self._timestamp = datetime.now()
 
     @property
-    def host(self):
+    def host(self) -> str:
         return self._host
 
     @property
-    def port(self):
+    def port(self) -> int:
         return self._port
 
     @contextmanager
@@ -90,7 +90,10 @@ class Client:
         finally:
             self._reader = None
 
-    async def process(self):
+    async def process(self) -> None:
+        assert self._writer, "Writer missing"
+        assert self._reader, "Reader missing"
+
         _process_heartbeat = asyncio.create_task(self._process_heartbeat(self._writer))
         try:
             await self._process_data(self._reader)
@@ -102,14 +105,14 @@ class Client:
                 pass
 
     @property
-    def connected(self):
+    def connected(self) -> bool:
         return self._reader is not None and not self._reader.at_eof()
 
     @property
-    def started(self):
+    def started(self) -> bool:
         return self._writer is not None
 
-    async def start(self):
+    async def start(self) -> None:
         if self._writer:
             raise ArcamException("Already started")
 
@@ -123,7 +126,7 @@ class Client:
             raise ConnectionFailed() from exception
         _LOGGER.info("Connected to %s:%d", self._host, self._port)
 
-    async def stop(self):
+    async def stop(self) -> None:
         if self._writer:
             try:
                 _LOGGER.info("Disconnecting from %s:%d", self._host, self._port)

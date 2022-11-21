@@ -4,7 +4,7 @@ import enum
 import logging
 import re
 from asyncio.exceptions import IncompleteReadError
-from typing import Dict, Iterable, Optional, SupportsBytes, Tuple, Type, TypeVar, Union
+from typing import Dict, Iterable, Optional, SupportsBytes, Tuple, Type, TypeVar, Union, Set, Literal, SupportsIndex
 
 import attr
 
@@ -127,6 +127,7 @@ class ApiModel(enum.Enum):
 
 _T = TypeVar("_T", bound="IntOrTypeEnum")
 class IntOrTypeEnum(enum.IntEnum):
+    version: Optional[Set[str]]
 
     @classmethod
     def _missing_(cls, value):
@@ -145,7 +146,7 @@ class IntOrTypeEnum(enum.IntEnum):
             pseudo_member = cls._value2member_map_.setdefault(value, obj)
         return pseudo_member
 
-    def __new__(cls, value: int, version: Optional[tuple] = None):
+    def __new__(cls, value: int, version: Optional[set] = None):
              obj = int.__new__(cls, value)
              obj._value_ = value
              obj.version = version
@@ -156,7 +157,7 @@ class IntOrTypeEnum(enum.IntEnum):
         return cls(value)
 
     @classmethod
-    def from_bytes(cls: Type[_T], bytes: Union[Iterable[int], SupportsBytes], byteorder: str = 'big', *, signed: bool = False) -> _T:
+    def from_bytes(cls: Type[_T], bytes: Union[Iterable[SupportsIndex], SupportsBytes], byteorder: Literal['little', 'big'] = 'big', *, signed: bool = False) -> _T:  # type: ignore[override]
         return cls.from_int(int.from_bytes(bytes, byteorder=byteorder, signed=signed))
 
 
@@ -413,9 +414,9 @@ RC5CODE_DECODE_MODE_2CH: Dict[Tuple[ApiModel, int], Dict[DecodeMode2CH, bytes]] 
         DecodeMode2CH.MCH_STEREO: bytes([16, 69]),
         DecodeMode2CH.DTS_NEURAL_X: bytes([16, 113]),
         DecodeMode2CH.DOLBY_VIRTUAL_HEIGHT: bytes([16, 115]),
-        DecodeModeMCH.AURO_NATIVE: bytes([16, 103]),
-        DecodeModeMCH.AURO_MATIC_3D: bytes([16, 71]),
-        DecodeModeMCH.AURO_2D: bytes([16, 104]),
+        DecodeMode2CH.AURO_NATIVE: bytes([16, 103]),
+        DecodeMode2CH.AURO_MATIC_3D: bytes([16, 71]),
+        DecodeMode2CH.AURO_2D: bytes([16, 104]),
     },
     (ApiModel.APIHDA_SERIES, 2): {},
     (ApiModel.APISA_SERIES, 1): {},
