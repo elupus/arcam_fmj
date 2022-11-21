@@ -69,7 +69,7 @@ def _get_dd(unique_id, serial_no, udn):
 """
 
 
-async def test_retry_fails():
+async def test_retry_fails(event_loop):
 
     calls = 0
 
@@ -85,7 +85,7 @@ async def test_retry_fails():
     assert calls == 2
 
 
-async def test_retry_succeeds():
+async def test_retry_succeeds(event_loop):
 
     calls = 0
 
@@ -100,7 +100,7 @@ async def test_retry_succeeds():
     assert await tester()
 
 
-async def test_retry_unexpected():
+async def test_retry_unexpected(event_loop):
 
 
     calls = 0
@@ -116,7 +116,7 @@ async def test_retry_unexpected():
     assert calls == 1
 
 
-async def test_get_uniqueid_from_device_description(aiohttp_client):
+async def test_get_uniqueid_from_device_description(event_loop, aiohttp_client):
 
     response_text = ""
     async def device_description(request):
