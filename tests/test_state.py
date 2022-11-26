@@ -2,17 +2,19 @@ import pytest
 from unittest.mock import MagicMock
 from arcam.fmj.client import Client
 from arcam.fmj.state import State
-from arcam.fmj import AnswerCodes, ApiModel, CommandCodes, ResponsePacket
+from arcam.fmj import AnswerCodes, ApiModel, CommandCodes, ResponsePacket, POWER_WRITE_SUPPORTED
 
 TEST_PARAMS = [
     (1, ApiModel.API450_SERIES),
     (1, ApiModel.API860_SERIES),
     (1, ApiModel.APIHDA_SERIES),
     (1, ApiModel.APISA_SERIES),
+    (1, ApiModel.APIPA_SERIES),
     (2, ApiModel.API450_SERIES),
     (2, ApiModel.API860_SERIES),
     (2, ApiModel.APIHDA_SERIES),
-    (2, ApiModel.APISA_SERIES)
+    (2, ApiModel.APISA_SERIES),
+    (2, ApiModel.APIPA_SERIES),
 ]
 
 # zn, api_model, power
@@ -47,7 +49,7 @@ async def test_power_on(zn, api_model):
     )
     client.request.return_value = response
     await state.set_power(True)
-    if api_model == ApiModel.APISA_SERIES:
+    if api_model in POWER_WRITE_SUPPORTED:
         client.request.assert_called_with(
             zn, CommandCodes.POWER, bytes([0x01])
         )
@@ -66,7 +68,7 @@ async def test_power_off(zn, api_model):
 
     assert state.get_power() is None
     await state.set_power(False)
-    if api_model == ApiModel.APISA_SERIES:
+    if api_model in POWER_WRITE_SUPPORTED:
         client.request.assert_called_with(
             zn, CommandCodes.POWER, bytes([0x00])
         )

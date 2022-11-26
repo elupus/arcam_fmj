@@ -8,6 +8,7 @@ from . import (
     APIVERSION_860_SERIES,
     APIVERSION_HDA_SERIES,
     APIVERSION_SA_SERIES,
+    APIVERSION_PA_SERIES,
     AmxDuetRequest,
     AmxDuetResponse,
     AnswerCodes,
@@ -26,6 +27,7 @@ from . import (
     ResponsePacket,
     SourceCodes,
     POWER_WRITE_SUPPORTED,
+    MUTE_WRITE_SUPPORTED,
     RC5CODE_SOURCE,
     RC5CODE_POWER,
     RC5CODE_MUTE,
@@ -240,9 +242,14 @@ class State():
         return int.from_bytes(value, 'big') == 0
 
     async def set_mute(self, mute: bool) -> None:
-        command = self.get_rc5code(RC5CODE_MUTE, mute)
-        await self._client.request(
-            self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command)
+        if self._api_model in MUTE_WRITE_SUPPORTED:
+            bool_to_hex = 0x00 if mute else 0x01
+            await self._client.request(
+                self._zn, CommandCodes.MUTE, bytes([bool_to_hex]))
+        else:
+            command = self.get_rc5code(RC5CODE_MUTE, mute)
+            await self._client.request(
+                self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command)
 
     def get_source(self) -> Optional[SourceCodes]:
         value = self._state.get(CommandCodes.CURRENT_SOURCE)
@@ -361,6 +368,9 @@ class State():
 
                 if data.device_model in APIVERSION_SA_SERIES:
                     self._api_model = ApiModel.APISA_SERIES
+
+                if data.device_model in APIVERSION_PA_SERIES:
+                    self._api_model = ApiModel.APIPA_SERIES
 
             except ResponseException as e:
                 _LOGGER.debug("Response error skipping %s", e.ac)
