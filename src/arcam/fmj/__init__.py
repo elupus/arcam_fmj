@@ -424,7 +424,7 @@ RC5CODE_DECODE_MODE_2CH: Dict[Tuple[ApiModel, int], Dict[DecodeMode2CH, bytes]] 
 
 }
 
-RC5CODE_SOURCE = {
+RC5CODE_SOURCE: Dict[Tuple[ApiModel, int], Dict[SourceCodes, bytes]] = {
     (ApiModel.API450_SERIES, 1): {
         SourceCodes.STB: bytes([16, 1]),
         SourceCodes.AV: bytes([16, 2]),
