@@ -1,6 +1,7 @@
 """Fake server"""
 import asyncio
 import logging
+import sys
 from typing import Callable, Dict, List, Optional, Tuple, Union
 
 from . import (
@@ -41,6 +42,9 @@ class Server():
         finally:
             _LOGGER.debug("Client disconnected")
             self._tasks.remove(task)
+            writer.close()
+            if sys.version_info >= (3, 7):
+                await writer.wait_closed()
 
     async def process_runner(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
         while True:
