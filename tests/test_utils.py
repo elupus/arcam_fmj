@@ -201,10 +201,6 @@ async def test_get_uniqueid_from_host(event_loop, mock_headers, aiohttp_client):
 
 
 @pytest.fixture
-def response_text():
-    return 
-
-@pytest.fixture
 async def mock_client_session(aiohttp_client):
     response_text = _get_dd(MOCK_UNIQUE_ID, MOCK_SERIAL_NO, MOCK_UDN)
     async def device_description(request):
