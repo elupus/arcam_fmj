@@ -1,10 +1,16 @@
 """Tests for utils."""
 import pytest
+from aiohttp import web
+from typing import Any, Awaitable, Callable, Optional
+
+from async_upnp_client.utils import CaseInsensitiveDict
+from async_upnp_client.ssdp import AddressTupleVXType
 
 from arcam.fmj.utils import async_retry
-from arcam.fmj.utils import get_uniqueid_from_device_description
-from aiohttp import web
+from arcam.fmj.utils import get_uniqueid, get_upnp_headers, get_uniqueid_from_host, get_serial_number_from_host
 
+TEST_HOST = "dummy host"
+TEST_LOCATION = "/dd.xml"
 MOCK_UNIQUE_ID = "0011044feeef"
 MOCK_UDN = f"uuid:aa331113-fa23-3333-2222-{MOCK_UNIQUE_ID}"
 MOCK_SERIAL_NO = "01a0132032f01103100400010010ff00"
@@ -59,13 +65,16 @@ def _get_dd(unique_id, serial_no, udn):
             <url>/icon2.jpg</url>
          </icon>
       </iconList>
-  <serviceList><service><serviceType>urn:schemas-upnp-org:service:AVTransport:1</serviceType><serviceId>urn:upnp-org:serviceId:AVTransport</serviceId><SCPDURL>AVTransport/scpd.xml</SCPDURL><controlURL>AVTransport/control</controlURL><eventSubURL>AVTransport/event</eventSubURL></service><service><serviceType>urn:schemas-upnp-org:service:ConnectionManager:1</serviceType><serviceId>urn:upnp-org:serviceId:ConnectionManager</serviceId><SCPDURL>ConnectionManager/scpd.xml</SCPDURL><controlURL>ConnectionManager/control</controlURL><eventSubURL>ConnectionManager/event</eventSubURL></service><service><serviceType>urn:schemas-upnp-org:service:RenderingControl:1</serviceType><serviceId>urn:upnp-org:serviceId:RenderingControl</serviceId><SCPDURL>RenderingControl/scpd.xml</SCPDURL><controlURL>RenderingControl/control</controlURL><eventSubURL>RenderingControl/event</eventSubURL></service></serviceList><dlna:X_DLNADOC xmlns:dlna="urn:schemas-dlna-org:device-1-0">DMR-1.50</dlna:X_DLNADOC>
-<pnpx:X_hardwareId>VEN_2A2D&amp;DEV_0001&amp;SUBSYS_0001&amp;REV_01 VEN_0033&amp;DEV_0006&amp;REV_01</pnpx:X_hardwareId>
-<pnpx:X_compatibleId>MS_DigitalMediaDeviceClass_DMR_V001</pnpx:X_compatibleId>
-<pnpx:X_deviceCategory>MediaDevices</pnpx:X_deviceCategory>
-<df:X_deviceCategory>Multimedia.DMR</df:X_deviceCategory>
-<microsoft:magicPacketWakeSupported>0</microsoft:magicPacketWakeSupported>
-<microsoft:magicPacketSendSupported>1</microsoft:magicPacketSendSupported></device></root>
+      <serviceList></serviceList>
+      <dlna:X_DLNADOC xmlns:dlna="urn:schemas-dlna-org:device-1-0">DMR-1.50</dlna:X_DLNADOC>
+      <pnpx:X_hardwareId>VEN_2A2D&amp;DEV_0001&amp;SUBSYS_0001&amp;REV_01 VEN_0033&amp;DEV_0006&amp;REV_01</pnpx:X_hardwareId>
+      <pnpx:X_compatibleId>MS_DigitalMediaDeviceClass_DMR_V001</pnpx:X_compatibleId>
+      <pnpx:X_deviceCategory>MediaDevices</pnpx:X_deviceCategory>
+      <df:X_deviceCategory>Multimedia.DMR</df:X_deviceCategory>
+      <microsoft:magicPacketWakeSupported>0</microsoft:magicPacketWakeSupported>
+      <microsoft:magicPacketSendSupported>1</microsoft:magicPacketSendSupported>
+   </device>
+</root>
 """
 
 
@@ -116,21 +125,68 @@ async def test_retry_unexpected(event_loop):
     assert calls == 1
 
 
-async def test_get_uniqueid_from_device_description(event_loop, aiohttp_client):
+@pytest.fixture
+async def mock_location(mocker):
+    mocker.patch('arcam.fmj.utils.get_upnp_field', return_value = TEST_LOCATION)
 
+
+@pytest.fixture
+async def mock_udn(mocker):
+    mocker.patch('arcam.fmj.utils.get_upnp_field', return_value = MOCK_UDN)
+
+
+@pytest.fixture
+async def mock_search(mocker):
+    responses = []
+    async def mock_async_search(
+        async_callback: Callable[[CaseInsensitiveDict], Awaitable],
+        search_target: str,
+        target: Optional[AddressTupleVXType],
+    ) -> None:
+        for response in responses:
+            await async_callback(CaseInsensitiveDict(response))
+
+    mocker.patch('arcam.fmj.utils.async_search', new = mock_async_search)
+
+    return responses
+
+
+async def test_get_upnp_headers(mock_search):
+    mock_search.append({"_udn": MOCK_UDN})
+    headers = await get_upnp_headers(TEST_HOST)
+    assert headers["_udn"] == MOCK_UDN
+
+
+async def test_get_upnp_headers_no_response(mock_search):
+    headers = await get_upnp_headers(TEST_HOST)
+    assert headers == None
+
+
+async def test_get_upnp_headers_multiple_response(mock_search):
+    mock_search.append({"_udn": MOCK_UDN})
+    mock_search.append({"_udn": MOCK_UDN})
+    headers = await get_upnp_headers(TEST_HOST)
+    assert headers == None
+
+
+async def test_get_uniqueid(event_loop, mock_udn):
+    assert await get_uniqueid(TEST_HOST) == MOCK_UNIQUE_ID
+
+
+async def test_get_uniqueid_from_host(event_loop, mock_udn, aiohttp_client):
+    app = web.Application()
+    dummy_client = await aiohttp_client(app)
+    assert await get_uniqueid_from_host(dummy_client, TEST_HOST) == MOCK_UNIQUE_ID
+
+
+async def test_get_serial_number_from_host(event_loop, mock_location, aiohttp_client):
     response_text = ""
     async def device_description(request):
         return web.Response(text=response_text)
 
     app = web.Application()
-    app.router.add_get('/dd.xml', device_description)
+    app.router.add_get(TEST_LOCATION, device_description)
     client = await aiohttp_client(app)
 
-    response_text = "non xml"
-    assert await get_uniqueid_from_device_description(client, "/dd.xml") is None
-
-    response_text = _get_dd(MOCK_UNIQUE_ID, MOCK_SERIAL_NO, "malformed udn")
-    assert await get_uniqueid_from_device_description(client, "/dd.xml") is None
-
     response_text = _get_dd(MOCK_UNIQUE_ID, MOCK_SERIAL_NO, MOCK_UDN)
-    assert await get_uniqueid_from_device_description(client, "/dd.xml") == MOCK_UNIQUE_ID
+    assert await get_serial_number_from_host(client, TEST_HOST) == MOCK_SERIAL_NO

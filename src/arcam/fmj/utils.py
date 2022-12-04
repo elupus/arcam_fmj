@@ -2,10 +2,14 @@ import asyncio
 import aiohttp
 import functools
 import logging
-import re
 from datetime import datetime, timedelta
-from defusedxml import ElementTree
-from typing import Optional, Any
+from typing import List, Optional
+
+from async_upnp_client.search import async_search
+from async_upnp_client.ssdp import SSDP_PORT
+from async_upnp_client.utils import CaseInsensitiveDict
+from async_upnp_client.aiohttp import AiohttpSessionRequester
+from async_upnp_client.client_factory import UpnpFactory
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -56,33 +60,69 @@ def get_uniqueid_from_udn(data) -> Optional[str]:
         return None
 
 
-def get_possibly_invalid_xml(data) -> Any:
-    try:
-        return ElementTree.fromstring(data)
-    except ElementTree.ParseError:
-        _LOGGER.info("Device provide corrupt xml, trying with ampersand replacement")
-        data = re.sub(r'&(?![A-Za-z]+[0-9]*;|#[0-9]+;|#x[0-9a-fA-F]+;)', r'&amp;', data)
-        return ElementTree.fromstring(data)
+async def get_upnp_headers(host: str) -> Optional[CaseInsensitiveDict]:
+    """Get search response headers from a host based on ssdp/upnp."""
+    search_target = "upnp:rootdevice"
 
-def get_udn_from_xml(xml: Any) -> Optional[str]:
-    return xml.findtext("d:device/d:UDN", None, {"d": "urn:schemas-upnp-org:device-1-0"})
+    responses : List[CaseInsensitiveDict] = []
 
-async def get_uniqueid_from_device_description(session: aiohttp.ClientSession, url: str):
-    """Retrieve and extract unique id from url."""
-    try:
-        async with session.get(url) as req:
-            req.raise_for_status()
-            data = await req.text()
-            xml = get_possibly_invalid_xml(data)
-            udn = get_udn_from_xml(xml)
-            return get_uniqueid_from_udn(udn)
-    except (aiohttp.ClientError, asyncio.TimeoutError, ElementTree.ParseError):
-        _log_exception("Unable to get device description from %s", url)
+    async def _handle_response(headers: CaseInsensitiveDict) -> None:
+        responses.append(headers)
+
+    await async_search(
+        search_target=search_target,
+        target=(host, SSDP_PORT),
+        async_callback=_handle_response,
+    )
+
+    if len(responses) == 0:
+        _LOGGER.warning(f"No UPNP response from {host}")
         return None
+    elif len(responses) > 1:
+        _LOGGER.warning(f"More than one UPNP response from {host}")
+        return None
+
+    return responses[0]
+
+
+async def get_upnp_field(host: str, field_name: str) -> Optional[str]:
+    """Get a search response header from a host based on ssdp/upnp."""
+    headers = await get_upnp_headers(host)
+    if headers is None:
+        return None
+    return headers.get(field_name, None)
+
+
+async def get_upnp_udn(host: str) -> Optional[str]:
+    """Get the UDN from a host based on ssdp/upnp."""
+    return await get_upnp_field(host, "_udn")
+
+
+async def get_uniqueid(host: str) -> Optional[str]:
+    """Try to deduce a unique id from a host based on ssdp/upnp."""
+    udn = await get_upnp_field(host, "_udn")
+    if udn is None:
+        return None
+    return get_uniqueid_from_udn(udn)
 
 
 async def get_uniqueid_from_host(session: aiohttp.ClientSession, host: str):
-    """Try to deduce a unique id from a host based on ssdp/upnp."""
-    return await get_uniqueid_from_device_description(
-        session, f"http://{host}:8080/dd.xml"
-    )
+    """
+    Try to deduce a unique id from a host based on ssdp/upnp.
+    
+    Back compatible argument list for HA integration
+    """
+    return await get_uniqueid(host)
+
+
+async def get_serial_number_from_host(session: aiohttp.ClientSession, host: str):
+    """Get the serial number from a host based on ssdp/upnp."""
+    location = await get_upnp_field(host, "location")
+    if location is None:
+        return None
+
+    requester = AiohttpSessionRequester(session, with_sleep=True)
+    factory = UpnpFactory(requester)
+    device = await factory.async_create_device(location)
+
+    return device.serial_number # More immutable than device.udn
