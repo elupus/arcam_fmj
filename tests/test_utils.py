@@ -1,13 +1,19 @@
 """Tests for utils."""
 import pytest
 from aiohttp import web
-from typing import Any, Awaitable, Callable, Optional
+from typing import Awaitable, Callable, Optional
 
 from async_upnp_client.utils import CaseInsensitiveDict
 from async_upnp_client.ssdp import AddressTupleVXType
 
 from arcam.fmj.utils import async_retry
-from arcam.fmj.utils import get_uniqueid, get_upnp_headers, get_uniqueid_from_host, get_serial_number_from_host
+from arcam.fmj.utils import (
+    get_uniqueid_from_udn,
+    get_uniqueid,
+    get_upnp_headers,
+    get_uniqueid_from_host,
+    get_serial_number_from_host,
+)
 
 TEST_HOST = "dummy host"
 TEST_LOCATION = "/dd.xml"
@@ -126,16 +132,6 @@ async def test_retry_unexpected(event_loop):
 
 
 @pytest.fixture
-async def mock_location(mocker):
-    mocker.patch('arcam.fmj.utils.get_upnp_field', return_value = TEST_LOCATION)
-
-
-@pytest.fixture
-async def mock_udn(mocker):
-    mocker.patch('arcam.fmj.utils.get_upnp_field', return_value = MOCK_UDN)
-
-
-@pytest.fixture
 async def mock_search(mocker):
     responses = []
     async def mock_async_search(
@@ -169,24 +165,58 @@ async def test_get_upnp_headers_multiple_response(mock_search):
     assert headers == None
 
 
-async def test_get_uniqueid(event_loop, mock_udn):
+@pytest.mark.parametrize("data, expected", [
+    (MOCK_UDN, MOCK_UNIQUE_ID),
+    ("", None),
+    ("malformed udn", None),
+    ("uuid:", None),
+    ('uuid:aa331113-fa23-3333-2222', None),
+    ])
+def test_unique_id_from_udn(data, expected):
+    assert get_uniqueid_from_udn(data) == expected
+
+
+@pytest.fixture
+async def mock_headers(mocker):
+    mocker.patch('arcam.fmj.utils.get_upnp_headers', return_value = CaseInsensitiveDict({"location": TEST_LOCATION, "_udn": MOCK_UDN}))
+
+
+@pytest.fixture
+async def mock_no_headers(mocker):
+    mocker.patch('arcam.fmj.utils.get_upnp_headers', return_value = None)
+
+
+async def test_get_uniqueid(event_loop, mock_headers):
     assert await get_uniqueid(TEST_HOST) == MOCK_UNIQUE_ID
 
 
-async def test_get_uniqueid_from_host(event_loop, mock_udn, aiohttp_client):
+async def test_get_uniqueid_no_headers(event_loop, mock_no_headers):
+    assert await get_uniqueid(TEST_HOST) == None
+
+
+async def test_get_uniqueid_from_host(event_loop, mock_headers, aiohttp_client):
     app = web.Application()
     dummy_client = await aiohttp_client(app)
     assert await get_uniqueid_from_host(dummy_client, TEST_HOST) == MOCK_UNIQUE_ID
 
 
-async def test_get_serial_number_from_host(event_loop, mock_location, aiohttp_client):
-    response_text = ""
+@pytest.fixture
+def response_text():
+    return 
+
+@pytest.fixture
+async def mock_client_session(aiohttp_client):
+    response_text = _get_dd(MOCK_UNIQUE_ID, MOCK_SERIAL_NO, MOCK_UDN)
     async def device_description(request):
         return web.Response(text=response_text)
-
     app = web.Application()
     app.router.add_get(TEST_LOCATION, device_description)
-    client = await aiohttp_client(app)
+    return await aiohttp_client(app)
 
-    response_text = _get_dd(MOCK_UNIQUE_ID, MOCK_SERIAL_NO, MOCK_UDN)
-    assert await get_serial_number_from_host(client, TEST_HOST) == MOCK_SERIAL_NO
+
+async def test_get_serial_number_from_host(event_loop, mock_headers, mock_client_session):
+    assert await get_serial_number_from_host(mock_client_session, TEST_HOST) == MOCK_SERIAL_NO
+
+
+async def test_get_serial_number_from_host_no_headers(event_loop, mock_no_headers, mock_client_session):
+    assert await get_serial_number_from_host(mock_client_session, TEST_HOST) == None

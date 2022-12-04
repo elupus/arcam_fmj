@@ -100,7 +100,7 @@ async def get_upnp_udn(host: str) -> Optional[str]:
 
 async def get_uniqueid(host: str) -> Optional[str]:
     """Try to deduce a unique id from a host based on ssdp/upnp."""
-    udn = await get_upnp_field(host, "_udn")
+    udn = await get_upnp_udn(host)
     if udn is None:
         return None
     return get_uniqueid_from_udn(udn)
