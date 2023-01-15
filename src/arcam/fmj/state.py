@@ -28,6 +28,8 @@ from . import (
     SourceCodes,
     POWER_WRITE_SUPPORTED,
     MUTE_WRITE_SUPPORTED,
+    SOURCE_WRITE_SUPPORTED,
+    DIRECT_SOURCE_CODES,
     RC5CODE_SOURCE,
     RC5CODE_POWER,
     RC5CODE_MUTE,
@@ -255,16 +257,27 @@ class State():
         value = self._state.get(CommandCodes.CURRENT_SOURCE)
         if value is None:
             return None
-        return SourceCodes.from_int(
+        correct_enum = SourceCodes
+        if self._api_model in SOURCE_WRITE_SUPPORTED:
+            correct_enum = DIRECT_SOURCE_CODES.get((self._api_model, self._zn))
+        return correct_enum.from_int(
             int.from_bytes(value, 'big'))
 
     def get_source_list(self) -> List[SourceCodes]:
         return list(RC5CODE_SOURCE[(self._api_model, self._zn)].keys())
 
     async def set_source(self, src: SourceCodes) -> None:
-        command = self.get_rc5code(RC5CODE_SOURCE, src)
-        await self._client.request(
-            self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command)
+        if self._api_model in SOURCE_WRITE_SUPPORTED:
+            source_codes = DIRECT_SOURCE_CODES.get((self._api_model, self._zn))
+            value = source_codes.get(src)
+            if not value:
+                raise ValueError("Unkown source code for model {} and zone {} and value {}".format(self._api_model, self._zn, value))
+            await self._client.request(
+                self._zn, CommandCodes.CURRENT_SOURCE, value)
+        else:
+            command = self.get_rc5code(RC5CODE_SOURCE, src)
+            await self._client.request(
+                self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command)
 
     def get_volume(self) -> Optional[int]:
         value = self._state.get(CommandCodes.VOLUME)

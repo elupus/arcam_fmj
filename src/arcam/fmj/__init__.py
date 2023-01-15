@@ -381,6 +381,40 @@ POWER_WRITE_SUPPORTED = {
     ApiModel.APIPA_SERIES,
 }
 MUTE_WRITE_SUPPORTED = POWER_WRITE_SUPPORTED
+SOURCE_WRITE_SUPPORTED = {
+    ApiModel.APISA_SERIES,
+}
+
+DIRECT_SOURCE_CODES = {
+    (ApiModel.APISA_SERIES, 1): {
+        SourceCodes.PHONO: bytes([0x01]),
+        SourceCodes.AUX: bytes([0x02]),
+        SourceCodes.PVR: bytes([0x03]),
+        SourceCodes.AV: bytes([0x04]),
+        SourceCodes.STB: bytes([0x05]),
+        SourceCodes.CD: bytes([0x06]),
+        SourceCodes.BD: bytes([0x07]),
+        SourceCodes.SAT: bytes([0x08]),
+        SourceCodes.GAME: bytes([0x09]),
+        SourceCodes.NET: bytes([0x0B]),
+        SourceCodes.USB: bytes([0x0B]),
+        SourceCodes.ARC_ERC: bytes([0x0D]),
+    },
+    (ApiModel.APISA_SERIES, 2): {
+        SourceCodes.PHONO: bytes([0x01]),
+        SourceCodes.AUX: bytes([0x02]),
+        SourceCodes.PVR: bytes([0x03]),
+        SourceCodes.AV: bytes([0x04]),
+        SourceCodes.STB: bytes([0x05]),
+        SourceCodes.CD: bytes([0x06]),
+        SourceCodes.BD: bytes([0x07]),
+        SourceCodes.SAT: bytes([0x08]),
+        SourceCodes.GAME: bytes([0x09]),
+        SourceCodes.NET: bytes([0x0B]),
+        SourceCodes.USB: bytes([0x0B]),
+        SourceCodes.ARC_ERC: bytes([0x0D]),
+    },
+}
 
 RC5CODE_DECODE_MODE_MCH: Dict[Tuple[ApiModel, int], Dict[DecodeModeMCH, bytes]] = {
     (ApiModel.API450_SERIES, 1): {
