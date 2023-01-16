@@ -29,7 +29,7 @@ from . import (
     POWER_WRITE_SUPPORTED,
     MUTE_WRITE_SUPPORTED,
     SOURCE_WRITE_SUPPORTED,
-    DIRECT_SOURCE_CODES,
+    SOURCE_CODES,
     RC5CODE_SOURCE,
     RC5CODE_POWER,
     RC5CODE_MUTE,
@@ -257,9 +257,7 @@ class State():
         value = self._state.get(CommandCodes.CURRENT_SOURCE)
         if value is None:
             return None
-        correct_enum = SourceCodes
-        if self._api_model in SOURCE_WRITE_SUPPORTED:
-            correct_enum = DIRECT_SOURCE_CODES.get((self._api_model, self._zn))
+        correct_enum = SOURCE_CODES.get((self._api_model, self._zn))
         return correct_enum.from_int(
             int.from_bytes(value, 'big'))
 
@@ -268,7 +266,7 @@ class State():
 
     async def set_source(self, src: SourceCodes) -> None:
         if self._api_model in SOURCE_WRITE_SUPPORTED:
-            source_codes = DIRECT_SOURCE_CODES.get((self._api_model, self._zn))
+            source_codes = SOURCE_CODES.get((self._api_model, self._zn))
             value = source_codes.get(src)
             if not value:
                 raise ValueError("Unkown source code for model {} and zone {} and value {}".format(self._api_model, self._zn, value))
