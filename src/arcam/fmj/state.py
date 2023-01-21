@@ -258,8 +258,7 @@ class State():
         if value is None:
             return None
         correct_enum = SOURCE_CODES.get((self._api_model, self._zn))
-        return correct_enum.from_int(
-            int.from_bytes(value, 'big'))
+        return int.from_bytes(correct_enum[value], 'big')
 
     def get_source_list(self) -> List[SourceCodes]:
         return list(RC5CODE_SOURCE[(self._api_model, self._zn)].keys())
