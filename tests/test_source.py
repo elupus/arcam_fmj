@@ -38,10 +38,10 @@ async def test_get_source(zn, api_model):
   source = SourceCodes.AUX
   state._state[CommandCodes.CURRENT_SOURCE] = source
 
-  raises_exception = api_model in NO_SOURCE
-  if raises_exception:
-    with pytest.raises(TypeError):
-      result = state.get_source()
+  source_not_supported = api_model in NO_SOURCE
+  if source_not_supported:
+    result = state.get_source()
+    assert result == None
   else:
     expected_source = SOURCE_CODES.get((api_model, zn))[source]
     expected_source_as_int = int.from_bytes(expected_source, 'big')

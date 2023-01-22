@@ -257,8 +257,11 @@ class State():
         value = self._state.get(CommandCodes.CURRENT_SOURCE)
         if value is None:
             return None
-        correct_enum = SOURCE_CODES.get((self._api_model, self._zn))
-        return int.from_bytes(correct_enum[value], 'big')
+        correct_enum = SOURCE_CODES.get((self._api_model, self._zn), {})
+        source = correct_enum.get(value)
+        if source is None:
+            return None
+        return int.from_bytes(source, 'big')
 
     def get_source_list(self) -> List[SourceCodes]:
         return list(RC5CODE_SOURCE[(self._api_model, self._zn)].keys())
