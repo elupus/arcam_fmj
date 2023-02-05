@@ -146,11 +146,11 @@ class IntOrTypeEnum(enum.IntEnum):
     @classmethod
     def _missing_(cls, value):
         if isinstance(value, int):
-            return cls._create_pseudo_member_(value)
+            return cls._create_member(value)
         return None
 
     @classmethod
-    def _create_pseudo_member_(cls, value):
+    def _create_member(cls, value):
         pseudo_member = cls._value2member_map_.get(value, None)
         if pseudo_member is None:
             obj = int.__new__(cls, value)
