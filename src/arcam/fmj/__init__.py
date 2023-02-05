@@ -306,23 +306,23 @@ class CommandCodes(IntOrTypeEnum):
 
 
 class SourceCodes(IntOrTypeEnum):
-    FOLLOW_ZONE_1 = 0x00
-    CD = 0x01
-    BD = 0x02
-    AV = 0x03
-    SAT = 0x04
-    PVR = 0x05
-    VCR = 0x06 # UHD on HDA Series
-    AUX = 0x08
-    DISPLAY = 0x09
-    FM = 0x0B
-    DAB = 0x0C, APIVERSION_DAB_SERIES
-    NET = 0x0E
-    USB = 0x0F
-    STB = 0x10
-    GAME = 0x11
-    PHONO = 0x12 # BT on HDA Series
-    ARC_ERC = 0x13
+    FOLLOW_ZONE_1 = enum.auto()
+    CD = enum.auto()
+    BD = enum.auto()
+    AV = enum.auto()
+    SAT = enum.auto()
+    PVR = enum.auto()
+    VCR = enum.auto()
+    AUX = enum.auto()
+    DISPLAY = enum.auto()
+    FM = enum.auto()
+    DAB = enum.auto()
+    NET = enum.auto()
+    USB = enum.auto()
+    STB = enum.auto()
+    GAME = enum.auto()
+    PHONO = enum.auto()
+    ARC_ERC = enum.auto()
 
 
 class MenuCodes(IntOrTypeEnum):
@@ -381,6 +381,66 @@ POWER_WRITE_SUPPORTED = {
     ApiModel.APIPA_SERIES,
 }
 MUTE_WRITE_SUPPORTED = POWER_WRITE_SUPPORTED
+SOURCE_WRITE_SUPPORTED = {
+    ApiModel.APISA_SERIES,
+}
+
+DEFAULT_SOURCE_MAPPING = {
+    SourceCodes.FOLLOW_ZONE_1: bytes([0x00]),
+    SourceCodes.CD: bytes([0x01]),
+    SourceCodes.BD: bytes([0x02]),
+    SourceCodes.AV: bytes([0x03]),
+    SourceCodes.SAT: bytes([0x04]),
+    SourceCodes.PVR: bytes([0x05]),
+    SourceCodes.VCR: bytes([0x06]),
+    SourceCodes.AUX: bytes([0x08]),
+    SourceCodes.DISPLAY: bytes([0x09]),
+    SourceCodes.FM: bytes([0x0B]),
+    SourceCodes.DAB: bytes([0x0C]),
+    SourceCodes.NET: bytes([0x0E]),
+    SourceCodes.USB: bytes([0x0F]),
+    SourceCodes.STB: bytes([0x10]),
+    SourceCodes.GAME: bytes([0x11]),
+    SourceCodes.PHONO: bytes([0x12]),
+    SourceCodes.ARC_ERC: bytes([0x13]),
+}
+
+SOURCE_CODES = {
+    (ApiModel.API450_SERIES, 1): DEFAULT_SOURCE_MAPPING,
+    (ApiModel.API450_SERIES, 2): DEFAULT_SOURCE_MAPPING,
+    (ApiModel.API860_SERIES, 1): DEFAULT_SOURCE_MAPPING,
+    (ApiModel.API860_SERIES, 2): DEFAULT_SOURCE_MAPPING,
+    (ApiModel.APIHDA_SERIES, 1): DEFAULT_SOURCE_MAPPING,
+    (ApiModel.APIHDA_SERIES, 2): DEFAULT_SOURCE_MAPPING,
+    (ApiModel.APISA_SERIES, 1): {
+        SourceCodes.PHONO: bytes([0x01]),
+        SourceCodes.AUX: bytes([0x02]),
+        SourceCodes.PVR: bytes([0x03]),
+        SourceCodes.AV: bytes([0x04]),
+        SourceCodes.STB: bytes([0x05]),
+        SourceCodes.CD: bytes([0x06]),
+        SourceCodes.BD: bytes([0x07]),
+        SourceCodes.SAT: bytes([0x08]),
+        SourceCodes.GAME: bytes([0x09]),
+        SourceCodes.NET: bytes([0x0B]),
+        SourceCodes.USB: bytes([0x0B]),
+        SourceCodes.ARC_ERC: bytes([0x0D]),
+    },
+    (ApiModel.APISA_SERIES, 2): {
+        SourceCodes.PHONO: bytes([0x01]),
+        SourceCodes.AUX: bytes([0x02]),
+        SourceCodes.PVR: bytes([0x03]),
+        SourceCodes.AV: bytes([0x04]),
+        SourceCodes.STB: bytes([0x05]),
+        SourceCodes.CD: bytes([0x06]),
+        SourceCodes.BD: bytes([0x07]),
+        SourceCodes.SAT: bytes([0x08]),
+        SourceCodes.GAME: bytes([0x09]),
+        SourceCodes.NET: bytes([0x0B]),
+        SourceCodes.USB: bytes([0x0B]),
+        SourceCodes.ARC_ERC: bytes([0x0D]),
+    },
+}
 
 RC5CODE_DECODE_MODE_MCH: Dict[Tuple[ApiModel, int], Dict[DecodeModeMCH, bytes]] = {
     (ApiModel.API450_SERIES, 1): {
