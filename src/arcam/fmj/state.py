@@ -257,21 +257,17 @@ class State():
         value = self._state.get(CommandCodes.CURRENT_SOURCE)
         if value is None:
             return None
-        correct_enum = SOURCE_CODES.get((self._api_model, self._zn), {})
-        source = correct_enum.get(value)
-        if source is None:
+        try:
+            return SourceCodes.from_bytes(value, self._api_model, self._zn)
+        except ValueError:
             return None
-        return int.from_bytes(source, 'big')
 
     def get_source_list(self) -> List[SourceCodes]:
         return list(RC5CODE_SOURCE[(self._api_model, self._zn)].keys())
 
     async def set_source(self, src: SourceCodes) -> None:
         if self._api_model in SOURCE_WRITE_SUPPORTED:
-            source_codes = SOURCE_CODES.get((self._api_model, self._zn))
-            value = source_codes.get(src)
-            if not value:
-                raise ValueError("Unkown source code for model {} and zone {} and value {}".format(self._api_model, self._zn, value))
+            value = src.to_bytes(self._api_model, self._zn)
             await self._client.request(
                 self._zn, CommandCodes.CURRENT_SOURCE, value)
         else:
