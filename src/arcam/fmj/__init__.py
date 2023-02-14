@@ -305,7 +305,7 @@ class CommandCodes(IntOrTypeEnum):
     MAXIMUM_STREAMING_VOLUME = 0x67, APIVERSION_APP_SAFETY_SERIES
 
 
-class SourceCodes(IntOrTypeEnum):
+class SourceCodes(enum.Enum):
     FOLLOW_ZONE_1 = enum.auto()
     CD = enum.auto()
     BD = enum.auto()
@@ -324,6 +324,25 @@ class SourceCodes(IntOrTypeEnum):
     PHONO = enum.auto()
     ARC_ERC = enum.auto()
 
+    @classmethod
+    def from_bytes(cls, data: bytes, model: ApiModel, zn: int) -> 'SourceCodes':
+        try:
+            table = SOURCE_CODES[(model, zn)]
+        except KeyError:
+            raise ValueError("Unknown source map for model {} and zone {}".format(model, zn))
+        for key, value in table.items():
+            if value == data:
+                return key
+        raise ValueError("Unknown source code for model {} and zone {} and value {!r}".format(model, zn, data))
+
+    def to_bytes(self, model: ApiModel, zn: int):
+        try:
+            table = SOURCE_CODES[(model, zn)]
+        except KeyError:
+            raise ValueError("Unknown source map for model {} and zone {}".format(model, zn))
+        if data := table.get(self):
+            return data
+        raise ValueError("Unknown byte code for model {} and zone {} and value {}".format(model, zn, self))
 
 class MenuCodes(IntOrTypeEnum):
     NONE = 0x00

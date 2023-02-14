@@ -17,6 +17,9 @@ def auto_bytes(x):
     print(x)
     return bytes.decode(x)
 
+def auto_source(x):
+    return SourceCodes[x]
+
 parser = argparse.ArgumentParser(description='Communicate with arcam receivers.')
 parser.add_argument('--verbose', action='store_true')
 
@@ -27,7 +30,7 @@ parser_state.add_argument('--host', required=True)
 parser_state.add_argument('--port', default=50000)
 parser_state.add_argument('--zone', default=1, type=int)
 parser_state.add_argument('--volume', type=int)
-parser_state.add_argument('--source', type=auto_int)
+parser_state.add_argument('--source', type=auto_source)
 parser_state.add_argument('--monitor', action='store_true')
 
 parser_client = subparsers.add_parser('client')
@@ -53,6 +56,7 @@ async def run_state(args):
     client = Client(args.host, args.port)
     async with ClientContext(client):
         state = State(client, args.zone)
+        await state.update()
 
         if args.volume is not None:
             await state.set_volume(args.volume)
@@ -63,7 +67,6 @@ async def run_state(args):
         if args.monitor:
             async with state:
                 prev = repr(state)
-                await state.update()
                 while client.connected:
                     curr = repr(state)
                     if prev != curr:
@@ -71,7 +74,6 @@ async def run_state(args):
                         prev = curr
                     await asyncio.sleep(delay=1)
         else:
-            await state.update()
             print(state)
 
 
@@ -246,15 +248,12 @@ def main():
         channel.setFormatter(formatter)
         root.addHandler(channel)
 
-
-    loop = asyncio.get_event_loop()
-
     if args.subcommand == 'client':
-        loop.run_until_complete(run_client(args))
+        asyncio.run(run_client(args))
     elif args.subcommand == 'state':
-        loop.run_until_complete(run_state(args))
+        asyncio.run(run_state(args))
     elif args.subcommand == 'server':
-        loop.run_until_complete(run_server(args))
+        asyncio.run(run_server(args))
 
 if __name__ == "__main__":
     main()
