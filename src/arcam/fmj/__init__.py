@@ -323,6 +323,8 @@ class SourceCodes(enum.Enum):
     GAME = enum.auto()
     PHONO = enum.auto()
     ARC_ERC = enum.auto()
+    UHD = enum.auto()
+    BT = enum.auto()
 
     @classmethod
     def from_bytes(cls, data: bytes, model: ApiModel, zn: int) -> 'SourceCodes':
@@ -424,41 +426,49 @@ DEFAULT_SOURCE_MAPPING = {
     SourceCodes.ARC_ERC: bytes([0x13]),
 }
 
+HDA_SOURCE_MAPPING = {
+    SourceCodes.FOLLOW_ZONE_1: bytes([0x00]),
+    SourceCodes.CD: bytes([0x01]),
+    SourceCodes.BD: bytes([0x02]),
+    SourceCodes.AV: bytes([0x03]),
+    SourceCodes.SAT: bytes([0x04]),
+    SourceCodes.PVR: bytes([0x05]),
+    SourceCodes.UHD: bytes([0x06]),
+    SourceCodes.AUX: bytes([0x08]),
+    SourceCodes.DISPLAY: bytes([0x09]),
+    SourceCodes.FM: bytes([0x0B]),
+    SourceCodes.DAB: bytes([0x0C]),
+    SourceCodes.NET: bytes([0x0E]),
+    SourceCodes.USB: bytes([0x0F]),
+    SourceCodes.STB: bytes([0x10]),
+    SourceCodes.GAME: bytes([0x11]),
+    SourceCodes.BT: bytes([0x12]),
+}
+
+SA_SOURCE_MAPPING = {
+    SourceCodes.PHONO: bytes([0x01]),
+    SourceCodes.AUX: bytes([0x02]),
+    SourceCodes.PVR: bytes([0x03]),
+    SourceCodes.AV: bytes([0x04]),
+    SourceCodes.STB: bytes([0x05]),
+    SourceCodes.CD: bytes([0x06]),
+    SourceCodes.BD: bytes([0x07]),
+    SourceCodes.SAT: bytes([0x08]),
+    SourceCodes.GAME: bytes([0x09]),
+    SourceCodes.NET: bytes([0x0B]),
+    SourceCodes.USB: bytes([0x0B]),
+    SourceCodes.ARC_ERC: bytes([0x0D]),
+}
+
 SOURCE_CODES = {
     (ApiModel.API450_SERIES, 1): DEFAULT_SOURCE_MAPPING,
     (ApiModel.API450_SERIES, 2): DEFAULT_SOURCE_MAPPING,
     (ApiModel.API860_SERIES, 1): DEFAULT_SOURCE_MAPPING,
     (ApiModel.API860_SERIES, 2): DEFAULT_SOURCE_MAPPING,
-    (ApiModel.APIHDA_SERIES, 1): DEFAULT_SOURCE_MAPPING,
-    (ApiModel.APIHDA_SERIES, 2): DEFAULT_SOURCE_MAPPING,
-    (ApiModel.APISA_SERIES, 1): {
-        SourceCodes.PHONO: bytes([0x01]),
-        SourceCodes.AUX: bytes([0x02]),
-        SourceCodes.PVR: bytes([0x03]),
-        SourceCodes.AV: bytes([0x04]),
-        SourceCodes.STB: bytes([0x05]),
-        SourceCodes.CD: bytes([0x06]),
-        SourceCodes.BD: bytes([0x07]),
-        SourceCodes.SAT: bytes([0x08]),
-        SourceCodes.GAME: bytes([0x09]),
-        SourceCodes.NET: bytes([0x0B]),
-        SourceCodes.USB: bytes([0x0B]),
-        SourceCodes.ARC_ERC: bytes([0x0D]),
-    },
-    (ApiModel.APISA_SERIES, 2): {
-        SourceCodes.PHONO: bytes([0x01]),
-        SourceCodes.AUX: bytes([0x02]),
-        SourceCodes.PVR: bytes([0x03]),
-        SourceCodes.AV: bytes([0x04]),
-        SourceCodes.STB: bytes([0x05]),
-        SourceCodes.CD: bytes([0x06]),
-        SourceCodes.BD: bytes([0x07]),
-        SourceCodes.SAT: bytes([0x08]),
-        SourceCodes.GAME: bytes([0x09]),
-        SourceCodes.NET: bytes([0x0B]),
-        SourceCodes.USB: bytes([0x0B]),
-        SourceCodes.ARC_ERC: bytes([0x0D]),
-    },
+    (ApiModel.APIHDA_SERIES, 1): HDA_SOURCE_MAPPING,
+    (ApiModel.APIHDA_SERIES, 2): HDA_SOURCE_MAPPING,
+    (ApiModel.APISA_SERIES, 1): SA_SOURCE_MAPPING,
+    (ApiModel.APISA_SERIES, 2): SA_SOURCE_MAPPING,
 }
 
 RC5CODE_DECODE_MODE_MCH: Dict[Tuple[ApiModel, int], Dict[DecodeModeMCH, bytes]] = {
@@ -614,15 +624,14 @@ RC5CODE_SOURCE: Dict[Tuple[ApiModel, int], Dict[SourceCodes, bytes]] = {
         SourceCodes.FM: bytes([16, 28]),
         SourceCodes.BD: bytes([16, 98]),
         SourceCodes.GAME: bytes([16, 97]),
-        SourceCodes.VCR: bytes([16, 125]), # UHD
+        SourceCodes.UHD: bytes([16, 125]),
         SourceCodes.CD: bytes([16, 118]),
         SourceCodes.AUX: bytes([16, 99]),
         SourceCodes.DISPLAY: bytes([16, 58]),
         SourceCodes.SAT: bytes([16, 27]),
         SourceCodes.PVR: bytes([16, 96]),
-        SourceCodes.USB: bytes([16, 93]), # Not in docs but seems plausible
         SourceCodes.NET: bytes([16, 92]),
-        SourceCodes.PHONO: bytes([16, 122]), # BT
+        SourceCodes.BT: bytes([16, 122]),
     },
     (ApiModel.APIHDA_SERIES, 2): {
         SourceCodes.STB: bytes([23, 8]),
@@ -637,9 +646,9 @@ RC5CODE_SOURCE: Dict[Tuple[ApiModel, int], Dict[SourceCodes, bytes]] = {
         SourceCodes.USB: bytes([23, 18]),
         SourceCodes.NET: bytes([23, 19]),
         SourceCodes.SAT: bytes([23, 20]),
-        SourceCodes.VCR: bytes([23, 23]), # UHD
-        SourceCodes.PHONO: bytes([23, 22]), # BT
-        SourceCodes.FOLLOW_ZONE_1: bytes([16, 20])
+        SourceCodes.UHD: bytes([23, 23]),
+        SourceCodes.BT: bytes([23, 22]),
+        SourceCodes.FOLLOW_ZONE_1: bytes([16, 20]),
     },
     (ApiModel.APISA_SERIES, 1): {
         SourceCodes.PHONO: bytes([16, 117]),
