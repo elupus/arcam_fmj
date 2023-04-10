@@ -11,20 +11,19 @@ from arcam.fmj import (
   AnswerCodes,
   CommandCodes,
   ResponsePacket,
-  SOURCE_CODES,
-  SOURCE_WRITE_SUPPORTED,
-  RC5CODE_SOURCE,
 )
 
 @pytest.mark.parametrize("zn, api_model, source, data", [
     (1, ApiModel.API450_SERIES, SourceCodes.AUX, bytes([0x08])),
     (1, ApiModel.API860_SERIES, SourceCodes.AUX, bytes([0x08])),
     (1, ApiModel.APIHDA_SERIES, SourceCodes.AUX, bytes([0x08])),
+    (1, ApiModel.APIHDA_SERIES, SourceCodes.UHD, bytes([0x06])),
     (1, ApiModel.APISA_SERIES, SourceCodes.AUX, bytes([0x02])),
     (1, ApiModel.APIPA_SERIES, None, bytes([0x02])),
     (2, ApiModel.API450_SERIES, SourceCodes.AUX, bytes([0x08])),
     (2, ApiModel.API860_SERIES, SourceCodes.AUX, bytes([0x08])),
     (2, ApiModel.APIHDA_SERIES, SourceCodes.AUX, bytes([0x08])),
+    (2, ApiModel.APIHDA_SERIES, SourceCodes.UHD, bytes([0x06])),
     (2, ApiModel.APISA_SERIES, SourceCodes.AUX, bytes([0x02])),
     (2, ApiModel.APIPA_SERIES, None, bytes([0x02])),
 ])
@@ -40,10 +39,12 @@ async def test_get_source(zn, api_model, source, data):
     (1, ApiModel.API450_SERIES, SourceCodes.AUX, True, bytes([16, 8])),
     (1, ApiModel.API860_SERIES, SourceCodes.AUX, True, bytes([16, 99])),
     (1, ApiModel.APIHDA_SERIES, SourceCodes.AUX, True, bytes([16, 99])),
+    (1, ApiModel.APIHDA_SERIES, SourceCodes.UHD, True, bytes([16, 125])),
     (1, ApiModel.APISA_SERIES, SourceCodes.AUX, False, bytes([0x02])),
     (2, ApiModel.API450_SERIES, SourceCodes.AUX, True, bytes([23, 13])),
     (2, ApiModel.API860_SERIES, SourceCodes.AUX, True, bytes([23, 13])),
     (2, ApiModel.APIHDA_SERIES, SourceCodes.AUX, True, bytes([23, 13])),
+    (2, ApiModel.APIHDA_SERIES, SourceCodes.UHD, True, bytes([23, 23])),
     (2, ApiModel.APISA_SERIES, SourceCodes.AUX, False, bytes([0x02])),
 ])
 async def test_set_source(zn, api_model, source, ir, data):
