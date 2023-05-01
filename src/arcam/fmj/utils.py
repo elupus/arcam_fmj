@@ -1,8 +1,8 @@
-import asyncio
 import aiohttp
 import functools
 import logging
 import re
+import anyio
 from datetime import datetime, timedelta
 from defusedxml import ElementTree
 from typing import Optional, Any
@@ -33,7 +33,7 @@ def async_retry(attempts=2, allowed_exceptions=()):
 class Throttle:
     def __init__(self, delay: float) -> None:
         self._timestamp = datetime.now()
-        self._lock = asyncio.Lock()
+        self._lock = anyio.Lock()
         self._delay = timedelta(seconds=delay)
 
     async def get(self) -> None:
@@ -41,7 +41,7 @@ class Throttle:
             timestamp = datetime.now()
             delay = (self._timestamp - timestamp).total_seconds()
             if delay > 0:
-                await asyncio.sleep(delay)
+                await anyio.sleep(delay)
             self._timestamp = datetime.now() + self._delay
 
 
@@ -85,7 +85,7 @@ async def get_uniqueid_from_device_description(
             xml = get_possibly_invalid_xml(data)
             udn = get_udn_from_xml(xml)
             return get_uniqueid_from_udn(udn)
-    except (aiohttp.ClientError, asyncio.TimeoutError, ElementTree.ParseError):
+    except (aiohttp.ClientError, TimeoutError, ElementTree.ParseError):
         _log_exception("Unable to get device description from %s", url)
         return None
 

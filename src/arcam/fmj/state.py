@@ -1,7 +1,7 @@
 """Zone state"""
-import asyncio
 import logging
 from typing import Any, Dict, List, Optional, Tuple, TypeVar, Union
+import anyio
 
 from . import (
     APIVERSION_450_SERIES,
@@ -373,7 +373,7 @@ class State:
             except NotConnectedException as e:
                 _LOGGER.debug("Not connected skipping %s", cc)
                 self._state[cc] = None
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 _LOGGER.error("Timeout requesting %s", cc)
 
         async def _update_presets() -> None:
@@ -393,7 +393,7 @@ class State:
                 except NotConnectedException as e:
                     _LOGGER.debug("Not connected skipping preset %s", preset)
                     return
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     _LOGGER.error("Timeout requesting preset %s", preset)
                     return
             self._presets = presets
@@ -425,30 +425,32 @@ class State:
                 _LOGGER.debug("Response error skipping %s", e.ac)
             except NotConnectedException as e:
                 _LOGGER.debug("Not connected skipping amx")
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 _LOGGER.error("Timeout requesting amx")
 
         if self._client.connected:
             if self._amxduet is None:
                 await _update_amxduet()
 
-            await asyncio.gather(
-                *[
-                    _update(CommandCodes.POWER),
-                    _update(CommandCodes.VOLUME),
-                    _update(CommandCodes.MUTE),
-                    _update(CommandCodes.CURRENT_SOURCE),
-                    _update(CommandCodes.MENU),
-                    _update(CommandCodes.DECODE_MODE_STATUS_2CH),
-                    _update(CommandCodes.DECODE_MODE_STATUS_MCH),
-                    _update(CommandCodes.INCOMING_AUDIO_FORMAT),
-                    _update(CommandCodes.DAB_STATION),
-                    _update(CommandCodes.DLS_PDT_INFO),
-                    _update(CommandCodes.RDS_INFORMATION),
-                    _update(CommandCodes.TUNER_PRESET),
-                    _update_presets(),
-                ]
-            )
+            async with anyio.create_task_group() as tg:
+                commands = (
+                    CommandCodes.POWER,
+                    CommandCodes.VOLUME,
+                    CommandCodes.MUTE,
+                    CommandCodes.CURRENT_SOURCE,
+                    CommandCodes.MENU,
+                    CommandCodes.DECODE_MODE_STATUS_2CH,
+                    CommandCodes.DECODE_MODE_STATUS_MCH,
+                    CommandCodes.INCOMING_AUDIO_FORMAT,
+                    CommandCodes.DAB_STATION,
+                    CommandCodes.DLS_PDT_INFO,
+                    CommandCodes.RDS_INFORMATION,
+                    CommandCodes.TUNER_PRESET,
+                )
+
+                for command in commands:
+                    tg.start_soon(_update, command)
+                tg.start_soon(_update_presets)
         else:
             if self._state:
                 self._state = dict()

@@ -1,11 +1,11 @@
 """Client code"""
-import asyncio
-from asyncio.streams import StreamReader, StreamWriter
 import logging
-import sys
 from datetime import datetime, timedelta
 from contextlib import contextmanager
 from typing import Callable, Optional, Set, Union, overload
+import anyio
+import anyio.abc
+import anyio.streams.buffered
 
 from . import (
     AmxDuetRequest,
@@ -33,14 +33,15 @@ _HEARTBEAT_TIMEOUT = _HEARTBEAT_INTERVAL + _HEARTBEAT_INTERVAL
 
 class Client:
     def __init__(self, host: str, port: int) -> None:
-        self._reader: Optional[StreamReader] = None
-        self._writer: Optional[StreamWriter] = None
+        self._stream: Optional[anyio.abc.SocketStream] = None
+        self._reader: Optional[anyio.streams.buffered.BufferedByteReceiveStream] = None
         self._task = None
         self._listen: Set[Callable] = set()
         self._host = host
         self._port = port
         self._throttle = Throttle(_REQUEST_THROTTLE)
         self._timestamp = datetime.now()
+        self._lock = anyio.Lock()
 
     @property
     def host(self) -> str:
@@ -56,88 +57,88 @@ class Client:
         yield self
         self._listen.remove(listener)
 
-    async def _process_heartbeat(self, writer: StreamWriter):
+    async def _process_heartbeat(self):
         while True:
             delay = self._timestamp + _HEARTBEAT_INTERVAL - datetime.now()
             if delay > timedelta():
-                await asyncio.sleep(delay.total_seconds())
+                await anyio.sleep(delay.total_seconds())
             else:
                 _LOGGER.debug("Sending ping")
-                await write_packet(
-                    writer, CommandPacket(1, CommandCodes.POWER, bytes([0xF0]))
-                )
-                self._timestamp = datetime.now()
-
-    async def _process_data(self, reader: StreamReader):
-        try:
-            while True:
-                try:
-                    packet = await asyncio.wait_for(
-                        read_response(reader), _HEARTBEAT_TIMEOUT.total_seconds()
+                async with self._lock:
+                    await write_packet(
+                        self._stream,
+                        CommandPacket(1, CommandCodes.POWER, bytes([0xF0])),
                     )
-                except asyncio.TimeoutError as exception:
-                    _LOGGER.warning("Missed all pings")
-                    raise ConnectionFailed() from exception
+                    self._timestamp = datetime.now()
 
-                if packet is None:
-                    _LOGGER.info("Server disconnected")
-                    return
+    async def _process_data(self):
+        while True:
+            try:
+                with anyio.fail_after(_HEARTBEAT_TIMEOUT.total_seconds()):
+                    packet = await read_response(self._reader)
+            except TimeoutError as exception:
+                _LOGGER.warning("Missed all pings")
+                raise ConnectionFailed("Missed all pings") from exception
 
-                _LOGGER.debug("Packet received: %s", packet)
-                for listener in self._listen:
-                    listener(packet)
-        finally:
-            self._reader = None
+            if packet is None:
+                _LOGGER.info("Server disconnected")
+                return
+
+            _LOGGER.debug("Packet received: %s", packet)
+            for listener in self._listen:
+                listener(packet)
 
     async def process(self) -> None:
-        assert self._writer, "Writer missing"
-        assert self._reader, "Reader missing"
+        assert self._stream, "Stream missing"
 
-        _process_heartbeat = asyncio.create_task(self._process_heartbeat(self._writer))
-        try:
-            await self._process_data(self._reader)
-        finally:
-            _process_heartbeat.cancel()
-            try:
-                await _process_heartbeat
-            except asyncio.CancelledError:
-                pass
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(self._process_heartbeat, name="Hearbeat")
+            tg.start_soon(self._process_data, name="Reader")
 
     @property
     def connected(self) -> bool:
-        return self._reader is not None and not self._reader.at_eof()
+        return self._stream is not None
 
     @property
     def started(self) -> bool:
-        return self._writer is not None
+        return self._stream is not None
 
     async def start(self) -> None:
-        if self._writer:
+        if self._stream:
             raise ArcamException("Already started")
 
         _LOGGER.debug("Connecting to %s:%d", self._host, self._port)
         try:
-            self._reader, self._writer = await asyncio.open_connection(
-                self._host, self._port
+            self._stream = await anyio.connect_tcp(self._host, self._port)
+            self._reader = anyio.streams.buffered.BufferedByteReceiveStream(
+                self._stream
             )
-        except ConnectionError as exception:
-            raise ConnectionFailed() from exception
         except OSError as exception:
-            raise ConnectionFailed() from exception
+            raise ConnectionFailed(
+                f"Unable to connect to server ({str(exception)})"
+            ) from exception
         _LOGGER.info("Connected to %s:%d", self._host, self._port)
 
     async def stop(self) -> None:
-        if self._writer:
+        if self._stream:
             try:
                 _LOGGER.info("Disconnecting from %s:%d", self._host, self._port)
-                self._writer.close()
-                if sys.version_info >= (3, 7):
-                    await self._writer.wait_closed()
-            except (ConnectionError, OSError):
+                await self._stream.aclose()
+            except OSError:
                 pass
             finally:
-                self._writer = None
+                self._stream = None
                 self._reader = None
+
+    async def run(
+        self, *, task_status: anyio.abc.TaskStatus = anyio.TASK_STATUS_IGNORED
+    ):
+        await self.start()
+        try:
+            task_status.started()
+            await self.process()
+        finally:
+            await self.stop()
 
     @overload
     async def request_raw(self, request: CommandPacket) -> ResponsePacket:
@@ -147,42 +148,44 @@ class Client:
     async def request_raw(self, request: AmxDuetRequest) -> AmxDuetResponse:
         ...
 
-    @async_retry(2, asyncio.TimeoutError)
+    @async_retry(2, TimeoutError)
     async def request_raw(
         self, request: Union[CommandPacket, AmxDuetRequest]
     ) -> Union[ResponsePacket, AmxDuetResponse]:
-        if not self._writer:
+        if not self._stream:
             raise NotConnectedException()
-        writer = self._writer  # keep copy around if stopped by another task
-        future: "asyncio.Future[Union[ResponsePacket, AmxDuetResponse]]" = (
-            asyncio.Future()
-        )
+        stream = self._stream  # keep copy around if stopped by another task
+        result: Union[ResponsePacket, AmxDuetResponse, None] = None
+        event = anyio.Event()
 
         def listen(response: Union[ResponsePacket, AmxDuetResponse]):
             if response.respons_to(request):
-                if not (future.cancelled() or future.done()):
-                    future.set_result(response)
+                nonlocal result
+                result = response
+                event.set()
 
         await self._throttle.get()
 
-        async def req() -> Union[ResponsePacket, AmxDuetResponse]:
+        with anyio.fail_after(_REQUEST_TIMEOUT.total_seconds()):
             _LOGGER.debug("Requesting %s", request)
             with self.listen(listen):
-                await write_packet(writer, request)
-                self._timestamp = datetime.now()
-                return await future
-
-        return await asyncio.wait_for(req(), _REQUEST_TIMEOUT.total_seconds())
+                async with self._lock:
+                    await write_packet(stream, request)
+                    self._timestamp = datetime.now()
+                await event.wait()
+                assert result
+                return result
 
     async def send(self, zn: int, cc: int, data: bytes) -> None:
-        if not self._writer:
+        if not self._stream:
             raise NotConnectedException()
-        writer = self._writer
+        stream = self._stream
         request = CommandPacket(zn, cc, data)
-        await self._throttle.get()
-        await write_packet(writer, request)
+        async with self._lock:
+            await self._throttle.get()
+            await write_packet(stream, request)
 
-    async def request(self, zn: int, cc: int, data: bytes):
+    async def request(self, zn: int, cc: int, data: bytes) -> bytes:
         response = await self.request_raw(CommandPacket(zn, cc, data))
 
         if response.ac == AnswerCodes.STATUS_UPDATE:
@@ -194,18 +197,13 @@ class Client:
 class ClientContext:
     def __init__(self, client: Client):
         self._client = client
-        self._task: Optional[asyncio.Task] = None
+        self._group = anyio.create_task_group()
 
     async def __aenter__(self) -> Client:
-        await self._client.start()
-        self._task = asyncio.create_task(self._client.process())
+        await self._group.__aenter__()
+        self._group.start_soon(self._client.run)
         return self._client
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        if self._task:
-            self._task.cancel()
-            try:
-                await self._task
-            except asyncio.CancelledError:
-                pass
-        await self._client.stop()
+        self._group.cancel_scope.cancel()
+        await self._group.__aexit__(exc_type, exc_val, exc_tb)

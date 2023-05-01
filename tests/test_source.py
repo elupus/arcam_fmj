@@ -30,11 +30,12 @@ from arcam.fmj import (
     (2, ApiModel.APIST_SERIES, None, bytes([0x01])),
 ])
 async def test_get_source(zn, api_model, source, data):
-    client = MagicMock(spec=Client)
-    state = State(client, zn, api_model)
-    state._state[CommandCodes.CURRENT_SOURCE] = data
+  client = MagicMock(spec=Client)
+  state = State(client, zn, api_model)
+  state._state[CommandCodes.CURRENT_SOURCE] = data
 
-    assert state.get_source() == source
+  assert state.get_source() == source
+  
 
 @pytest.mark.parametrize("zn, api_model, source, ir, data", [
     (1, ApiModel.API450_SERIES, SourceCodes.AUX, True, bytes([16, 8])),
@@ -53,9 +54,9 @@ async def test_set_source(zn, api_model, source, ir, data):
     state = State(client, zn, api_model)
 
     if ir:
-        command_code = CommandCodes.SIMULATE_RC5_IR_COMMAND
+      command_code = CommandCodes.SIMULATE_RC5_IR_COMMAND
     else:
-        command_code = CommandCodes.CURRENT_SOURCE
+      command_code = CommandCodes.CURRENT_SOURCE
 
     client.request.return_value = ResponsePacket(
         zn,
@@ -80,4 +81,4 @@ async def test_set_source_invalid(zn, api_model, source):
     state = State(client, zn, api_model)
 
     with pytest.raises(ValueError):
-        await state.set_source(source)
+      await state.set_source(source)

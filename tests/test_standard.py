@@ -1,8 +1,8 @@
 """Standard tests for component"""
-import asyncio
-from unittest.mock import MagicMock, call
-
+import anyio
 import pytest
+from anyio.streams.buffered import BufferedByteReceiveStream
+from typing import Iterable
 
 from arcam.fmj import (
     AmxDuetResponse,
@@ -11,31 +11,37 @@ from arcam.fmj import (
     ResponsePacket,
     _read_response,
     write_packet,
-    IntOrTypeEnum
+    IntOrTypeEnum,
+    ConnectionFailed,
 )
 
 
+async def _stream_data(data: Iterable[bytes]):
+    bytes_send, bytes_receive = anyio.create_memory_object_stream(100)
+    for block in data:
+        await bytes_send.send(block)
+    await bytes_send.aclose()
+    return BufferedByteReceiveStream(bytes_receive)
+
+
 async def test_reader_valid(event_loop):
-    reader = asyncio.StreamReader(loop=event_loop)
-    reader.feed_data(b'\x21\x01\x08\x00\x02\x10\x10\x0D')
-    reader.feed_eof()
+    reader = await _stream_data([b"\x21\x01\x08\x00\x02\x10\x10\x0D"])
     packet = await _read_response(reader)
     assert packet == ResponsePacket(1, 8, 0, b'\x10\x10')
 
 
 async def test_reader_invalid_data(event_loop):
-    reader = asyncio.StreamReader(loop=event_loop)
-    reader.feed_data(b'\x21\x01\x08\x00\x02\x10\x0D')
-    reader.feed_eof()
+    reader = await _stream_data(
+        [b"\x21\x01\x08\x00\x02\x10\x0D", b"\x00", b"\x00", b"\x00", b"\x00"]
+    )
     with pytest.raises(InvalidPacket):
         await _read_response(reader)
 
 
 async def test_reader_invalid_data_recover(event_loop):
-    reader = asyncio.StreamReader(loop=event_loop)
-    reader.feed_data(b'\x21\x01\x08\x00\x02\x10\x0D\x00')
-    reader.feed_data(b'\x21\x01\x08\x00\x02\x10\x10\x0D')
-    reader.feed_eof()
+    reader = await _stream_data(
+        [b"\x21\x01\x08\x00\x02\x10\x0D\x00", b"\x21\x01\x08\x00\x02\x10\x10\x0D"]
+    )
     with pytest.raises(InvalidPacket):
         packet = await _read_response(reader)
     packet = await _read_response(reader)
@@ -43,22 +49,20 @@ async def test_reader_invalid_data_recover(event_loop):
 
 
 async def test_reader_short(event_loop):
-    reader = asyncio.StreamReader(loop=event_loop)
-    reader.feed_data(b'\x21\x10\x0D')
-    reader.feed_eof()
-    with pytest.raises(InvalidPacket):
+    reader = await _stream_data([b"\x21\x10\x0D"])
+    with pytest.raises(ConnectionFailed):
         await _read_response(reader)
 
 
 async def test_writer_valid(event_loop):
-    writer = MagicMock()
-    writer.write.return_value = None
-    writer.drain.return_value = asyncio.Future()
-    writer.drain.return_value.set_result(None)
-    await write_packet(writer, CommandPacket(1, 8, b'\x10\x10'))
-    writer.write.assert_has_calls([
-        call(b'\x21\x01\x08\x02\x10\x10\x0D'),
-    ])
+    writer, bytes_receive = anyio.create_memory_object_stream(100)
+    reader = BufferedByteReceiveStream(bytes_receive)
+    await write_packet(writer, CommandPacket(1, 8, b"\x10\x10"))
+    await writer.aclose()
+    with anyio.fail_after(1):
+        await reader.receive_exactly(7) == b"\x21\x01\x08\x02\x10\x10\x0D"
+        with pytest.raises(anyio.EndOfStream):
+            await reader.receive()
 
 
 async def test_intenum(event_loop):
