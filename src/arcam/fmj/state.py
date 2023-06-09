@@ -9,6 +9,7 @@ from . import (
     APIVERSION_HDA_SERIES,
     APIVERSION_SA_SERIES,
     APIVERSION_PA_SERIES,
+    APIVERSION_ST_SERIES,
     AmxDuetRequest,
     AmxDuetResponse,
     AnswerCodes,
@@ -379,6 +380,9 @@ class State():
 
                 if data.device_model in APIVERSION_PA_SERIES:
                     self._api_model = ApiModel.APIPA_SERIES
+                
+                if data.device_model in APIVERSION_ST_SERIES:
+                    self._api_model = ApiModel.APIST_SERIES
 
             except ResponseException as e:
                 _LOGGER.debug("Response error skipping %s", e.ac)
