@@ -326,12 +326,12 @@ class SourceCodes(enum.Enum):
     PHONO = enum.auto()
     ARC_ERC = enum.auto()
     UHD = enum.auto()
-    BT = enum.auto(),
-    DIG1 = enum.auto(),
-    DIG2 = enum.auto(),
-    DIG3 = enum.auto(),
-    DIG4 = enum.auto(),
-    NET_USB = enum.auto(),
+    BT = enum.auto()
+    DIG1 = enum.auto()
+    DIG2 = enum.auto()
+    DIG3 = enum.auto()
+    DIG4 = enum.auto()
+    NET_USB = enum.auto()
 
     @classmethod
     def from_bytes(cls, data: bytes, model: ApiModel, zn: int) -> 'SourceCodes':
