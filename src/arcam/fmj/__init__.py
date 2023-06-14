@@ -326,7 +326,12 @@ class SourceCodes(enum.Enum):
     PHONO = enum.auto()
     ARC_ERC = enum.auto()
     UHD = enum.auto()
-    BT = enum.auto()
+    BT = enum.auto(),
+    DIG1 = enum.auto(),
+    DIG2 = enum.auto(),
+    DIG3 = enum.auto(),
+    DIG4 = enum.auto(),
+    NET_USB = enum.auto(),
 
     @classmethod
     def from_bytes(cls, data: bytes, model: ApiModel, zn: int) -> 'SourceCodes':
@@ -407,6 +412,7 @@ POWER_WRITE_SUPPORTED = {
 MUTE_WRITE_SUPPORTED = POWER_WRITE_SUPPORTED
 SOURCE_WRITE_SUPPORTED = {
     ApiModel.APISA_SERIES,
+    ApiModel.APIST_SERIES,
 }
 
 DEFAULT_SOURCE_MAPPING = {
@@ -461,6 +467,14 @@ SA_SOURCE_MAPPING = {
     SourceCodes.NET: bytes([0x0B]),
     SourceCodes.USB: bytes([0x0B]),
     SourceCodes.ARC_ERC: bytes([0x0D]),
+}
+
+ST_SOURCE_MAPPING = {
+    SourceCodes.DIG1: bytes([0x01]),
+    SourceCodes.DIG2: bytes([0x02]),
+    SourceCodes.DIG3: bytes([0x03]),
+    SourceCodes.DIG4: bytes([0x04]),
+    SourceCodes.NET_USB: bytes([0x05]),
 }
 
 SOURCE_CODES = {
@@ -787,6 +801,10 @@ RC5CODE_VOLUME = {
     (ApiModel.APISA_SERIES, 2): {
         True: bytes([16, 16]),
         False: bytes([16, 17]),
+    },
+    (ApiModel.APIST_SERIES, 1): {
+        True: bytes([21, 86]),
+        False: bytes([21, 85]),
     }
 }
 
