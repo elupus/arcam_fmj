@@ -486,6 +486,7 @@ SOURCE_CODES = {
     (ApiModel.APIHDA_SERIES, 2): HDA_SOURCE_MAPPING,
     (ApiModel.APISA_SERIES, 1): SA_SOURCE_MAPPING,
     (ApiModel.APISA_SERIES, 2): SA_SOURCE_MAPPING,
+    (ApiModel.APIST_SERIES, 1): ST_SOURCE_MAPPING,
 }
 
 RC5CODE_DECODE_MODE_MCH: Dict[Tuple[ApiModel, int], Dict[DecodeModeMCH, bytes]] = {
