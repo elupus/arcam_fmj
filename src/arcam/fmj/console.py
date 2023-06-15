@@ -32,6 +32,8 @@ parser_state.add_argument('--zone', default=1, type=int)
 parser_state.add_argument('--volume', type=int)
 parser_state.add_argument('--source', type=auto_source)
 parser_state.add_argument('--monitor', action='store_true')
+parser_state.add_argument('--power-on', action=argparse.BooleanOptionalAction)
+parser_state.add_argument('--power-off', action=argparse.BooleanOptionalAction)
 
 parser_client = subparsers.add_parser('client')
 parser_client.add_argument('--host', required=True)
@@ -63,6 +65,12 @@ async def run_state(args):
 
         if args.source is not None:
             await state.set_source(args.source)
+        
+        if args.power_on is not None:
+            await state.set_power(True)
+
+        if args.power_off is not None:
+            await state.set_power(False)
 
         if args.monitor:
             async with state:

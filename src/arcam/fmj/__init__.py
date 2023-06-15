@@ -90,6 +90,7 @@ APIVERSION_HDA_SERIES = {"AVR5", "AVR10", "AVR20", "AVR30", "AV40", "AVR11", "AV
 APIVERSION_HDA_PREMIUM_SERIES = {"AVR10", "AVR20", "AVR30", "AV40", "AVR11", "AVR21", "ARV31", "AV41", "SDP-55", "SDP-58"}
 APIVERSION_HDA_MULTI_ZONE_SERIES = {"AVR20", "AVR30", "AV40", "AVR21", "ARV31", "AV41", "SDP-55", "SDP-58"}
 APIVERSION_PA_SERIES = {"PA720", "PA240", "PA410"}
+APIVERSION_ST_SERIES = {"ST60"}
 
 APIVERSION_DAB_SERIES = {"AVR450", "AVR750"}
 APIVERSION_DAB_SERIES.update("AV860", "AVR850", "AVR550", "AVR390")
@@ -138,6 +139,7 @@ class ApiModel(enum.Enum):
     APISA_SERIES = 3
     APIHDA_SERIES = 4
     APIPA_SERIES = 5
+    APIST_SERIES = 6
 
 _T = TypeVar("_T", bound="IntOrTypeEnum")
 class IntOrTypeEnum(enum.IntEnum):
@@ -325,6 +327,11 @@ class SourceCodes(enum.Enum):
     ARC_ERC = enum.auto()
     UHD = enum.auto()
     BT = enum.auto()
+    DIG1 = enum.auto()
+    DIG2 = enum.auto()
+    DIG3 = enum.auto()
+    DIG4 = enum.auto()
+    NET_USB = enum.auto()
 
     @classmethod
     def from_bytes(cls, data: bytes, model: ApiModel, zn: int) -> 'SourceCodes':
@@ -400,10 +407,12 @@ class DecodeModeMCH(IntOrTypeEnum):
 POWER_WRITE_SUPPORTED = {
     ApiModel.APISA_SERIES,
     ApiModel.APIPA_SERIES,
+    ApiModel.APIST_SERIES,
 }
 MUTE_WRITE_SUPPORTED = POWER_WRITE_SUPPORTED
 SOURCE_WRITE_SUPPORTED = {
     ApiModel.APISA_SERIES,
+    ApiModel.APIST_SERIES,
 }
 
 DEFAULT_SOURCE_MAPPING = {
@@ -460,6 +469,14 @@ SA_SOURCE_MAPPING = {
     SourceCodes.ARC_ERC: bytes([0x0D]),
 }
 
+ST_SOURCE_MAPPING = {
+    SourceCodes.DIG1: bytes([0x01]),
+    SourceCodes.DIG2: bytes([0x02]),
+    SourceCodes.DIG3: bytes([0x03]),
+    SourceCodes.DIG4: bytes([0x04]),
+    SourceCodes.NET_USB: bytes([0x05]),
+}
+
 SOURCE_CODES = {
     (ApiModel.API450_SERIES, 1): DEFAULT_SOURCE_MAPPING,
     (ApiModel.API450_SERIES, 2): DEFAULT_SOURCE_MAPPING,
@@ -469,6 +486,7 @@ SOURCE_CODES = {
     (ApiModel.APIHDA_SERIES, 2): HDA_SOURCE_MAPPING,
     (ApiModel.APISA_SERIES, 1): SA_SOURCE_MAPPING,
     (ApiModel.APISA_SERIES, 2): SA_SOURCE_MAPPING,
+    (ApiModel.APIST_SERIES, 1): ST_SOURCE_MAPPING,
 }
 
 RC5CODE_DECODE_MODE_MCH: Dict[Tuple[ApiModel, int], Dict[DecodeModeMCH, bytes]] = {
@@ -784,6 +802,10 @@ RC5CODE_VOLUME = {
     (ApiModel.APISA_SERIES, 2): {
         True: bytes([16, 16]),
         False: bytes([16, 17]),
+    },
+    (ApiModel.APIST_SERIES, 1): {
+        True: bytes([21, 86]),
+        False: bytes([21, 85]),
     }
 }
 
