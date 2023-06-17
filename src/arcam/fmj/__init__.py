@@ -570,6 +570,8 @@ RC5CODE_DECODE_MODE_2CH: Dict[Tuple[ApiModel, int], Dict[DecodeMode2CH, bytes]] 
     (ApiModel.APISA_SERIES, 2): {},
     (ApiModel.APIPA_SERIES, 1): {},
     (ApiModel.APIPA_SERIES, 2): {},
+    (ApiModel.APIST_SERIES, 1): {},
+    (ApiModel.APIST_SERIES, 2): {},
 }
 
 RC5CODE_SOURCE: Dict[Tuple[ApiModel, int], Dict[SourceCodes, bytes]] = {
@@ -695,6 +697,22 @@ RC5CODE_SOURCE: Dict[Tuple[ApiModel, int], Dict[SourceCodes, bytes]] = {
         SourceCodes.USB: bytes([16, 93]),
         SourceCodes.GAME: bytes([16, 97]),
         SourceCodes.ARC_ERC: bytes([16, 125])
+    },
+    (ApiModel.APIST_SERIES, 1): {
+        SourceCodes.DIG1: bytes([21, 94]),
+        SourceCodes.DIG2: bytes([21, 98]),
+        SourceCodes.DIG3: bytes([21, 27]),
+        SourceCodes.DIG4: bytes([21, 27]),
+        SourceCodes.USB: bytes([21, 93]),
+        SourceCodes.NET: bytes([21, 92])
+    },
+    (ApiModel.APIST_SERIES, 2): {
+        SourceCodes.DIG1: bytes([21, 94]),
+        SourceCodes.DIG2: bytes([21, 98]),
+        SourceCodes.DIG3: bytes([21, 27]),
+        SourceCodes.DIG4: bytes([21, 27]),
+        SourceCodes.USB: bytes([21, 93]),
+        SourceCodes.NET: bytes([21, 92])
     },
     (ApiModel.APIPA_SERIES, 1): {},
     (ApiModel.APIPA_SERIES, 2): {},
