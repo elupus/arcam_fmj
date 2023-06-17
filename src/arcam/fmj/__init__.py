@@ -1025,6 +1025,9 @@ async def _read_delimited(reader: asyncio.StreamReader, header_len) -> Optional[
 
             data = await reader.readuntil(PROTOCOL_ETR)
             packet =  bytes([*start, *header, *data])
+        elif start == b"\x00":
+            _LOGGER.debug("Ignoring 0x00 start byte sent from some devices")
+            return None
         else:
             raise InvalidPacket("unexpected str byte {!r}".format(start))
 
