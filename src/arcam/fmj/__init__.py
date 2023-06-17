@@ -83,6 +83,9 @@ class InvalidDataLength(ResponseException):
 class InvalidPacket(ArcamException):
     pass
 
+class NullPacket(ArcamException):
+    pass
+
 APIVERSION_450_SERIES = {"AVR380", "AVR450", "AVR750"}
 APIVERSION_860_SERIES = {"AV860", "AVR850", "AVR550", "AVR390", "SR250"}
 APIVERSION_SA_SERIES = {"SA10", "SA20", "SA30"}
@@ -1044,8 +1047,7 @@ async def _read_delimited(reader: asyncio.StreamReader, header_len) -> Optional[
             data = await reader.readuntil(PROTOCOL_ETR)
             packet =  bytes([*start, *header, *data])
         elif start == b"\x00":
-            _LOGGER.debug("Ignoring 0x00 start byte sent from some devices")
-            return None
+            raise NullPacket()
         else:
             raise InvalidPacket("unexpected str byte {!r}".format(start))
 
@@ -1078,6 +1080,9 @@ async def read_response(reader: asyncio.StreamReader) -> Optional[Union[Response
             data = await _read_response(reader)
         except InvalidPacket as e:
             _LOGGER.warning(str(e))
+            continue
+        except NullPacket:
+            _LOGGER.debug("Ignoring 0x00 start byte sent from some devices")
             continue
         return data
 
