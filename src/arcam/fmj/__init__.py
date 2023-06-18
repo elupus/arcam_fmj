@@ -704,18 +704,11 @@ RC5CODE_SOURCE: Dict[Tuple[ApiModel, int], Dict[SourceCodes, bytes]] = {
         SourceCodes.DIG1: bytes([21, 94]),
         SourceCodes.DIG2: bytes([21, 98]),
         SourceCodes.DIG3: bytes([21, 27]),
-        SourceCodes.DIG4: bytes([21, 27]),
+        SourceCodes.DIG4: bytes([21, 97]),
         SourceCodes.USB: bytes([21, 93]),
         SourceCodes.NET: bytes([21, 92])
     },
-    (ApiModel.APIST_SERIES, 2): {
-        SourceCodes.DIG1: bytes([21, 94]),
-        SourceCodes.DIG2: bytes([21, 98]),
-        SourceCodes.DIG3: bytes([21, 27]),
-        SourceCodes.DIG4: bytes([21, 27]),
-        SourceCodes.USB: bytes([21, 93]),
-        SourceCodes.NET: bytes([21, 92])
-    },
+    (ApiModel.APIST_SERIES, 2): {},
     (ApiModel.APIPA_SERIES, 1): {},
     (ApiModel.APIPA_SERIES, 2): {},
 }
