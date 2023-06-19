@@ -83,6 +83,9 @@ class InvalidDataLength(ResponseException):
 class InvalidPacket(ArcamException):
     pass
 
+class NullPacket(ArcamException):
+    pass
+
 APIVERSION_450_SERIES = {"AVR380", "AVR450", "AVR750"}
 APIVERSION_860_SERIES = {"AV860", "AVR850", "AVR550", "AVR390", "SR250"}
 APIVERSION_SA_SERIES = {"SA10", "SA20", "SA30"}
@@ -409,9 +412,14 @@ POWER_WRITE_SUPPORTED = {
     ApiModel.APIPA_SERIES,
     ApiModel.APIST_SERIES,
 }
+
 MUTE_WRITE_SUPPORTED = POWER_WRITE_SUPPORTED
+
 SOURCE_WRITE_SUPPORTED = {
     ApiModel.APISA_SERIES,
+}
+
+VOLUME_STEP_SUPPORTED = {
     ApiModel.APIST_SERIES,
 }
 
@@ -570,6 +578,8 @@ RC5CODE_DECODE_MODE_2CH: Dict[Tuple[ApiModel, int], Dict[DecodeMode2CH, bytes]] 
     (ApiModel.APISA_SERIES, 2): {},
     (ApiModel.APIPA_SERIES, 1): {},
     (ApiModel.APIPA_SERIES, 2): {},
+    (ApiModel.APIST_SERIES, 1): {},
+    (ApiModel.APIST_SERIES, 2): {},
 }
 
 RC5CODE_SOURCE: Dict[Tuple[ApiModel, int], Dict[SourceCodes, bytes]] = {
@@ -696,6 +706,15 @@ RC5CODE_SOURCE: Dict[Tuple[ApiModel, int], Dict[SourceCodes, bytes]] = {
         SourceCodes.GAME: bytes([16, 97]),
         SourceCodes.ARC_ERC: bytes([16, 125])
     },
+    (ApiModel.APIST_SERIES, 1): {
+        SourceCodes.DIG1: bytes([21, 94]),
+        SourceCodes.DIG2: bytes([21, 98]),
+        SourceCodes.DIG3: bytes([21, 27]),
+        SourceCodes.DIG4: bytes([21, 97]),
+        SourceCodes.USB: bytes([21, 93]),
+        SourceCodes.NET: bytes([21, 92])
+    },
+    (ApiModel.APIST_SERIES, 2): {},
     (ApiModel.APIPA_SERIES, 1): {},
     (ApiModel.APIPA_SERIES, 2): {},
 }
@@ -1025,6 +1044,8 @@ async def _read_delimited(reader: asyncio.StreamReader, header_len) -> Optional[
 
             data = await reader.readuntil(PROTOCOL_ETR)
             packet =  bytes([*start, *header, *data])
+        elif start == b"\x00":
+            raise NullPacket()
         else:
             raise InvalidPacket("unexpected str byte {!r}".format(start))
 
@@ -1057,6 +1078,9 @@ async def read_response(reader: asyncio.StreamReader) -> Optional[Union[Response
             data = await _read_response(reader)
         except InvalidPacket as e:
             _LOGGER.warning(str(e))
+            continue
+        except NullPacket:
+            _LOGGER.debug("Ignoring 0x00 start byte sent from some devices")
             continue
         return data
 

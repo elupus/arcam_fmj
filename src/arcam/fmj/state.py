@@ -30,6 +30,7 @@ from . import (
     POWER_WRITE_SUPPORTED,
     MUTE_WRITE_SUPPORTED,
     SOURCE_WRITE_SUPPORTED,
+    VOLUME_STEP_SUPPORTED,
     RC5CODE_SOURCE,
     RC5CODE_POWER,
     RC5CODE_MUTE,
@@ -286,16 +287,20 @@ class State():
             self._zn, CommandCodes.VOLUME, bytes([volume]))
 
     async def inc_volume(self) -> None:
-        command = self.get_rc5code(RC5CODE_VOLUME, True)
-
-        await self._client.request(
-            self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command)
+        if self._api_model in VOLUME_STEP_SUPPORTED:
+            await self._client.request(self._zn, CommandCodes.VOLUME, bytes([0xF1]))
+        else:
+            command = self.get_rc5code(RC5CODE_VOLUME, True)
+            await self._client.request(
+                self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command)
 
     async def dec_volume(self) -> None:
-        command = self.get_rc5code(RC5CODE_VOLUME, False)
-
-        await self._client.request(
-            self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command)
+        if self._api_model in VOLUME_STEP_SUPPORTED:
+            await self._client.request(self._zn, CommandCodes.VOLUME, bytes([0xF2]))
+        else:
+            command = self.get_rc5code(RC5CODE_VOLUME, False)
+            await self._client.request(
+                self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command)
 
     def get_dab_station(self) -> Optional[str]:
         value = self._state.get(CommandCodes.DAB_STATION)
