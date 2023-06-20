@@ -31,7 +31,7 @@ setup(
             "coveralls",
             "pytest-mock",
             "aiohttp",
-            "defusedxml"
+            "async-upnp-client"
         ]
     },
     entry_points={"console_scripts": ["arcam-fmj=arcam.fmj.console:main"]},
