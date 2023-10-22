@@ -1,9 +1,7 @@
 """Arcam AV Control"""
-import asyncio
 import enum
 import logging
 import re
-from asyncio.exceptions import IncompleteReadError
 from typing import (
     Dict,
     Iterable,
@@ -17,6 +15,9 @@ from typing import (
     Literal,
     SupportsIndex,
 )
+import anyio
+import anyio.abc
+from anyio.streams.buffered import BufferedByteReceiveStream
 
 import attr
 
@@ -1057,18 +1058,20 @@ class AmxDuetResponse:
         return res.encode("ASCII")
 
 
-async def _read_delimited(reader: asyncio.StreamReader, header_len) -> Optional[bytes]:
+async def _read_delimited(
+    reader: BufferedByteReceiveStream, header_len
+) -> Optional[bytes]:
     try:
-        start = await reader.read(1)
+        start = await reader.receive_exactly(1)
         if start == PROTOCOL_EOF:
             _LOGGER.debug("eof")
             return None
 
         if start == PROTOCOL_STR:
-            header = await reader.read(header_len - 1)
-            data_len = await reader.read(1)
-            data = await reader.read(int.from_bytes(data_len, "big"))
-            etr = await reader.read(1)
+            header = await reader.receive_exactly(header_len - 1)
+            data_len = await reader.receive_exactly(1)
+            data = await reader.receive_exactly(int.from_bytes(data_len, "big"))
+            etr = await reader.receive_exactly(1)
 
             if etr != PROTOCOL_ETR:
                 raise InvalidPacket("unexpected etr byte {!r}".format(etr))
@@ -1076,19 +1079,19 @@ async def _read_delimited(reader: asyncio.StreamReader, header_len) -> Optional[
             packet = bytes([*start, *header, *data_len, *data, *etr])
         elif start == b"\x01":
             """Sometime the AMX header seem to be sent as \x01^AMX"""
-            header = await reader.read(4)
+            header = await reader.receive_exactly(4)
             if header != b"^AMX":
                 raise InvalidPacket("Unexpected AMX header: {!r}".format(header))
 
-            data = await reader.readuntil(PROTOCOL_ETR)
-            packet = bytes([*b"AMX", *data])
+            data = await reader.receive_until(PROTOCOL_ETR, 65536)
+            packet = bytes([*b"AMX", *data, *PROTOCOL_ETR])
         elif start == b"A":
-            header = await reader.read(2)
+            header = await reader.receive_exactly(2)
             if header != b"MX":
                 raise InvalidPacket("Unexpected AMX header")
 
-            data = await reader.readuntil(PROTOCOL_ETR)
-            packet = bytes([*start, *header, *data])
+            data = await reader.receive_until(PROTOCOL_ETR, 65536)
+            packet = bytes([*start, *header, *data, *PROTOCOL_ETR])
         elif start == b"\x00":
             raise NullPacket()
         else:
@@ -1096,18 +1099,20 @@ async def _read_delimited(reader: asyncio.StreamReader, header_len) -> Optional[
 
         return packet
 
-    except TimeoutError as exception:
-        raise ConnectionFailed() from exception
-    except ConnectionError as exception:
-        raise ConnectionFailed() from exception
-    except OSError as exception:
-        raise ConnectionFailed() from exception
-    except IncompleteReadError as exception:
-        raise ConnectionFailed() from exception
+    except (
+        anyio.BrokenResourceError,
+        anyio.EndOfStream,
+        anyio.IncompleteRead,
+        TimeoutError,
+        OSError,
+    ) as exception:
+        raise ConnectionFailed(str(exception)) from exception
+    except anyio.ClosedResourceError as exception:
+        raise NotConnectedException(str(exception)) from exception
 
 
 async def _read_response(
-    reader: asyncio.StreamReader,
+    reader: BufferedByteReceiveStream,
 ) -> Optional[Union[ResponsePacket, AmxDuetResponse]]:
     data = await _read_delimited(reader, 4)
     if not data:
@@ -1120,7 +1125,7 @@ async def _read_response(
 
 
 async def read_response(
-    reader: asyncio.StreamReader,
+    reader: BufferedByteReceiveStream,
 ) -> Optional[Union[ResponsePacket, AmxDuetResponse]]:
     while True:
         try:
@@ -1135,7 +1140,7 @@ async def read_response(
 
 
 async def _read_command(
-    reader: asyncio.StreamReader,
+    reader: BufferedByteReceiveStream,
 ) -> Optional[Union[CommandPacket, AmxDuetRequest]]:
     data = await _read_delimited(reader, 3)
     if not data:
@@ -1147,11 +1152,11 @@ async def _read_command(
 
 
 async def read_command(
-    reader: asyncio.StreamReader,
+    stream: BufferedByteReceiveStream,
 ) -> Optional[Union[CommandPacket, AmxDuetRequest]]:
     while True:
         try:
-            data = await _read_command(reader)
+            data = await _read_command(stream)
         except InvalidPacket as e:
             _LOGGER.warning(str(e))
             continue
@@ -1159,16 +1164,22 @@ async def read_command(
 
 
 async def write_packet(
-    writer: asyncio.StreamWriter,
+    writer: anyio.abc.ByteSendStream,
     packet: Union[CommandPacket, ResponsePacket, AmxDuetRequest, AmxDuetResponse],
 ) -> None:
     try:
         data = packet.to_bytes()
-        writer.write(data)
-        await asyncio.wait_for(writer.drain(), _WRITE_TIMEOUT)
-    except asyncio.TimeoutError as exception:
-        raise ConnectionFailed() from exception
-    except ConnectionError as exception:
-        raise ConnectionFailed() from exception
+        with anyio.fail_after(_WRITE_TIMEOUT):
+            await writer.send(data)
+    except TimeoutError as exception:
+        raise ConnectionFailed(str(exception)) from exception
+    except (
+        anyio.BrokenResourceError,
+        anyio.EndOfStream,
+        anyio.IncompleteRead,
+    ) as exception:
+        raise ConnectionFailed(str(exception)) from exception
+    except anyio.ClosedResourceError as exception:
+        raise NotConnectedException(str(exception)) from exception
     except OSError as exception:
-        raise ConnectionFailed() from exception
+        raise ConnectionFailed(str(exception)) from exception

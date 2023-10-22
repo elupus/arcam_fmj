@@ -1,7 +1,9 @@
 """Fake server"""
-import asyncio
 import logging
 from typing import Callable, Dict, List, Optional, Tuple, Union
+import anyio
+import anyio.abc
+import anyio.streams.buffered
 
 from . import (
     AmxDuetRequest,
@@ -13,6 +15,7 @@ from . import (
     ResponsePacket,
     read_command,
     write_packet,
+    ConnectionFailed,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -20,13 +23,11 @@ _LOGGER = logging.getLogger(__name__)
 
 class Server:
     def __init__(self, host: str, port: int, model: str) -> None:
-        self._server: Optional[asyncio.AbstractServer] = None
         self._host = host
         self._port = port
         self._handlers: Dict[
             Union[Tuple[int, int], Tuple[int, int, bytes]], Callable
         ] = dict()
-        self._tasks: List[asyncio.Task] = list()
         self._amxduet = AmxDuetResponse(
             {
                 "Device-SDKClass": "Receiver",
@@ -36,20 +37,17 @@ class Server:
             }
         )
 
-    async def process(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
+    async def process(self, stream: anyio.abc.SocketStream):
         _LOGGER.debug("Client connected")
-        task = asyncio.current_task()
-        assert task
-        self._tasks.append(task)
         try:
-            await self.process_runner(reader, writer)
+            await self.process_runner(stream)
+        except ConnectionFailed:
+            pass
         finally:
             _LOGGER.debug("Client disconnected")
-            self._tasks.remove(task)
 
-    async def process_runner(
-        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
-    ):
+    async def process_runner(self, stream: anyio.abc.SocketStream):
+        reader = anyio.streams.buffered.BufferedByteReceiveStream(stream)
         while True:
             request = await read_command(reader)
             if request is None:
@@ -59,7 +57,7 @@ class Server:
             responses = await self.process_request(request)
             _LOGGER.debug("Client command %s -> %s", request, responses)
             for response in responses:
-                await write_packet(writer, response)
+                await write_packet(stream, response)
 
     async def process_request(self, request: Union[CommandPacket, AmxDuetRequest]):
         if isinstance(request, AmxDuetRequest):
@@ -94,31 +92,16 @@ class Server:
         else:
             self._handlers[(zn, cc)] = fun
 
-    async def start(self):
+    async def run(
+        self, *, task_status: anyio.abc.TaskStatus = anyio.TASK_STATUS_IGNORED
+    ):
         _LOGGER.debug("Starting server")
-        self._server = await asyncio.start_server(self.process, self._host, self._port)
-        return self
-
-    async def stop(self):
-        if self._server:
+        self._listener = await anyio.create_tcp_listener(
+            local_host=self._host, local_port=self._port
+        )
+        try:
+            task_status.started()
+            await self._listener.serve(self.process)
+        finally:
             _LOGGER.debug("Stopping server")
-            self._server.close()
-            await self._server.wait_closed()
-            self._server = None
-
-        if self._tasks:
-            _LOGGER.debug("Cancelling clients %s", self._tasks)
-            for task in self._tasks:
-                task.cancel()
-            await asyncio.wait(self._tasks)
-
-
-class ServerContext:
-    def __init__(self, server: Server):
-        self._server = server
-
-    async def __aenter__(self):
-        await self._server.start()
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        await self._server.stop()
+            await self._listener.aclose()

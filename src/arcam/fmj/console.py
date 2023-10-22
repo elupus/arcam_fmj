@@ -1,5 +1,5 @@
 import argparse
-import asyncio
+import anyio
 import logging
 import sys
 
@@ -22,9 +22,10 @@ from . import (
     RC5CODE_SOURCE,
     RC5CODE_DECODE_MODE_2CH,
     RC5CODE_DECODE_MODE_MCH,
+    SOURCE_CODES,
 )
 from .client import Client, ClientContext
-from .server import Server, ServerContext
+from .server import Server
 from .state import State
 
 # pylint: disable=invalid-name
@@ -104,7 +105,7 @@ async def run_state(args):
                     if prev != curr:
                         print(curr)
                         prev = curr
-                    await asyncio.sleep(delay=1)
+                    await anyio.sleep(delay=1)
         else:
             print(state)
 
@@ -126,7 +127,7 @@ async def run_server(args):
             rc5_key = (self._api_version, 1)
 
             self._volume = bytes([10])
-            self._source = bytes([SourceCodes.PVR])
+            self._source = SOURCE_CODES[self._api_version, 1][SourceCodes.PVR]
             self._audio_format = bytes(
                 [IncomingAudioFormat.PCM, IncomingAudioConfig.STEREO_ONLY]
             )
@@ -293,9 +294,7 @@ async def run_server(args):
                 raise CommandInvalidAtThisTime()
 
     server = DummyServer(args.host, args.port, args.model)
-    async with ServerContext(server):
-        while True:
-            await asyncio.sleep(delay=1)
+    await server.run()
 
 
 def main():
@@ -314,11 +313,11 @@ def main():
         root.addHandler(channel)
 
     if args.subcommand == "client":
-        asyncio.run(run_client(args))
+        anyio.run(run_client, args)
     elif args.subcommand == "state":
-        asyncio.run(run_state(args))
+        anyio.run(run_state, args)
     elif args.subcommand == "server":
-        asyncio.run(run_server(args))
+        anyio.run(run_server, args)
 
 
 if __name__ == "__main__":
