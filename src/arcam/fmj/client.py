@@ -19,7 +19,7 @@ from . import (
     ResponseException,
     ResponsePacket,
     read_response,
-    write_packet
+    write_packet,
 )
 from .utils import Throttle, async_retry
 
@@ -28,7 +28,8 @@ _REQUEST_TIMEOUT = timedelta(seconds=3)
 _REQUEST_THROTTLE = 0.2
 
 _HEARTBEAT_INTERVAL = timedelta(seconds=5)
-_HEARTBEAT_TIMEOUT  = _HEARTBEAT_INTERVAL + _HEARTBEAT_INTERVAL
+_HEARTBEAT_TIMEOUT = _HEARTBEAT_INTERVAL + _HEARTBEAT_INTERVAL
+
 
 class Client:
     def __init__(self, host: str, port: int) -> None:
@@ -63,8 +64,7 @@ class Client:
             else:
                 _LOGGER.debug("Sending ping")
                 await write_packet(
-                    writer,
-                    CommandPacket(1, CommandCodes.POWER, bytes([0xF0]))
+                    writer, CommandPacket(1, CommandCodes.POWER, bytes([0xF0]))
                 )
                 self._timestamp = datetime.now()
 
@@ -73,8 +73,7 @@ class Client:
             while True:
                 try:
                     packet = await asyncio.wait_for(
-                        read_response(reader),
-                        _HEARTBEAT_TIMEOUT.total_seconds()
+                        read_response(reader), _HEARTBEAT_TIMEOUT.total_seconds()
                     )
                 except asyncio.TimeoutError as exception:
                     _LOGGER.warning("Missed all pings")
@@ -119,7 +118,8 @@ class Client:
         _LOGGER.debug("Connecting to %s:%d", self._host, self._port)
         try:
             self._reader, self._writer = await asyncio.open_connection(
-                self._host, self._port)
+                self._host, self._port
+            )
         except ConnectionError as exception:
             raise ConnectionFailed() from exception
         except OSError as exception:
@@ -148,11 +148,15 @@ class Client:
         ...
 
     @async_retry(2, asyncio.TimeoutError)
-    async def request_raw(self, request: Union[CommandPacket, AmxDuetRequest]) -> Union[ResponsePacket, AmxDuetResponse]:
+    async def request_raw(
+        self, request: Union[CommandPacket, AmxDuetRequest]
+    ) -> Union[ResponsePacket, AmxDuetResponse]:
         if not self._writer:
             raise NotConnectedException()
-        writer = self._writer # keep copy around if stopped by another task
-        future: 'asyncio.Future[Union[ResponsePacket, AmxDuetResponse]]' = asyncio.Future()
+        writer = self._writer  # keep copy around if stopped by another task
+        future: "asyncio.Future[Union[ResponsePacket, AmxDuetResponse]]" = (
+            asyncio.Future()
+        )
 
         def listen(response: Union[ResponsePacket, AmxDuetResponse]):
             if response.respons_to(request):
@@ -168,9 +172,7 @@ class Client:
                 self._timestamp = datetime.now()
                 return await future
 
-        return await asyncio.wait_for(
-            req(),
-            _REQUEST_TIMEOUT.total_seconds())
+        return await asyncio.wait_for(req(), _REQUEST_TIMEOUT.total_seconds())
 
     async def send(self, zn: int, cc: int, data: bytes) -> None:
         if not self._writer:
@@ -196,9 +198,7 @@ class ClientContext:
 
     async def __aenter__(self) -> Client:
         await self._client.start()
-        self._task = asyncio.create_task(
-            self._client.process()
-        )
+        self._task = asyncio.create_task(self._client.process())
         return self._client
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):

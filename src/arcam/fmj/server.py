@@ -12,24 +12,29 @@ from . import (
     ResponseException,
     ResponsePacket,
     read_command,
-    write_packet
+    write_packet,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
-class Server():
+
+class Server:
     def __init__(self, host: str, port: int, model: str) -> None:
         self._server: Optional[asyncio.AbstractServer] = None
         self._host = host
         self._port = port
-        self._handlers: Dict[Union[Tuple[int, int], Tuple[int, int, bytes]], Callable] = dict()
+        self._handlers: Dict[
+            Union[Tuple[int, int], Tuple[int, int, bytes]], Callable
+        ] = dict()
         self._tasks: List[asyncio.Task] = list()
-        self._amxduet = AmxDuetResponse({
-            "Device-SDKClass": "Receiver",
-            "Device-Make": "ARCAM",
-            "Device-Model": model,
-            "Device-Revision": "x.y.z"
-        })
+        self._amxduet = AmxDuetResponse(
+            {
+                "Device-SDKClass": "Receiver",
+                "Device-Make": "ARCAM",
+                "Device-Model": model,
+                "Device-Revision": "x.y.z",
+            }
+        )
 
     async def process(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
         _LOGGER.debug("Client connected")
@@ -42,7 +47,9 @@ class Server():
             _LOGGER.debug("Client disconnected")
             self._tasks.remove(task)
 
-    async def process_runner(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
+    async def process_runner(
+        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+    ):
         while True:
             request = await read_command(reader)
             if request is None:
@@ -64,32 +71,20 @@ class Server():
 
         try:
             if handler:
-                data = handler(
-                    zn=request.zn,
-                    cc=request.cc,
-                    data=request.data)
+                data = handler(zn=request.zn, cc=request.cc, data=request.data)
 
                 if isinstance(data, bytes):
                     response = [
                         ResponsePacket(
-                            request.zn,
-                            request.cc,
-                            AnswerCodes.STATUS_UPDATE,
-                            data)
+                            request.zn, request.cc, AnswerCodes.STATUS_UPDATE, data
+                        )
                     ]
                 else:
                     response = data
             else:
                 raise CommandNotRecognised()
         except ResponseException as e:
-            response = [
-                ResponsePacket(
-                    request.zn,
-                    request.cc,
-                    e.ac,
-                    e.data or bytes()
-                )
-            ]
+            response = [ResponsePacket(request.zn, request.cc, e.ac, e.data or bytes())]
 
         return response
 
@@ -101,10 +96,7 @@ class Server():
 
     async def start(self):
         _LOGGER.debug("Starting server")
-        self._server = await asyncio.start_server(
-            self.process,
-            self._host,
-            self._port)
+        self._server = await asyncio.start_server(self.process, self._host, self._port)
         return self
 
     async def stop(self):
@@ -121,7 +113,7 @@ class Server():
             await asyncio.wait(self._tasks)
 
 
-class ServerContext():
+class ServerContext:
     def __init__(self, server: Server):
         self._server = server
 

@@ -9,6 +9,7 @@ from typing import Optional, Any
 
 _LOGGER = logging.getLogger(__name__)
 
+
 def async_retry(attempts=2, allowed_exceptions=()):
     def decorator(f):
         @functools.wraps(f)
@@ -25,7 +26,9 @@ def async_retry(attempts=2, allowed_exceptions=()):
                     _LOGGER.warning("Retrying: %s %s", f, args)
 
         return wrapper
+
     return decorator
+
 
 class Throttle:
     def __init__(self, delay: float) -> None:
@@ -61,13 +64,19 @@ def get_possibly_invalid_xml(data) -> Any:
         return ElementTree.fromstring(data)
     except ElementTree.ParseError:
         _LOGGER.info("Device provide corrupt xml, trying with ampersand replacement")
-        data = re.sub(r'&(?![A-Za-z]+[0-9]*;|#[0-9]+;|#x[0-9a-fA-F]+;)', r'&amp;', data)
+        data = re.sub(r"&(?![A-Za-z]+[0-9]*;|#[0-9]+;|#x[0-9a-fA-F]+;)", r"&amp;", data)
         return ElementTree.fromstring(data)
 
-def get_udn_from_xml(xml: Any) -> Optional[str]:
-    return xml.findtext("d:device/d:UDN", None, {"d": "urn:schemas-upnp-org:device-1-0"})
 
-async def get_uniqueid_from_device_description(session: aiohttp.ClientSession, url: str):
+def get_udn_from_xml(xml: Any) -> Optional[str]:
+    return xml.findtext(
+        "d:device/d:UDN", None, {"d": "urn:schemas-upnp-org:device-1-0"}
+    )
+
+
+async def get_uniqueid_from_device_description(
+    session: aiohttp.ClientSession, url: str
+):
     """Retrieve and extract unique id from url."""
     try:
         async with session.get(url) as req:
