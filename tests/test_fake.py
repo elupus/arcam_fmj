@@ -16,6 +16,7 @@ from arcam.fmj import (
 from arcam.fmj.client import Client
 from arcam.fmj.server import Server
 from arcam.fmj.state import State
+from . import raises_in_groups
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -134,7 +135,7 @@ async def test_silent_server_disconnect(speedy_client, silent_server):
 
     c = Client("localhost", 8888)
 
-    with pytest.raises(ConnectionFailed):
+    with raises_in_groups(ConnectionFailed):
         async with anyio.create_task_group() as tg:
             await tg.start(silent_server.run)
             await tg.start(c.run)

@@ -19,7 +19,7 @@ setup(
     package_data = {
         'arcam.fmj': ['py.typed'],
     },
-    python_requires=">=3.8",
+    python_requires=">=3.11",
     author="Joakim Plate",
     install_requires=["attrs>18.1", "anyio>=3.6.2"],
     extras_require={
