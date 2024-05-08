@@ -76,7 +76,7 @@ class Client:
                         read_response(reader), _HEARTBEAT_TIMEOUT.total_seconds()
                     )
                 except asyncio.TimeoutError as exception:
-                    _LOGGER.warning("Missed all pings")
+                    _LOGGER.debug("Missed all pings")
                     raise ConnectionFailed() from exception
 
                 if packet is None:
