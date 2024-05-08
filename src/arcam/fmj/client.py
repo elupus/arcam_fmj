@@ -15,9 +15,11 @@ from . import (
     CommandCodes,
     CommandPacket,
     ConnectionFailed,
+    EnumFlags,
     NotConnectedException,
     ResponseException,
     ResponsePacket,
+    UnsupportedZone,
     read_response,
     write_packet,
 )
@@ -31,24 +33,14 @@ _HEARTBEAT_INTERVAL = timedelta(seconds=5)
 _HEARTBEAT_TIMEOUT = _HEARTBEAT_INTERVAL + _HEARTBEAT_INTERVAL
 
 
-class Client:
-    def __init__(self, host: str, port: int) -> None:
+class ClientBase:
+    def __init__(self) -> None:
         self._reader: Optional[StreamReader] = None
         self._writer: Optional[StreamWriter] = None
         self._task = None
         self._listen: Set[Callable] = set()
-        self._host = host
-        self._port = port
         self._throttle = Throttle(_REQUEST_THROTTLE)
         self._timestamp = datetime.now()
-
-    @property
-    def host(self) -> str:
-        return self._host
-
-    @property
-    def port(self) -> int:
-        return self._port
 
     @contextmanager
     def listen(self, listener: Callable):
@@ -111,34 +103,6 @@ class Client:
     def started(self) -> bool:
         return self._writer is not None
 
-    async def start(self) -> None:
-        if self._writer:
-            raise ArcamException("Already started")
-
-        _LOGGER.debug("Connecting to %s:%d", self._host, self._port)
-        try:
-            self._reader, self._writer = await asyncio.open_connection(
-                self._host, self._port
-            )
-        except ConnectionError as exception:
-            raise ConnectionFailed() from exception
-        except OSError as exception:
-            raise ConnectionFailed() from exception
-        _LOGGER.info("Connected to %s:%d", self._host, self._port)
-
-    async def stop(self) -> None:
-        if self._writer:
-            try:
-                _LOGGER.info("Disconnecting from %s:%d", self._host, self._port)
-                self._writer.close()
-                if sys.version_info >= (3, 7):
-                    await self._writer.wait_closed()
-            except (ConnectionError, OSError):
-                pass
-            finally:
-                self._writer = None
-                self._reader = None
-
     @overload
     async def request_raw(self, request: CommandPacket) -> ResponsePacket:
         ...
@@ -174,15 +138,29 @@ class Client:
 
         return await asyncio.wait_for(req(), _REQUEST_TIMEOUT.total_seconds())
 
-    async def send(self, zn: int, cc: int, data: bytes) -> None:
+    async def send(self, zn: int, cc: CommandCodes, data: bytes) -> None:
         if not self._writer:
             raise NotConnectedException()
+
+        if not (cc.flags & EnumFlags.ZONE_SUPPORT) and zn != 1:
+            raise UnsupportedZone()
+
         writer = self._writer
         request = CommandPacket(zn, cc, data)
         await self._throttle.get()
         await write_packet(writer, request)
 
-    async def request(self, zn: int, cc: int, data: bytes):
+    async def request(self, zn: int, cc: CommandCodes, data: bytes):
+        if not self._writer:
+            raise NotConnectedException()
+
+        if not (cc.flags & EnumFlags.ZONE_SUPPORT) and zn != 1:
+            raise UnsupportedZone()
+
+        if cc.flags & EnumFlags.SEND_ONLY:
+            await self.send(zn, cc, data)
+            return
+
         response = await self.request_raw(CommandPacket(zn, cc, data))
 
         if response.ac == AnswerCodes.STATUS_UPDATE:
@@ -190,6 +168,47 @@ class Client:
 
         raise ResponseException.from_response(response)
 
+class Client(ClientBase):
+    def __init__(self, host: str, port: int) -> None:
+        super().__init__()
+        self._host = host
+        self._port = port
+
+    @property
+    def host(self) -> str:
+        return self._host
+
+    @property
+    def port(self) -> int:
+        return self._port
+
+    async def start(self) -> None:
+        if self._writer:
+            raise ArcamException("Already started")
+
+        _LOGGER.debug("Connecting to %s:%d", self._host, self._port)
+        try:
+            self._reader, self._writer = await asyncio.open_connection(
+                self._host, self._port
+            )
+        except ConnectionError as exception:
+            raise ConnectionFailed() from exception
+        except OSError as exception:
+            raise ConnectionFailed() from exception
+        _LOGGER.info("Connected to %s:%d", self._host, self._port)
+
+    async def stop(self) -> None:
+        if self._writer:
+            try:
+                _LOGGER.info("Disconnecting from %s:%d", self._host, self._port)
+                self._writer.close()
+                if sys.version_info >= (3, 7):
+                    await self._writer.wait_closed()
+            except (ConnectionError, OSError):
+                pass
+            finally:
+                self._writer = None
+                self._reader = None
 
 class ClientContext:
     def __init__(self, client: Client):

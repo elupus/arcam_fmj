@@ -37,6 +37,7 @@ from . import (
     RC5CODE_VOLUME,
     RC5CODE_DECODE_MODE_2CH,
     RC5CODE_DECODE_MODE_MCH,
+    UnsupportedZone,
 )
 from .client import Client
 
@@ -363,10 +364,12 @@ class State:
         return self._presets
 
     async def update(self) -> None:
-        async def _update(cc):
+        async def _update(cc: CommandCodes):
             try:
                 data = await self._client.request(self._zn, cc, bytes([0xF0]))
                 self._state[cc] = data
+            except UnsupportedZone:
+                _LOGGER.debug("Unsupported zone %s for %s", self._zn, cc)
             except ResponseException as e:
                 _LOGGER.debug("Response error skipping %s - %s", cc, e.ac)
                 self._state[cc] = None

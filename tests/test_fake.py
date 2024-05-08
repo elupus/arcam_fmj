@@ -11,6 +11,7 @@ from arcam.fmj import (
     CommandCodes,
     CommandNotRecognised,
     ConnectionFailed,
+    UnsupportedZone,
 )
 from arcam.fmj.client import Client, ClientContext
 from arcam.fmj.server import Server, ServerContext
@@ -77,7 +78,7 @@ async def test_multiple(event_loop, server, client):
 
 async def test_invalid_command(event_loop, server, client):
     with pytest.raises(CommandNotRecognised):
-        await client.request(0x01, 0xff, bytes([0xF0]))
+        await client.request(0x01, CommandCodes.from_int(0xff), bytes([0xF0]))
 
 
 async def test_state(event_loop, server, client):
@@ -91,6 +92,9 @@ async def test_silent_server_request(event_loop, speedy_client, silent_server, c
     with pytest.raises(asyncio.TimeoutError):
         await client.request(0x01, CommandCodes.POWER, bytes([0xF0]))
 
+async def test_unsupported_zone(event_loop, speedy_client, silent_server, client):
+    with pytest.raises(UnsupportedZone):
+        await client.request(0x02, CommandCodes.DECODE_MODE_STATUS_2CH, bytes([0xF0]))
 
 async def test_silent_server_disconnect(event_loop, speedy_client, silent_server):
     from arcam.fmj.client import _HEARTBEAT_TIMEOUT

@@ -62,7 +62,7 @@ parser_client = subparsers.add_parser("client")
 parser_client.add_argument("--host", required=True)
 parser_client.add_argument("--port", default=50000)
 parser_client.add_argument("--zone", default=1, type=int)
-parser_client.add_argument("--command", type=auto_int)
+parser_client.add_argument("--command", type=auto_int, required=True)
 parser_client.add_argument("--data", nargs="+", default=[0xF0], type=auto_int)
 
 parser_server = subparsers.add_parser("server")
@@ -74,7 +74,7 @@ parser_server.add_argument("--model", default="AVR450")
 async def run_client(args):
     client = Client(args.host, args.port)
     async with ClientContext(client):
-        result = await client.request(args.zone, args.command, bytes(args.data))
+        result = await client.request(args.zone, CommandCodes(args.command), bytes(args.data))
         print(result)
 
 

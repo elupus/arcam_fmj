@@ -40,6 +40,8 @@ class ConnectionFailed(ArcamException):
 class NotConnectedException(ArcamException):
     pass
 
+class UnsupportedZone(ArcamException):
+    pass
 
 class ResponseException(ArcamException):
     def __init__(self, ac=None, zn=None, cc=None, data=None):
@@ -199,9 +201,14 @@ class ApiModel(enum.Enum):
 
 _T = TypeVar("_T", bound="IntOrTypeEnum")
 
+class EnumFlags(enum.IntFlag):
+    ZONE_SUPPORT = enum.auto()
+    SEND_ONLY = enum.auto()
+
 
 class IntOrTypeEnum(enum.IntEnum):
     version: Optional[Set[str]]
+    flags: EnumFlags
 
     @classmethod
     def _missing_(cls, value):
@@ -217,13 +224,15 @@ class IntOrTypeEnum(enum.IntEnum):
             obj._name_ = f"CODE_{value}"
             obj._value_ = value
             obj.version = None
+            obj.flags = EnumFlags(0)
             pseudo_member = cls._value2member_map_.setdefault(value, obj)
         return pseudo_member
 
-    def __new__(cls, value: int, version: Optional[set] = None):
+    def __new__(cls, value: int, version: Optional[Set[str]] = None, flags = EnumFlags(0)):
         obj = int.__new__(cls, value)
         obj._value_ = value
         obj.version = version
+        obj.flags = flags
         return obj
 
     @classmethod
@@ -246,17 +255,17 @@ class AnswerCodes(IntOrTypeEnum):
 
 class CommandCodes(IntOrTypeEnum):
     # System Commands
-    POWER = 0x00
+    POWER = 0x00, None, EnumFlags.ZONE_SUPPORT
     DISPLAY_BRIGHTNESS = 0x01
     HEADPHONES = 0x02
-    FMGENRE = 0x03
+    FMGENRE = 0x03, None, EnumFlags.ZONE_SUPPORT
     SOFTWARE_VERSION = 0x04
     RESTORE_FACTORY_DEFAULT = 0x05
     SAVE_RESTORE_COPY_OF_SETTINGS = 0x06
-    SIMULATE_RC5_IR_COMMAND = 0x08
-    DISPLAY_INFORMATION_TYPE = 0x09
-    CURRENT_SOURCE = 0x1D  # Request
-    HEADPHONES_OVERRIDE = 0x1F
+    SIMULATE_RC5_IR_COMMAND = 0x08, None, EnumFlags.ZONE_SUPPORT | EnumFlags.SEND_ONLY
+    DISPLAY_INFORMATION_TYPE = 0x09, None, EnumFlags.ZONE_SUPPORT
+    CURRENT_SOURCE = 0x1D, None, EnumFlags.ZONE_SUPPORT  # Request
+    HEADPHONES_OVERRIDE = 0x1F, None, EnumFlags.ZONE_SUPPORT
 
     # Input Commands
     VIDEO_SELECTION = 0x0A
@@ -264,44 +273,44 @@ class CommandCodes(IntOrTypeEnum):
     VIDEO_INPUT_TYPE = 0x0C  # IMAX_ENHANCED on 860 and HDA Series (not AVR5)
 
     # Output Commands
-    VOLUME = 0x0D  # Set/Request
-    MUTE = 0x0E  # Request
+    VOLUME = 0x0D, None, EnumFlags.ZONE_SUPPORT  # Set/Request
+    MUTE = 0x0E, None, EnumFlags.ZONE_SUPPORT  # Request
     DIRECT_MODE_STATUS = 0x0F  # Request
     DECODE_MODE_STATUS_2CH = 0x10  # Request
     DECODE_MODE_STATUS_MCH = 0x11  # Request
-    RDS_INFORMATION = 0x12  # Request
+    RDS_INFORMATION = 0x12, None, EnumFlags.ZONE_SUPPORT  # Request
     VIDEO_OUTPUT_RESOLUTION = 0x13  # Set/Request
 
     # Menu Command
     MENU = 0x14  # Request
-    TUNER_PRESET = 0x15  # Set/Request
-    TUNE = 0x16  # Set/Request
-    DAB_STATION = 0x18  # Set/Request
-    DAB_PROGRAM_TYPE_CATEGORY = 0x19  # Set/Request
-    DLS_PDT_INFO = 0x1A  # Request
-    PRESET_DETAIL = 0x1B  # Request
+    TUNER_PRESET = 0x15, None, EnumFlags.ZONE_SUPPORT  # Set/Request
+    TUNE = 0x16, None, EnumFlags.ZONE_SUPPORT  # Set/Request
+    DAB_STATION = 0x18, None, EnumFlags.ZONE_SUPPORT  # Set/Request
+    DAB_PROGRAM_TYPE_CATEGORY = 0x19, None, EnumFlags.ZONE_SUPPORT  # Set/Request
+    DLS_PDT_INFO = 0x1A, None, EnumFlags.ZONE_SUPPORT  # Request
+    PRESET_DETAIL = 0x1B, None, EnumFlags.ZONE_SUPPORT  # Request
     NETWORK_PLAYBACK_STATUS = 0x1C, APIVERSION_HDA_SERIES  # Request
 
     # Network Command
 
     # Setup
-    TREBLE_EQUALIZATION = 0x35
-    BASS_EQUALIZATION = 0x36
-    ROOM_EQUALIZATION = 0x37
-    DOLBY_VOLUME = 0x38  # DOLBY_AUDIO on HDA series
-    DOLBY_LEVELER = 0x39
-    DOLBY_VOLUME_CALIBRATION_OFFSET = 0x3A
-    BALANCE = 0x3B
+    TREBLE_EQUALIZATION = 0x35, None, EnumFlags.ZONE_SUPPORT
+    BASS_EQUALIZATION = 0x36, None, EnumFlags.ZONE_SUPPORT
+    ROOM_EQUALIZATION = 0x37, None, EnumFlags.ZONE_SUPPORT
+    DOLBY_VOLUME = 0x38, None, EnumFlags.ZONE_SUPPORT  # DOLBY_AUDIO on HDA series
+    DOLBY_LEVELER = 0x39, None, EnumFlags.ZONE_SUPPORT
+    DOLBY_VOLUME_CALIBRATION_OFFSET = 0x3A, None, EnumFlags.ZONE_SUPPORT
+    BALANCE = 0x3B, None, EnumFlags.ZONE_SUPPORT
 
     DOLBY_PLII_X_MUSIC_DIMENSION = 0x3C
     DOLBY_PLII_X_MUSIC_CENTRE_WIDTH = 0x3D
     DOLBY_PLII_X_MUSIC_PANORAMA = 0x3E
-    SUBWOOFER_TRIM = 0x3F
-    LIPSYNC_DELAY = 0x40
-    COMPRESSION = 0x41
+    SUBWOOFER_TRIM = 0x3F, None, EnumFlags.ZONE_SUPPORT
+    LIPSYNC_DELAY = 0x40, None, EnumFlags.ZONE_SUPPORT
+    COMPRESSION = 0x41, None, EnumFlags.ZONE_SUPPORT
 
-    INCOMING_VIDEO_FORMAT = 0x42
-    INCOMING_AUDIO_FORMAT = 0x43
+    INCOMING_VIDEO_FORMAT = 0x42, None, EnumFlags.ZONE_SUPPORT
+    INCOMING_AUDIO_FORMAT = 0x43, None, EnumFlags.ZONE_SUPPORT
     INCOMING_AUDIO_SAMPLERATE = 0x44
 
     SUB_STEREO_TRIM = 0x45  # Set/Request
@@ -324,7 +333,7 @@ class CommandCodes(IntOrTypeEnum):
     REBOOT = 0x26
     SETUP = 0x27, APIVERSION_HDA_SERIES
     ROOM_EQ_NAMES = 0x34, APIVERSION_HDA_SERIES
-    NOW_PLAYING_INFO = 0x64, APIVERSION_HDA_SERIES
+    NOW_PLAYING_INFO = 0x64, APIVERSION_HDA_SERIES, EnumFlags.ZONE_SUPPORT
     INPUT_CONFIG = 0x28, APIVERSION_HDA_SERIES
     GENERAL_SETUP = 0x29, APIVERSION_HDA_SERIES
     SPEAKER_TYPES = 0x2A, APIVERSION_HDA_SERIES
