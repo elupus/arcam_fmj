@@ -21,11 +21,11 @@ setup(
     },
     python_requires=">=3.8",
     author="Joakim Plate",
-    install_requires=["attrs>18.1"],
+    install_requires=["attrs>18.1", "async"],
     extras_require={
         "tests": [
             "pytest>3.6.4",
-            "pytest-asyncio==0.21",
+            "pytest-asyncio==0.21.2",
             "pytest-aiohttp>=1.0.0",
             "pytest-cov>=3.0.0",
             "coveralls",
