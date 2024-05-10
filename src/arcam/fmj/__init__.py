@@ -310,7 +310,7 @@ class CommandCodes(IntOrTypeEnum):
     COMPRESSION = 0x41, None, EnumFlags.ZONE_SUPPORT
 
     INCOMING_VIDEO_FORMAT = 0x42, None
-    INCOMING_AUDIO_FORMAT = 0x43, None, EnumFlags.ZONE_SUPPORT
+    INCOMING_AUDIO_FORMAT = 0x43, None
     INCOMING_AUDIO_SAMPLERATE = 0x44
 
     SUB_STEREO_TRIM = 0x45  # Set/Request
