@@ -21,7 +21,7 @@ setup(
     },
     python_requires=">=3.8",
     author="Joakim Plate",
-    install_requires=["attrs>18.1", "async"],
+    install_requires=["attrs>18.1"],
     extras_require={
         "tests": [
             "pytest>3.6.4",
