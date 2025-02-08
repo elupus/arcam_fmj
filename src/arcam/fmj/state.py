@@ -82,6 +82,7 @@ class State:
             "MUTE": self.get_mute(),
             "MENU": self.get_menu(),
             "INCOMING_AUDIO_FORMAT": self.get_incoming_audio_format(),
+            "INCOMING_AUDIO_SAMPLE_RATE": self.get_incoming_audio_sample_rate(),
             "DECODE_MODE_2CH": self.get_decode_mode_2ch(),
             "DECODE_MODE_MCH": self.get_decode_mode_mch(),
             "DAB_STATION": self.get_dab_station(),
@@ -162,6 +163,20 @@ class State:
             IncomingAudioFormat.from_int(value[0]),
             IncomingAudioConfig.from_int(value[1]),
         )
+
+    def get_incoming_audio_sample_rate(self) -> int:
+        value = self._state.get(CommandCodes.INCOMING_AUDIO_SAMPLERATE)
+        if value is None:
+            return 0
+        match value[0]:
+            case 0x00: return 32000
+            case 0x01: return 44100
+            case 0x02: return 48000
+            case 0x03: return 88200
+            case 0x04: return 96000
+            case 0x05: return 176400
+            case 0x06: return 192000
+            case _: return 0
 
     def get_decode_mode_2ch(self) -> Optional[DecodeMode2CH]:
         value = self._state.get(CommandCodes.DECODE_MODE_STATUS_2CH)

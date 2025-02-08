@@ -130,6 +130,7 @@ async def run_server(args):
             self._audio_format = bytes(
                 [IncomingAudioFormat.PCM, IncomingAudioConfig.STEREO_ONLY]
             )
+            self._audio_sample_rate = 48000
             self._decode_mode_2ch = bytes(
                 [next(iter(RC5CODE_DECODE_MODE_2CH[rc5_key]))]
             )
@@ -168,6 +169,12 @@ async def run_server(args):
                 CommandCodes.INCOMING_AUDIO_FORMAT,
                 bytes([0xF0]),
                 self.get_incoming_audio_format,
+            )
+            self.register_handler(
+                0x01,
+                CommandCodes.INCOMING_AUDIO_SAMPLE_RATE,
+                bytes([0xF0]),
+                self.get_incoming_audio_sample_rate,
             )
             self.register_handler(
                 0x01,
@@ -277,6 +284,9 @@ async def run_server(args):
 
         def get_incoming_audio_format(self, **kwargs):
             return self._audio_format
+
+        def get_incoming_audio_sample_rate(self, **kwargs):
+            return self._audio_sample_rate
 
         def get_tuner_preset(self, **kwargs):
             return self._tuner_preset
