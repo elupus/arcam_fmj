@@ -309,7 +309,7 @@ class CommandCodes(IntOrTypeEnum):
     LIPSYNC_DELAY = 0x40, None, EnumFlags.ZONE_SUPPORT
     COMPRESSION = 0x41, None, EnumFlags.ZONE_SUPPORT
 
-    INCOMING_VIDEO_FORMAT = 0x42, None
+    INCOMING_VIDEO_PARAMETERS = 0x42, None
     INCOMING_AUDIO_FORMAT = 0x43, None
     INCOMING_AUDIO_SAMPLERATE = 0x44
 
@@ -876,6 +876,20 @@ RC5CODE_VOLUME = {
         False: bytes([21, 85]),
     },
 }
+
+
+class IncomingVideoAspectRatio(IntOrTypeEnum):
+    UNDEFINED = 0x00
+    _4_3 = 0x01
+    _16_9 = 0x02
+
+
+class IncomingVideoColorspace(IntOrTypeEnum):
+    NORMAL = 0x00
+    HDR10 = 0x01
+    DOLBY_VISION = 0x02
+    HLG = 0x03
+    HDR10_PLUS = 0x04
 
 
 class IncomingAudioFormat(IntOrTypeEnum):

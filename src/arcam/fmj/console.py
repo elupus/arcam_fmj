@@ -11,6 +11,8 @@ from . import (
     CommandCodes,
     CommandInvalidAtThisTime,
     SourceCodes,
+    IncomingVideoAspectRatio,
+    IncomingVideoColorspace,
     IncomingAudioFormat,
     IncomingAudioConfig,
     DecodeMode2CH,
@@ -127,6 +129,14 @@ async def run_server(args):
 
             self._volume = bytes([10])
             self._source = bytes([SourceCodes.PVR])
+            self._video_parameters = {
+                "HORIZONTAL": 1920,
+                "VERTICAL": 1080,
+                "REFRESH_RATE": 60,
+                "INTERLACED": False,
+                "ASPECT_RATIO": IncomingVideoAspectRatio._16_9,
+                "COLORSPACE": IncomingVideoColorspace.NORMAL,
+            }
             self._audio_format = bytes(
                 [IncomingAudioFormat.PCM, IncomingAudioConfig.STEREO_ONLY]
             )
@@ -163,6 +173,12 @@ async def run_server(args):
             self.register_handler(0x01, CommandCodes.VOLUME, None, self.set_volume)
             self.register_handler(
                 0x01, CommandCodes.CURRENT_SOURCE, bytes([0xF0]), self.get_source
+            )
+            self.register_handler(
+                0x01,
+                CommandCodes.INCOMING_VIDEO_PARAMETERS,
+                bytes([0xF0]),
+                self.get_incoming_video_parameters,
             )
             self.register_handler(
                 0x01,
@@ -281,6 +297,9 @@ async def run_server(args):
 
         def get_decode_mode_mch(self, **kwargs):
             return self._decode_mode_mch
+
+        def get_incoming_video_parameters(self, **kwargs):
+            return self._video_parameters
 
         def get_incoming_audio_format(self, **kwargs):
             return self._audio_format

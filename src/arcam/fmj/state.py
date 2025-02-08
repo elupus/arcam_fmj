@@ -21,6 +21,8 @@ from . import (
     DecodeModeMCH,
     IncomingAudioConfig,
     IncomingAudioFormat,
+    IncomingVideoAspectRatio,
+    IncomingVideoColorspace,
     MenuCodes,
     NotConnectedException,
     PresetDetail,
@@ -81,6 +83,7 @@ class State:
             "SOURCE": self.get_source(),
             "MUTE": self.get_mute(),
             "MENU": self.get_menu(),
+            "INCOMING_VIDEO_PARAMETERS": self.get_incoming_video_parameters(),
             "INCOMING_AUDIO_FORMAT": self.get_incoming_audio_format(),
             "INCOMING_AUDIO_SAMPLE_RATE": self.get_incoming_audio_sample_rate(),
             "DECODE_MODE_2CH": self.get_decode_mode_2ch(),
@@ -152,6 +155,19 @@ class State:
 
     def get(self, cc):
         return self._state[cc]
+    
+    def get_incoming_video_parameters(self) -> Dict[str, Any]:
+        value = self._state.get(CommandCodes.INCOMING_VIDEO_PARAMETERS)
+        if value is None:
+            return {}
+        return {
+            "HORIZONTAL": (value[0] << 8) + value[1],
+            "VERTICAL": (value[2] << 8) + value[3],
+            "REFRESH_RATE": value[4],
+            "INTERLACED": (value[5] == 0x01),
+            "ASPECT_RATIO": IncomingVideoAspectRatio.from_int(value[6]),
+            "COLORSPACE": IncomingVideoColorspace.from_int(value[7]),
+        }
 
     def get_incoming_audio_format(
         self,
