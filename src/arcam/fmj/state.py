@@ -161,8 +161,8 @@ class State:
         if value is None:
             return {}
         return {
-            "HORIZONTAL": (value[0] << 8) + value[1],
-            "VERTICAL": (value[2] << 8) + value[3],
+            "HORIZONTAL": int.from_bytes(value[0:2], "big"),
+            "VERTICAL": int.from_bytes(value[2:4], "big"),
             "REFRESH_RATE": value[4],
             "INTERLACED": (value[5] == 0x01),
             "ASPECT_RATIO": IncomingVideoAspectRatio.from_int(value[6]),
