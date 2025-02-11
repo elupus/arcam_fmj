@@ -155,10 +155,10 @@ class State:
     def get(self, cc):
         return self._state[cc]
     
-    def get_incoming_video_parameters(self) -> Dict[str, Any]:
+    def get_incoming_video_parameters(self) -> Optional[VideoParameters]:
         value = self._state.get(CommandCodes.INCOMING_VIDEO_PARAMETERS)
         if value is None:
-            return {}
+            return None
         return VideoParameters.from_bytes(value)
 
     def get_incoming_audio_format(
