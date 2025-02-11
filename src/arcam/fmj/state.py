@@ -184,7 +184,7 @@ class State:
         value = self._state.get(CommandCodes.INCOMING_AUDIO_SAMPLERATE)
         if value is None:
             return 0
-        return {
+        map = {
             0x00: 32000,
             0x01: 44100,
             0x02: 48000,
@@ -192,7 +192,8 @@ class State:
             0x04: 96000,
             0x05: 176400,
             0x06: 192000,
-        }.get(value[0], 0)
+        }
+        return map.get(value[0], 0)
 
     def get_decode_mode_2ch(self) -> Optional[DecodeMode2CH]:
         value = self._state.get(CommandCodes.DECODE_MODE_STATUS_2CH)
