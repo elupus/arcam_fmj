@@ -19,6 +19,7 @@ from . import (
     DecodeModeMCH,
     CommandNotRecognised,
     _LOGGER,
+    VideoParameters,
     ResponsePacket,
     AnswerCodes,
     RC5CODE_SOURCE,
@@ -129,14 +130,14 @@ async def run_server(args):
 
             self._volume = bytes([10])
             self._source = bytes([SourceCodes.PVR])
-            self._video_parameters = {
-                "HORIZONTAL": 1920,
-                "VERTICAL": 1080,
-                "REFRESH_RATE": 60,
-                "INTERLACED": False,
-                "ASPECT_RATIO": IncomingVideoAspectRatio.ASPECT_16_9,
-                "COLORSPACE": IncomingVideoColorspace.NORMAL,
-            }
+            self._video_parameters = VideoParameters(
+                horizontal_resolution = 1920,
+                vertical_resolution = 1080,
+                refresh_rate = 60,
+                interlaced = False,
+                aspect_ratio = IncomingVideoAspectRatio.ASPECT_16_9,
+                colorspace = IncomingVideoColorspace.NORMAL
+            )
             self._audio_format = bytes(
                 [IncomingAudioFormat.PCM, IncomingAudioConfig.STEREO_ONLY]
             )

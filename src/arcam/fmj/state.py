@@ -21,11 +21,10 @@ from . import (
     DecodeModeMCH,
     IncomingAudioConfig,
     IncomingAudioFormat,
-    IncomingVideoAspectRatio,
-    IncomingVideoColorspace,
     MenuCodes,
     NotConnectedException,
     PresetDetail,
+    VideoParameters,
     ResponseException,
     ResponsePacket,
     SourceCodes,
@@ -160,14 +159,7 @@ class State:
         value = self._state.get(CommandCodes.INCOMING_VIDEO_PARAMETERS)
         if value is None:
             return {}
-        return {
-            "HORIZONTAL": int.from_bytes(value[0:2], "big"),
-            "VERTICAL": int.from_bytes(value[2:4], "big"),
-            "REFRESH_RATE": value[4],
-            "INTERLACED": (value[5] == 0x01),
-            "ASPECT_RATIO": IncomingVideoAspectRatio.from_int(value[6]),
-            "COLORSPACE": IncomingVideoColorspace.from_int(value[7]),
-        }
+        return VideoParameters.from_bytes(value)
 
     def get_incoming_audio_format(
         self,

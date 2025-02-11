@@ -5,6 +5,7 @@ import logging
 import re
 from asyncio.exceptions import IncompleteReadError
 from typing import (
+    Any,
     Dict,
     Iterable,
     Optional,
@@ -996,6 +997,37 @@ class PresetDetail:
         else:
             name = str(data[2:])
         return PresetDetail(data[0], type, name)
+
+
+@attr.s
+class VideoParameters:
+    horizontal_resolution = attr.ib(type=int)
+    vertical_resolution = attr.ib(type=int)
+    refresh_rate = attr.ib(type=int)
+    interlaced = attr.ib(type=bool)
+    aspect_ratio = attr.ib(type=IncomingVideoAspectRatio)
+    colorspace = attr.ib(type=IncomingVideoColorspace)
+
+    @staticmethod
+    def from_bytes(data: bytes) -> "VideoParameters":
+        return VideoParameters(
+            horizontal_resolution = int.from_bytes(data[0:2], "big"),
+            vertical_resolution = int.from_bytes(data[2:4], "big"),
+            refresh_rate = data[4],
+            interlaced = (data[5] == 0x01),
+            aspect_ratio = IncomingVideoAspectRatio.from_int(data[6]),
+            colorspace = IncomingVideoColorspace.from_int(data[7])
+        )
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "horizontal_resolution": self.horizontal_resolution,
+            "vertical_resolution": self.vertical_resolution,
+            "refresh_rate": self.refresh_rate,
+            "interlaced": self.interlaced,
+            "aspect_ratio": self.aspect_ratio,
+            "colorspace": self.colorspace,
+        }
 
 
 @attr.s
