@@ -184,15 +184,14 @@ class State:
         value = self._state.get(CommandCodes.INCOMING_AUDIO_SAMPLERATE)
         if value is None:
             return 0
-        match value[0]:
-            case 0x00: return 32000
-            case 0x01: return 44100
-            case 0x02: return 48000
-            case 0x03: return 88200
-            case 0x04: return 96000
-            case 0x05: return 176400
-            case 0x06: return 192000
-            case _: return 0
+        if value[0] is 0x00: return 32000
+        if value[0] is 0x01: return 44100
+        if value[0] is 0x02: return 48000
+        if value[0] is 0x03: return 88200
+        if value[0] is 0x04: return 96000
+        if value[0] is 0x05: return 176400
+        if value[0] is 0x06: return 192000
+        return 0
 
     def get_decode_mode_2ch(self) -> Optional[DecodeMode2CH]:
         value = self._state.get(CommandCodes.DECODE_MODE_STATUS_2CH)
