@@ -134,7 +134,7 @@ async def run_server(args):
                 "VERTICAL": 1080,
                 "REFRESH_RATE": 60,
                 "INTERLACED": False,
-                "ASPECT_RATIO": IncomingVideoAspectRatio._16_9,
+                "ASPECT_RATIO": IncomingVideoAspectRatio.ASPECT_16_9,
                 "COLORSPACE": IncomingVideoColorspace.NORMAL,
             }
             self._audio_format = bytes(

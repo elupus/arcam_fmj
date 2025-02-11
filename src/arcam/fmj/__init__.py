@@ -880,8 +880,8 @@ RC5CODE_VOLUME = {
 
 class IncomingVideoAspectRatio(IntOrTypeEnum):
     UNDEFINED = 0x00
-    _4_3 = 0x01
-    _16_9 = 0x02
+    ASPECT_4_3 = 0x01
+    ASPECT_16_9 = 0x02
 
 
 class IncomingVideoColorspace(IntOrTypeEnum):
