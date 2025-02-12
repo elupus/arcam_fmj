@@ -5,6 +5,7 @@ import logging
 import re
 from asyncio.exceptions import IncompleteReadError
 from typing import (
+    Any,
     Dict,
     Iterable,
     Optional,
@@ -309,7 +310,7 @@ class CommandCodes(IntOrTypeEnum):
     LIPSYNC_DELAY = 0x40, None, EnumFlags.ZONE_SUPPORT
     COMPRESSION = 0x41, None, EnumFlags.ZONE_SUPPORT
 
-    INCOMING_VIDEO_FORMAT = 0x42, None
+    INCOMING_VIDEO_PARAMETERS = 0x42, None
     INCOMING_AUDIO_FORMAT = 0x43, None
     INCOMING_AUDIO_SAMPLERATE = 0x44
 
@@ -878,6 +879,20 @@ RC5CODE_VOLUME = {
 }
 
 
+class IncomingVideoAspectRatio(IntOrTypeEnum):
+    UNDEFINED = 0x00
+    ASPECT_4_3 = 0x01
+    ASPECT_16_9 = 0x02
+
+
+class IncomingVideoColorspace(IntOrTypeEnum):
+    NORMAL = 0x00
+    HDR10 = 0x01
+    DOLBY_VISION = 0x02
+    HLG = 0x03
+    HDR10_PLUS = 0x04
+
+
 class IncomingAudioFormat(IntOrTypeEnum):
     PCM = 0x00
     ANALOGUE_DIRECT = 0x01
@@ -908,10 +923,51 @@ class IncomingAudioFormat(IntOrTypeEnum):
 class IncomingAudioConfig(IntOrTypeEnum):
     """List of possible audio configurations."""
 
+    DUAL_MONO = 0x00
     MONO = 0x01
     CENTER_ONLY = 0x01
     STEREO_ONLY = 0x02
-    # Incomplete list...
+    STEREO_SURR_MONO = 0x03
+    STEREO_SURR_LR = 0x04
+    STEREO_SURR_LR_BACK_MONO = 0x05
+    STEREO_SURR_LR_BACK_LR = 0x06
+    STEREO_SURR_LR_BACK_MATRIX = 0x07
+    STEREO_CENTER = 0x08
+    STEREO_CENTER_SURR_MONO = 0x09
+    STEREO_CENTER_SURR_LR = 0x0A
+    STEREO_CENTER_SURR_LR_BACK_MONO = 0x0B
+    STEREO_CENTER_SURR_LR_BACK_LR = 0x0C
+    STEREO_CENTER_SURR_LR_BACK_MATRIX = 0x0D
+    STEREO_DOWNMIX = 0x0E
+    STEREO_ONLY_LO_RO = 0x0F
+    DUAL_MONO_LFE = 0x10
+    MONO_LFE = 0x11
+    CENTER_LFE = 0x11
+    STEREO_LFE = 0x12
+    STEREO_SURR_MONO_LFE = 0x13
+    STEREO_SURR_LR_LFE = 0x14
+    STEREO_SURR_LR_BACK_MONO_LFE = 0x15
+    STEREO_SURR_LR_BACK_LR_LFE = 0x16
+    STEREO_SURR_LR_BACK_MATRIX_LFE = 0x17
+    STEREO_CENTER_LFE = 0x18
+    STEREO_CENTER_SURR_MONO_LFE = 0x19
+    STEREO_CENTER_SURR_LR_LFE = 0x1A
+    STEREO_CENTER_SURR_LR_BACK_MONO_LFE = 0x1B
+    STEREO_CENTER_SURR_LR_BACK_LR_LFE = 0x1C
+    STEREO_CENTER_SURR_LR_BACK_MATRIX_LFE = 0x1D
+    STEREO_DOWNMIX_LFE = 0x1E
+    STEREO_ONLY_LO_RO_LFE = 0x1F
+    UNKNOWN = 0x20
+    UNDETECTED = 0x21
+    AURO_QUAD = 0x30
+    AURO_5_0 = 0x31
+    AURO_5_1 = 0x32
+    AURO_2_2_2 = 0x33
+    AURO_8_0 = 0x34
+    AURO_9_1 = 0x35
+    AURO_10_1 = 0x36
+    AURO_11_1 = 0x37
+    AURO_13_1 = 0x38
 
 
 class PresetType(IntOrTypeEnum):
@@ -941,6 +997,37 @@ class PresetDetail:
         else:
             name = str(data[2:])
         return PresetDetail(data[0], type, name)
+
+
+@attr.s
+class VideoParameters:
+    horizontal_resolution = attr.ib(type=int)
+    vertical_resolution = attr.ib(type=int)
+    refresh_rate = attr.ib(type=int)
+    interlaced = attr.ib(type=bool)
+    aspect_ratio = attr.ib(type=IncomingVideoAspectRatio)
+    colorspace = attr.ib(type=IncomingVideoColorspace)
+
+    @staticmethod
+    def from_bytes(data: bytes) -> "VideoParameters":
+        return VideoParameters(
+            horizontal_resolution = int.from_bytes(data[0:2], "big"),
+            vertical_resolution = int.from_bytes(data[2:4], "big"),
+            refresh_rate = data[4],
+            interlaced = (data[5] == 0x01),
+            aspect_ratio = IncomingVideoAspectRatio.from_int(data[6]),
+            colorspace = IncomingVideoColorspace.from_int(data[7])
+        )
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "horizontal_resolution": self.horizontal_resolution,
+            "vertical_resolution": self.vertical_resolution,
+            "refresh_rate": self.refresh_rate,
+            "interlaced": self.interlaced,
+            "aspect_ratio": self.aspect_ratio,
+            "colorspace": self.colorspace,
+        }
 
 
 @attr.s

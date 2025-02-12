@@ -11,12 +11,15 @@ from . import (
     CommandCodes,
     CommandInvalidAtThisTime,
     SourceCodes,
+    IncomingVideoAspectRatio,
+    IncomingVideoColorspace,
     IncomingAudioFormat,
     IncomingAudioConfig,
     DecodeMode2CH,
     DecodeModeMCH,
     CommandNotRecognised,
     _LOGGER,
+    VideoParameters,
     ResponsePacket,
     AnswerCodes,
     RC5CODE_SOURCE,
@@ -127,9 +130,18 @@ async def run_server(args):
 
             self._volume = bytes([10])
             self._source = bytes([SourceCodes.PVR])
+            self._video_parameters = VideoParameters(
+                horizontal_resolution = 1920,
+                vertical_resolution = 1080,
+                refresh_rate = 60,
+                interlaced = False,
+                aspect_ratio = IncomingVideoAspectRatio.ASPECT_16_9,
+                colorspace = IncomingVideoColorspace.NORMAL
+            )
             self._audio_format = bytes(
                 [IncomingAudioFormat.PCM, IncomingAudioConfig.STEREO_ONLY]
             )
+            self._audio_sample_rate = 48000
             self._decode_mode_2ch = bytes(
                 [next(iter(RC5CODE_DECODE_MODE_2CH[rc5_key]))]
             )
@@ -165,9 +177,21 @@ async def run_server(args):
             )
             self.register_handler(
                 0x01,
+                CommandCodes.INCOMING_VIDEO_PARAMETERS,
+                bytes([0xF0]),
+                self.get_incoming_video_parameters,
+            )
+            self.register_handler(
+                0x01,
                 CommandCodes.INCOMING_AUDIO_FORMAT,
                 bytes([0xF0]),
                 self.get_incoming_audio_format,
+            )
+            self.register_handler(
+                0x01,
+                CommandCodes.INCOMING_AUDIO_SAMPLE_RATE,
+                bytes([0xF0]),
+                self.get_incoming_audio_sample_rate,
             )
             self.register_handler(
                 0x01,
@@ -275,8 +299,14 @@ async def run_server(args):
         def get_decode_mode_mch(self, **kwargs):
             return self._decode_mode_mch
 
+        def get_incoming_video_parameters(self, **kwargs):
+            return self._video_parameters
+
         def get_incoming_audio_format(self, **kwargs):
             return self._audio_format
+
+        def get_incoming_audio_sample_rate(self, **kwargs):
+            return self._audio_sample_rate
 
         def get_tuner_preset(self, **kwargs):
             return self._tuner_preset

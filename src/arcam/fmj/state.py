@@ -24,6 +24,7 @@ from . import (
     MenuCodes,
     NotConnectedException,
     PresetDetail,
+    VideoParameters,
     ResponseException,
     ResponsePacket,
     SourceCodes,
@@ -81,7 +82,9 @@ class State:
             "SOURCE": self.get_source(),
             "MUTE": self.get_mute(),
             "MENU": self.get_menu(),
+            "INCOMING_VIDEO_PARAMETERS": self.get_incoming_video_parameters(),
             "INCOMING_AUDIO_FORMAT": self.get_incoming_audio_format(),
+            "INCOMING_AUDIO_SAMPLE_RATE": self.get_incoming_audio_sample_rate(),
             "DECODE_MODE_2CH": self.get_decode_mode_2ch(),
             "DECODE_MODE_MCH": self.get_decode_mode_mch(),
             "DAB_STATION": self.get_dab_station(),
@@ -151,6 +154,12 @@ class State:
 
     def get(self, cc):
         return self._state[cc]
+    
+    def get_incoming_video_parameters(self) -> Optional[VideoParameters]:
+        value = self._state.get(CommandCodes.INCOMING_VIDEO_PARAMETERS)
+        if value is None:
+            return None
+        return VideoParameters.from_bytes(value)
 
     def get_incoming_audio_format(
         self,
@@ -162,6 +171,21 @@ class State:
             IncomingAudioFormat.from_int(value[0]),
             IncomingAudioConfig.from_int(value[1]),
         )
+
+    def get_incoming_audio_sample_rate(self) -> int:
+        value = self._state.get(CommandCodes.INCOMING_AUDIO_SAMPLERATE)
+        if value is None:
+            return 0
+        map = {
+            0x00: 32000,
+            0x01: 44100,
+            0x02: 48000,
+            0x03: 88200,
+            0x04: 96000,
+            0x05: 176400,
+            0x06: 192000,
+        }
+        return map.get(value[0], 0)
 
     def get_decode_mode_2ch(self) -> Optional[DecodeMode2CH]:
         value = self._state.get(CommandCodes.DECODE_MODE_STATUS_2CH)
