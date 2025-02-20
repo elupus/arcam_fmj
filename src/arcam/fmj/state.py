@@ -173,7 +173,7 @@ class State:
         )
 
     def get_incoming_audio_sample_rate(self) -> int:
-        value = self._state.get(CommandCodes.INCOMING_AUDIO_SAMPLERATE)
+        value = self._state.get(CommandCodes.INCOMING_AUDIO_SAMPLE_RATE)
         if value is None:
             return 0
         map = {
@@ -468,7 +468,9 @@ class State:
                     _update(CommandCodes.MENU),
                     _update(CommandCodes.DECODE_MODE_STATUS_2CH),
                     _update(CommandCodes.DECODE_MODE_STATUS_MCH),
+                    _update(CommandCodes.INCOMING_VIDEO_PARAMETERS),
                     _update(CommandCodes.INCOMING_AUDIO_FORMAT),
+                    _update(CommandCodes.INCOMING_AUDIO_SAMPLE_RATE),
                     _update(CommandCodes.DAB_STATION),
                     _update(CommandCodes.DLS_PDT_INFO),
                     _update(CommandCodes.RDS_INFORMATION),
