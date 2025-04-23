@@ -10,6 +10,7 @@ TEST_PARAMS = [
     (1, ApiModel.APIHDA_SERIES),
     (1, ApiModel.APISA_SERIES),
     (1, ApiModel.APIPA_SERIES),
+    (1, ApiModel.APIST_SERIES),
     (2, ApiModel.API450_SERIES),
     (2, ApiModel.API860_SERIES),
     (2, ApiModel.APIHDA_SERIES),
@@ -78,4 +79,4 @@ async def test_power_off(zn, api_model):
         client.send.assert_called_with(
             zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, code
         )
-    assert state.get_power() == False
+    assert state.get_power() is False

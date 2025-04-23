@@ -4,25 +4,44 @@ import enum
 import logging
 import re
 from asyncio.exceptions import IncompleteReadError
-from typing import Dict, Iterable, Optional, SupportsBytes, Tuple, Type, TypeVar, Union, Set, Literal, SupportsIndex
+from typing import (
+    Any,
+    Dict,
+    Iterable,
+    Optional,
+    SupportsBytes,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+    Set,
+    Literal,
+    SupportsIndex,
+)
 
 import attr
 
-PROTOCOL_STR = b'\x21'
-PROTOCOL_ETR = b'\x0D'
-PROTOCOL_EOF = b''
+PROTOCOL_STR = b"\x21"
+PROTOCOL_ETR = b"\x0D"
+PROTOCOL_EOF = b""
 
 _LOGGER = logging.getLogger(__name__)
 _WRITE_TIMEOUT = 3
 _READ_TIMEOUT = 3
 
+
 class ArcamException(Exception):
     pass
+
 
 class ConnectionFailed(ArcamException):
     pass
 
+
 class NotConnectedException(ArcamException):
+    pass
+
+class UnsupportedZone(ArcamException):
     pass
 
 class ResponseException(ArcamException):
@@ -31,17 +50,13 @@ class ResponseException(ArcamException):
         self.zn = zn
         self.cc = cc
         self.data = data
-        super().__init__("'ac':{}, 'zn':{}, 'cc':{}, 'data':{}".format(
-            ac, zn, cc, data
-        ))
+        super().__init__(
+            "'ac':{}, 'zn':{}, 'cc':{}, 'data':{}".format(ac, zn, cc, data)
+        )
 
     @staticmethod
-    def from_response(response: 'ResponsePacket'):
-        kwargs = {
-            'zn': response.zn,
-            'cc': response.cc,
-            'data': response.data
-        }
+    def from_response(response: "ResponsePacket"):
+        kwargs = {"zn": response.zn, "cc": response.cc, "data": response.data}
         if response.ac == AnswerCodes.ZONE_INVALID:
             return InvalidZoneException(**kwargs)
         elif response.ac == AnswerCodes.COMMAND_NOT_RECOGNISED:
@@ -55,44 +70,87 @@ class ResponseException(ArcamException):
         else:
             return ResponseException(ac=response.ac, **kwargs)
 
+
 class InvalidZoneException(ResponseException):
     def __init__(self, zn=None, cc=None, data=None):
-        super().__init__(ac=AnswerCodes.ZONE_INVALID,
-                         zn=zn, cc=cc, data=data)
+        super().__init__(ac=AnswerCodes.ZONE_INVALID, zn=zn, cc=cc, data=data)
+
 
 class CommandNotRecognised(ResponseException):
     def __init__(self, zn=None, cc=None, data=None):
-        super().__init__(ac=AnswerCodes.COMMAND_NOT_RECOGNISED,
-                         zn=zn, cc=cc, data=data)
+        super().__init__(ac=AnswerCodes.COMMAND_NOT_RECOGNISED, zn=zn, cc=cc, data=data)
+
 
 class ParameterNotRecognised(ResponseException):
     def __init__(self, zn=None, cc=None, data=None):
-        super().__init__(ac=AnswerCodes.PARAMETER_NOT_RECOGNISED,
-                         zn=zn, cc=cc, data=data)
+        super().__init__(
+            ac=AnswerCodes.PARAMETER_NOT_RECOGNISED, zn=zn, cc=cc, data=data
+        )
+
 
 class CommandInvalidAtThisTime(ResponseException):
     def __init__(self, zn=None, cc=None, data=None):
-        super().__init__(ac=AnswerCodes.COMMAND_INVALID_AT_THIS_TIME,
-                         zn=zn, cc=cc, data=data)
+        super().__init__(
+            ac=AnswerCodes.COMMAND_INVALID_AT_THIS_TIME, zn=zn, cc=cc, data=data
+        )
+
 
 class InvalidDataLength(ResponseException):
     def __init__(self, zn=None, cc=None, data=None):
-        super().__init__(ac=AnswerCodes.INVALID_DATA_LENGTH,
-                         zn=zn, cc=cc, data=data)
+        super().__init__(ac=AnswerCodes.INVALID_DATA_LENGTH, zn=zn, cc=cc, data=data)
+
 
 class InvalidPacket(ArcamException):
     pass
 
+
+class NullPacket(ArcamException):
+    pass
+
+
 APIVERSION_450_SERIES = {"AVR380", "AVR450", "AVR750"}
-APIVERSION_860_SERIES = {"AV860", "AVR850", "AVR550", "AVR390", "SR250"}
-APIVERSION_SA_SERIES = {"SA10", "SA20", "SA30"}
-APIVERSION_HDA_SERIES = {"AVR5", "AVR10", "AVR20", "AVR30", "AV40", "AVR11", "AVR21", "ARV31", "AV41"}
-APIVERSION_HDA_PREMIUM_SERIES = {"AVR10", "AVR20", "AVR30", "AV40", "AVR11", "AVR21", "ARV31", "AV41"}
-APIVERSION_HDA_MULTI_ZONE_SERIES = {"AVR20", "AVR30", "AV40", "AVR21", "ARV31", "AV41"}
+APIVERSION_860_SERIES = {"AV860", "AVR850", "AVR550", "AVR390", "SR250", "RV-6", "RV-9", "MC-10"}
+APIVERSION_SA_SERIES = {"SA10", "SA20", "SA30", "SA750"}
+APIVERSION_HDA_SERIES = {
+    "AVR5",
+    "AVR10",
+    "AVR20",
+    "AVR30",
+    "AV40",
+    "AVR11",
+    "AVR21",
+    "ARV31",
+    "AV41",
+    "SDP-55",
+    "SDP-58",
+}
+APIVERSION_HDA_PREMIUM_SERIES = {
+    "AVR10",
+    "AVR20",
+    "AVR30",
+    "AV40",
+    "AVR11",
+    "AVR21",
+    "ARV31",
+    "AV41",
+    "SDP-55",
+    "SDP-58",
+}
+APIVERSION_HDA_MULTI_ZONE_SERIES = {
+    "AVR20",
+    "AVR30",
+    "AV40",
+    "AVR21",
+    "ARV31",
+    "AV41",
+    "SDP-55",
+    "SDP-58",
+}
 APIVERSION_PA_SERIES = {"PA720", "PA240", "PA410"}
+APIVERSION_ST_SERIES = {"ST60"}
 
 APIVERSION_DAB_SERIES = {"AVR450", "AVR750"}
-APIVERSION_DAB_SERIES.update("AV860", "AVR850", "AVR550", "AVR390")
+APIVERSION_DAB_SERIES.update("AV860", "AVR850", "AVR550", "AVR390", "RV-6", "RV-9", "MC-10")
 APIVERSION_DAB_SERIES.update(APIVERSION_HDA_SERIES)
 
 APIVERSION_ZONE2_SERIES = set()
@@ -124,13 +182,14 @@ APIVERSION_AMP_DIAGNOSTICS_SERIES = set()
 APIVERSION_AMP_DIAGNOSTICS_SERIES.update(APIVERSION_SA_SERIES)
 APIVERSION_AMP_DIAGNOSTICS_SERIES.update(APIVERSION_PA_SERIES)
 
-APIVERSION_CLASS_G_SERIES = {"PA720", "PA240", "SA20", "SA30"}
+APIVERSION_CLASS_G_SERIES = {"PA720", "PA240", "SA20", "SA30", "SA750"}
 
-APIVERSION_PHONO_SERIES = {"SA30"}
+APIVERSION_PHONO_SERIES = {"SA30", "SA750"}
 
 APIVERSION_SIMPLE_IP_SERIES = {"PA720", "PA240", "SA10", "SA20"}
 
-APIVERSION_APP_SAFETY_SERIES = {"SA30"}
+APIVERSION_APP_SAFETY_SERIES = {"SA30", "SA750"}
+
 
 class ApiModel(enum.Enum):
     API450_SERIES = 1
@@ -138,10 +197,19 @@ class ApiModel(enum.Enum):
     APISA_SERIES = 3
     APIHDA_SERIES = 4
     APIPA_SERIES = 5
+    APIST_SERIES = 6
+
 
 _T = TypeVar("_T", bound="IntOrTypeEnum")
+
+class EnumFlags(enum.IntFlag):
+    ZONE_SUPPORT = enum.auto()
+    SEND_ONLY = enum.auto()
+
+
 class IntOrTypeEnum(enum.IntEnum):
     version: Optional[Set[str]]
+    flags: EnumFlags
 
     @classmethod
     def _missing_(cls, value):
@@ -157,21 +225,23 @@ class IntOrTypeEnum(enum.IntEnum):
             obj._name_ = f"CODE_{value}"
             obj._value_ = value
             obj.version = None
+            obj.flags = EnumFlags(0)
             pseudo_member = cls._value2member_map_.setdefault(value, obj)
         return pseudo_member
 
-    def __new__(cls, value: int, version: Optional[set] = None):
-             obj = int.__new__(cls, value)
-             obj._value_ = value
-             obj.version = version
-             return obj
+    def __new__(cls, value: int, version: Optional[Set[str]] = None, flags = EnumFlags(0)):
+        obj = int.__new__(cls, value)
+        obj._value_ = value
+        obj.version = version
+        obj.flags = flags
+        return obj
 
     @classmethod
     def from_int(cls: Type[_T], value: int) -> _T:
         return cls(value)
 
     @classmethod
-    def from_bytes(cls: Type[_T], bytes: Union[Iterable[SupportsIndex], SupportsBytes], byteorder: Literal['little', 'big'] = 'big', *, signed: bool = False) -> _T:  # type: ignore[override]
+    def from_bytes(cls: Type[_T], bytes: Union[Iterable[SupportsIndex], SupportsBytes], byteorder: Literal["little", "big"] = "big", *, signed: bool = False) -> _T:  # type: ignore[override]
         return cls.from_int(int.from_bytes(bytes, byteorder=byteorder, signed=signed))
 
 
@@ -186,68 +256,63 @@ class AnswerCodes(IntOrTypeEnum):
 
 class CommandCodes(IntOrTypeEnum):
     # System Commands
-    POWER = 0x00
+    POWER = 0x00, None, EnumFlags.ZONE_SUPPORT
     DISPLAY_BRIGHTNESS = 0x01
     HEADPHONES = 0x02
-    FMGENRE = 0x03
+    FMGENRE = 0x03, None, EnumFlags.ZONE_SUPPORT
     SOFTWARE_VERSION = 0x04
     RESTORE_FACTORY_DEFAULT = 0x05
     SAVE_RESTORE_COPY_OF_SETTINGS = 0x06
-    SIMULATE_RC5_IR_COMMAND = 0x08
-    DISPLAY_INFORMATION_TYPE = 0x09
-    CURRENT_SOURCE = 0x1D  # Request
-    HEADPHONES_OVERRIDE = 0x1F
-
+    SIMULATE_RC5_IR_COMMAND = 0x08, None, EnumFlags.ZONE_SUPPORT | EnumFlags.SEND_ONLY
+    DISPLAY_INFORMATION_TYPE = 0x09, None, EnumFlags.ZONE_SUPPORT
+    CURRENT_SOURCE = 0x1D, None, EnumFlags.ZONE_SUPPORT  # Request
+    HEADPHONES_OVERRIDE = 0x1F, None, EnumFlags.ZONE_SUPPORT
 
     # Input Commands
     VIDEO_SELECTION = 0x0A
     SELECT_ANALOG_DIGITAL = 0x0B
-    VIDEO_INPUT_TYPE = 0x0C # IMAX_ENHANCED on 860 and HDA Series (not AVR5)
-
+    VIDEO_INPUT_TYPE = 0x0C  # IMAX_ENHANCED on 860 and HDA Series (not AVR5)
 
     # Output Commands
-    VOLUME = 0x0D  # Set/Request
-    MUTE = 0x0E  # Request
+    VOLUME = 0x0D, None, EnumFlags.ZONE_SUPPORT  # Set/Request
+    MUTE = 0x0E, None, EnumFlags.ZONE_SUPPORT  # Request
     DIRECT_MODE_STATUS = 0x0F  # Request
     DECODE_MODE_STATUS_2CH = 0x10  # Request
     DECODE_MODE_STATUS_MCH = 0x11  # Request
-    RDS_INFORMATION = 0x12  # Request
-    VIDEO_OUTPUT_RESOLUTION = 0x13 # Set/Request
-
+    RDS_INFORMATION = 0x12, None, EnumFlags.ZONE_SUPPORT  # Request
+    VIDEO_OUTPUT_RESOLUTION = 0x13  # Set/Request
 
     # Menu Command
     MENU = 0x14  # Request
-    TUNER_PRESET = 0x15  # Set/Request
-    TUNE = 0x16  # Set/Request
-    DAB_STATION = 0x18  # Set/Request
-    DAB_PROGRAM_TYPE_CATEGORY = 0x19  # Set/Request
-    DLS_PDT_INFO = 0x1A  # Request
-    PRESET_DETAIL = 0x1B # Request
-    NETWORK_PLAYBACK_STATUS = 0x1C, APIVERSION_HDA_SERIES # Request
-    
+    TUNER_PRESET = 0x15, None, EnumFlags.ZONE_SUPPORT  # Set/Request
+    TUNE = 0x16, None, EnumFlags.ZONE_SUPPORT  # Set/Request
+    DAB_STATION = 0x18, None, EnumFlags.ZONE_SUPPORT  # Set/Request
+    DAB_PROGRAM_TYPE_CATEGORY = 0x19, None, EnumFlags.ZONE_SUPPORT  # Set/Request
+    DLS_PDT_INFO = 0x1A, None, EnumFlags.ZONE_SUPPORT  # Request
+    PRESET_DETAIL = 0x1B, None, EnumFlags.ZONE_SUPPORT  # Request
+    NETWORK_PLAYBACK_STATUS = 0x1C, APIVERSION_HDA_SERIES  # Request
 
     # Network Command
 
-
     # Setup
-    TREBLE_EQUALIZATION = 0x35
-    BASS_EQUALIZATION = 0x36
-    ROOM_EQUALIZATION = 0x37
-    DOLBY_VOLUME = 0x38 # DOLBY_AUDIO on HDA series
-    DOLBY_LEVELER = 0x39
-    DOLBY_VOLUME_CALIBRATION_OFFSET = 0x3A
-    BALANCE = 0x3B
+    TREBLE_EQUALIZATION = 0x35, None, EnumFlags.ZONE_SUPPORT
+    BASS_EQUALIZATION = 0x36, None, EnumFlags.ZONE_SUPPORT
+    ROOM_EQUALIZATION = 0x37, None, EnumFlags.ZONE_SUPPORT
+    DOLBY_VOLUME = 0x38, None, EnumFlags.ZONE_SUPPORT  # DOLBY_AUDIO on HDA series
+    DOLBY_LEVELER = 0x39, None, EnumFlags.ZONE_SUPPORT
+    DOLBY_VOLUME_CALIBRATION_OFFSET = 0x3A, None, EnumFlags.ZONE_SUPPORT
+    BALANCE = 0x3B, None, EnumFlags.ZONE_SUPPORT
 
     DOLBY_PLII_X_MUSIC_DIMENSION = 0x3C
     DOLBY_PLII_X_MUSIC_CENTRE_WIDTH = 0x3D
     DOLBY_PLII_X_MUSIC_PANORAMA = 0x3E
-    SUBWOOFER_TRIM = 0x3F
-    LIPSYNC_DELAY = 0x40
-    COMPRESSION = 0x41
+    SUBWOOFER_TRIM = 0x3F, None, EnumFlags.ZONE_SUPPORT
+    LIPSYNC_DELAY = 0x40, None, EnumFlags.ZONE_SUPPORT
+    COMPRESSION = 0x41, None, EnumFlags.ZONE_SUPPORT
 
-    INCOMING_VIDEO_FORMAT = 0x42
-    INCOMING_AUDIO_FORMAT = 0x43
-    INCOMING_AUDIO_SAMPLERATE = 0x44
+    INCOMING_VIDEO_PARAMETERS = 0x42, None
+    INCOMING_AUDIO_FORMAT = 0x43, None
+    INCOMING_AUDIO_SAMPLE_RATE = 0x44
 
     SUB_STEREO_TRIM = 0x45  # Set/Request
     VIDEO_BRIGHTNESS = 0x46  # Set/Request
@@ -269,7 +334,7 @@ class CommandCodes(IntOrTypeEnum):
     REBOOT = 0x26
     SETUP = 0x27, APIVERSION_HDA_SERIES
     ROOM_EQ_NAMES = 0x34, APIVERSION_HDA_SERIES
-    NOW_PLAYING_INFO = 0x64, APIVERSION_HDA_SERIES
+    NOW_PLAYING_INFO = 0x64, APIVERSION_HDA_SERIES, EnumFlags.ZONE_SUPPORT
     INPUT_CONFIG = 0x28, APIVERSION_HDA_SERIES
     GENERAL_SETUP = 0x29, APIVERSION_HDA_SERIES
     SPEAKER_TYPES = 0x2A, APIVERSION_HDA_SERIES
@@ -286,8 +351,14 @@ class CommandCodes(IntOrTypeEnum):
     DC_OFFSET = 0x51, APIVERSION_AMP_DIAGNOSTICS_SERIES
     SHORT_CIRCUIT_STATUS = 0x52, APIVERSION_CLASS_G_SERIES
     TIMEOUT_COUNTER = 0x55, APIVERSION_AMP_DIAGNOSTICS_SERIES
-    LIFTER_TEMPERATURE = 0x56, APIVERSION_CLASS_G_SERIES # Bug in PA720 1.8 firmware - does not return sensor id
-    OUTPUT_TEMPERATURE = 0x57, APIVERSION_AMP_DIAGNOSTICS_SERIES # Bug in PA720 1.8 firmware - does not return sensor id
+    LIFTER_TEMPERATURE = (
+        0x56,
+        APIVERSION_CLASS_G_SERIES,
+    )  # Bug in PA720 1.8 firmware - does not return sensor id
+    OUTPUT_TEMPERATURE = (
+        0x57,
+        APIVERSION_AMP_DIAGNOSTICS_SERIES,
+    )  # Bug in PA720 1.8 firmware - does not return sensor id
     AUTO_SHUTDOWN_CONTROL = 0x58, APIVERSION_AMP_DIAGNOSTICS_SERIES
 
     # Status/Diagnostics
@@ -299,7 +370,7 @@ class CommandCodes(IntOrTypeEnum):
     PROCESSOR_MODE_VOLUME = 0x5C, APIVERSION_SA_SERIES
     SYSTEM_STATUS = 0x5D, APIVERSION_AMP_DIAGNOSTICS_SERIES
     SYSTEM_MODEL = 0x5E, APIVERSION_AMP_DIAGNOSTICS_SERIES
-    DAC_FILTER = 0x61, APIVERSION_SA_SERIES # Clashes with AMPLIFIER_MODE on PA240
+    DAC_FILTER = 0x61, APIVERSION_SA_SERIES  # Clashes with AMPLIFIER_MODE on PA240
     MAXIMUM_TURN_ON_VOLUME = 0x65, APIVERSION_APP_SAFETY_SERIES
     MAXIMUM_VOLUME = 0x66, APIVERSION_APP_SAFETY_SERIES
     MAXIMUM_STREAMING_VOLUME = 0x67, APIVERSION_APP_SAFETY_SERIES
@@ -325,26 +396,44 @@ class SourceCodes(enum.Enum):
     ARC_ERC = enum.auto()
     UHD = enum.auto()
     BT = enum.auto()
+    DIG1 = enum.auto()
+    DIG2 = enum.auto()
+    DIG3 = enum.auto()
+    DIG4 = enum.auto()
+    NET_USB = enum.auto()
 
     @classmethod
-    def from_bytes(cls, data: bytes, model: ApiModel, zn: int) -> 'SourceCodes':
+    def from_bytes(cls, data: bytes, model: ApiModel, zn: int) -> "SourceCodes":
         try:
             table = SOURCE_CODES[(model, zn)]
         except KeyError:
-            raise ValueError("Unknown source map for model {} and zone {}".format(model, zn))
+            raise ValueError(
+                "Unknown source map for model {} and zone {}".format(model, zn)
+            )
         for key, value in table.items():
             if value == data:
                 return key
-        raise ValueError("Unknown source code for model {} and zone {} and value {!r}".format(model, zn, data))
+        raise ValueError(
+            "Unknown source code for model {} and zone {} and value {!r}".format(
+                model, zn, data
+            )
+        )
 
     def to_bytes(self, model: ApiModel, zn: int):
         try:
             table = SOURCE_CODES[(model, zn)]
         except KeyError:
-            raise ValueError("Unknown source map for model {} and zone {}".format(model, zn))
+            raise ValueError(
+                "Unknown source map for model {} and zone {}".format(model, zn)
+            )
         if data := table.get(self):
             return data
-        raise ValueError("Unknown byte code for model {} and zone {} and value {}".format(model, zn, self))
+        raise ValueError(
+            "Unknown byte code for model {} and zone {} and value {}".format(
+                model, zn, self
+            )
+        )
+
 
 class MenuCodes(IntOrTypeEnum):
     NONE = 0x00
@@ -378,6 +467,7 @@ class DecodeMode2CH(IntOrTypeEnum):
     AURO_MATIC_3D = 0x0F, APIVERSION_AURO_SERIES
     AURO_2D = 0x10, APIVERSION_AURO_SERIES
 
+
 class DecodeModeMCH(IntOrTypeEnum):
     STEREO_DOWNMIX = 0x01
     MULTI_CHANNEL = 0x02
@@ -400,10 +490,17 @@ class DecodeModeMCH(IntOrTypeEnum):
 POWER_WRITE_SUPPORTED = {
     ApiModel.APISA_SERIES,
     ApiModel.APIPA_SERIES,
+    ApiModel.APIST_SERIES,
 }
+
 MUTE_WRITE_SUPPORTED = POWER_WRITE_SUPPORTED
+
 SOURCE_WRITE_SUPPORTED = {
     ApiModel.APISA_SERIES,
+}
+
+VOLUME_STEP_SUPPORTED = {
+    ApiModel.APIST_SERIES,
 }
 
 DEFAULT_SOURCE_MAPPING = {
@@ -460,6 +557,14 @@ SA_SOURCE_MAPPING = {
     SourceCodes.ARC_ERC: bytes([0x0D]),
 }
 
+ST_SOURCE_MAPPING = {
+    SourceCodes.DIG1: bytes([0x01]),
+    SourceCodes.DIG2: bytes([0x02]),
+    SourceCodes.DIG3: bytes([0x03]),
+    SourceCodes.DIG4: bytes([0x04]),
+    SourceCodes.NET_USB: bytes([0x05]),
+}
+
 SOURCE_CODES = {
     (ApiModel.API450_SERIES, 1): DEFAULT_SOURCE_MAPPING,
     (ApiModel.API450_SERIES, 2): DEFAULT_SOURCE_MAPPING,
@@ -469,6 +574,7 @@ SOURCE_CODES = {
     (ApiModel.APIHDA_SERIES, 2): HDA_SOURCE_MAPPING,
     (ApiModel.APISA_SERIES, 1): SA_SOURCE_MAPPING,
     (ApiModel.APISA_SERIES, 2): SA_SOURCE_MAPPING,
+    (ApiModel.APIST_SERIES, 1): ST_SOURCE_MAPPING,
 }
 
 RC5CODE_DECODE_MODE_MCH: Dict[Tuple[ApiModel, int], Dict[DecodeModeMCH, bytes]] = {
@@ -483,10 +589,8 @@ RC5CODE_DECODE_MODE_MCH: Dict[Tuple[ApiModel, int], Dict[DecodeModeMCH, bytes]] 
     (ApiModel.API860_SERIES, 1): {
         DecodeModeMCH.STEREO_DOWNMIX: bytes([16, 107]),
         DecodeModeMCH.MULTI_CHANNEL: bytes([16, 106]),
-
         # We map to DTS_NEURAL_X
         DecodeModeMCH.DOLBY_D_EX_OR_DTS_ES: bytes([16, 113]),
-
         DecodeModeMCH.DOLBY_SURROUND: bytes([16, 110]),
         DecodeModeMCH.DTS_VIRTUAL_X: bytes([16, 115]),
     },
@@ -494,17 +598,13 @@ RC5CODE_DECODE_MODE_MCH: Dict[Tuple[ApiModel, int], Dict[DecodeModeMCH, bytes]] 
     (ApiModel.APIHDA_SERIES, 1): {
         DecodeModeMCH.STEREO_DOWNMIX: bytes([16, 107]),
         DecodeModeMCH.MULTI_CHANNEL: bytes([16, 106]),
-
         # We map to DTS_NEURAL_X
         DecodeModeMCH.DOLBY_D_EX_OR_DTS_ES: bytes([16, 113]),
-
         DecodeModeMCH.DOLBY_SURROUND: bytes([16, 110]),
-
         DecodeModeMCH.DOLBY_VIRTUAL_HEIGHT: bytes([16, 115]),
         DecodeModeMCH.AURO_NATIVE: bytes([16, 103]),
         DecodeModeMCH.AURO_MATIC_3D: bytes([16, 71]),
         DecodeModeMCH.AURO_2D: bytes([16, 104]),
-
     },
     (ApiModel.APIHDA_SERIES, 2): {},
     (ApiModel.APISA_SERIES, 1): {},
@@ -513,7 +613,7 @@ RC5CODE_DECODE_MODE_MCH: Dict[Tuple[ApiModel, int], Dict[DecodeModeMCH, bytes]] 
     (ApiModel.APIPA_SERIES, 2): {},
 }
 
-RC5CODE_DECODE_MODE_2CH: Dict[Tuple[ApiModel, int], Dict[DecodeMode2CH, bytes]]  = {
+RC5CODE_DECODE_MODE_2CH: Dict[Tuple[ApiModel, int], Dict[DecodeMode2CH, bytes]] = {
     (ApiModel.API450_SERIES, 1): {
         DecodeMode2CH.STEREO: bytes([16, 107]),
         DecodeMode2CH.DOLBY_PLII_IIx_MOVIE: bytes([16, 103]),
@@ -552,6 +652,8 @@ RC5CODE_DECODE_MODE_2CH: Dict[Tuple[ApiModel, int], Dict[DecodeMode2CH, bytes]] 
     (ApiModel.APISA_SERIES, 2): {},
     (ApiModel.APIPA_SERIES, 1): {},
     (ApiModel.APIPA_SERIES, 2): {},
+    (ApiModel.APIST_SERIES, 1): {},
+    (ApiModel.APIST_SERIES, 2): {},
 }
 
 RC5CODE_SOURCE: Dict[Tuple[ApiModel, int], Dict[SourceCodes, bytes]] = {
@@ -583,7 +685,7 @@ RC5CODE_SOURCE: Dict[Tuple[ApiModel, int], Dict[SourceCodes, bytes]] = {
         SourceCodes.PVR: bytes([23, 15]),
         SourceCodes.USB: bytes([23, 18]),
         SourceCodes.NET: bytes([23, 19]),
-        SourceCodes.FOLLOW_ZONE_1: bytes([16, 20])
+        SourceCodes.FOLLOW_ZONE_1: bytes([16, 20]),
     },
     (ApiModel.API860_SERIES, 1): {
         SourceCodes.STB: bytes([16, 100]),
@@ -615,7 +717,7 @@ RC5CODE_SOURCE: Dict[Tuple[ApiModel, int], Dict[SourceCodes, bytes]] = {
         SourceCodes.NET: bytes([23, 19]),
         SourceCodes.SAT: bytes([23, 20]),
         SourceCodes.VCR: bytes([23, 21]),
-        SourceCodes.FOLLOW_ZONE_1: bytes([16, 20])
+        SourceCodes.FOLLOW_ZONE_1: bytes([16, 20]),
     },
     (ApiModel.APIHDA_SERIES, 1): {
         SourceCodes.STB: bytes([16, 100]),
@@ -662,7 +764,7 @@ RC5CODE_SOURCE: Dict[Tuple[ApiModel, int], Dict[SourceCodes, bytes]] = {
         SourceCodes.NET: bytes([16, 92]),
         SourceCodes.USB: bytes([16, 93]),
         SourceCodes.GAME: bytes([16, 97]),
-        SourceCodes.ARC_ERC: bytes([16, 125])
+        SourceCodes.ARC_ERC: bytes([16, 125]),
     },
     (ApiModel.APISA_SERIES, 2): {
         SourceCodes.PHONO: bytes([16, 117]),
@@ -676,45 +778,30 @@ RC5CODE_SOURCE: Dict[Tuple[ApiModel, int], Dict[SourceCodes, bytes]] = {
         SourceCodes.NET: bytes([16, 92]),
         SourceCodes.USB: bytes([16, 93]),
         SourceCodes.GAME: bytes([16, 97]),
-        SourceCodes.ARC_ERC: bytes([16, 125])
+        SourceCodes.ARC_ERC: bytes([16, 125]),
     },
+    (ApiModel.APIST_SERIES, 1): {
+        SourceCodes.DIG1: bytes([21, 94]),
+        SourceCodes.DIG2: bytes([21, 98]),
+        SourceCodes.DIG3: bytes([21, 27]),
+        SourceCodes.DIG4: bytes([21, 97]),
+        SourceCodes.USB: bytes([21, 93]),
+        SourceCodes.NET: bytes([21, 92]),
+    },
+    (ApiModel.APIST_SERIES, 2): {},
     (ApiModel.APIPA_SERIES, 1): {},
     (ApiModel.APIPA_SERIES, 2): {},
 }
 
 RC5CODE_POWER = {
-    (ApiModel.API450_SERIES, 1): {
-        True: bytes([16, 123]),
-        False: bytes([16, 124])
-    },
-    (ApiModel.API450_SERIES, 2): {
-        True: bytes([23, 123]),
-        False: bytes([23, 124])
-    },
-    (ApiModel.API860_SERIES, 1): {
-        True: bytes([16, 123]),
-        False: bytes([16, 124])
-    },
-    (ApiModel.API860_SERIES, 2): {
-        True: bytes([23, 123]),
-        False: bytes([23, 124])
-    },
-    (ApiModel.APIHDA_SERIES, 1): {
-        True: bytes([16, 123]),
-        False: bytes([16, 124])
-    },
-    (ApiModel.APIHDA_SERIES, 2): {
-        True: bytes([23, 123]),
-        False: bytes([23, 124])
-    },
-    (ApiModel.APISA_SERIES, 1): {
-        True: bytes([16, 123]),
-        False: bytes([16, 124])
-    },
-    (ApiModel.APISA_SERIES, 2): {
-        True: bytes([16, 123]),
-        False: bytes([16, 124])
-    }
+    (ApiModel.API450_SERIES, 1): {True: bytes([16, 123]), False: bytes([16, 124])},
+    (ApiModel.API450_SERIES, 2): {True: bytes([23, 123]), False: bytes([23, 124])},
+    (ApiModel.API860_SERIES, 1): {True: bytes([16, 123]), False: bytes([16, 124])},
+    (ApiModel.API860_SERIES, 2): {True: bytes([23, 123]), False: bytes([23, 124])},
+    (ApiModel.APIHDA_SERIES, 1): {True: bytes([16, 123]), False: bytes([16, 124])},
+    (ApiModel.APIHDA_SERIES, 2): {True: bytes([23, 123]), False: bytes([23, 124])},
+    (ApiModel.APISA_SERIES, 1): {True: bytes([16, 123]), False: bytes([16, 124])},
+    (ApiModel.APISA_SERIES, 2): {True: bytes([16, 123]), False: bytes([16, 124])},
 }
 
 RC5CODE_MUTE = {
@@ -749,7 +836,7 @@ RC5CODE_MUTE = {
     (ApiModel.APISA_SERIES, 2): {
         True: bytes([16, 26]),
         False: bytes([16, 120]),
-    }
+    },
 }
 
 RC5CODE_VOLUME = {
@@ -784,8 +871,27 @@ RC5CODE_VOLUME = {
     (ApiModel.APISA_SERIES, 2): {
         True: bytes([16, 16]),
         False: bytes([16, 17]),
-    }
+    },
+    (ApiModel.APIST_SERIES, 1): {
+        True: bytes([21, 86]),
+        False: bytes([21, 85]),
+    },
 }
+
+
+class IncomingVideoAspectRatio(IntOrTypeEnum):
+    UNDEFINED = 0x00
+    ASPECT_4_3 = 0x01
+    ASPECT_16_9 = 0x02
+
+
+class IncomingVideoColorspace(IntOrTypeEnum):
+    NORMAL = 0x00
+    HDR10 = 0x01
+    DOLBY_VISION = 0x02
+    HLG = 0x03
+    HDR10_PLUS = 0x04
+
 
 class IncomingAudioFormat(IntOrTypeEnum):
     PCM = 0x00
@@ -816,30 +922,74 @@ class IncomingAudioFormat(IntOrTypeEnum):
 
 class IncomingAudioConfig(IntOrTypeEnum):
     """List of possible audio configurations."""
+
+    DUAL_MONO = 0x00
     MONO = 0x01
     CENTER_ONLY = 0x01
     STEREO_ONLY = 0x02
-    # Incomplete list...
+    STEREO_SURR_MONO = 0x03
+    STEREO_SURR_LR = 0x04
+    STEREO_SURR_LR_BACK_MONO = 0x05
+    STEREO_SURR_LR_BACK_LR = 0x06
+    STEREO_SURR_LR_BACK_MATRIX = 0x07
+    STEREO_CENTER = 0x08
+    STEREO_CENTER_SURR_MONO = 0x09
+    STEREO_CENTER_SURR_LR = 0x0A
+    STEREO_CENTER_SURR_LR_BACK_MONO = 0x0B
+    STEREO_CENTER_SURR_LR_BACK_LR = 0x0C
+    STEREO_CENTER_SURR_LR_BACK_MATRIX = 0x0D
+    STEREO_DOWNMIX = 0x0E
+    STEREO_ONLY_LO_RO = 0x0F
+    DUAL_MONO_LFE = 0x10
+    MONO_LFE = 0x11
+    CENTER_LFE = 0x11
+    STEREO_LFE = 0x12
+    STEREO_SURR_MONO_LFE = 0x13
+    STEREO_SURR_LR_LFE = 0x14
+    STEREO_SURR_LR_BACK_MONO_LFE = 0x15
+    STEREO_SURR_LR_BACK_LR_LFE = 0x16
+    STEREO_SURR_LR_BACK_MATRIX_LFE = 0x17
+    STEREO_CENTER_LFE = 0x18
+    STEREO_CENTER_SURR_MONO_LFE = 0x19
+    STEREO_CENTER_SURR_LR_LFE = 0x1A
+    STEREO_CENTER_SURR_LR_BACK_MONO_LFE = 0x1B
+    STEREO_CENTER_SURR_LR_BACK_LR_LFE = 0x1C
+    STEREO_CENTER_SURR_LR_BACK_MATRIX_LFE = 0x1D
+    STEREO_DOWNMIX_LFE = 0x1E
+    STEREO_ONLY_LO_RO_LFE = 0x1F
+    UNKNOWN = 0x20
+    UNDETECTED = 0x21
+    AURO_QUAD = 0x30
+    AURO_5_0 = 0x31
+    AURO_5_1 = 0x32
+    AURO_2_2_2 = 0x33
+    AURO_8_0 = 0x34
+    AURO_9_1 = 0x35
+    AURO_10_1 = 0x36
+    AURO_11_1 = 0x37
+    AURO_13_1 = 0x38
 
 
 class PresetType(IntOrTypeEnum):
     """List of possible audio configurations."""
+
     AM_FREQUENCY = 0x00
     FM_FREQUENCY = 0x01
     FM_RDS_NAME = 0x02
     DAB = 0x03
 
+
 @attr.s
-class PresetDetail():
+class PresetDetail:
     index = attr.ib(type=int)
     type = attr.ib(type=Union[PresetType, int])
     name = attr.ib(type=str)
 
     @staticmethod
-    def from_bytes(data: bytes) -> 'PresetDetail':
+    def from_bytes(data: bytes) -> "PresetDetail":
         type = PresetType.from_int(data[1])
         if type == PresetType.FM_RDS_NAME or type == PresetType.DAB:
-            name = data[2:].decode('utf8').rstrip()
+            name = data[2:].decode("utf8").rstrip()
         elif type == PresetType.FM_FREQUENCY:
             name = f"{data[2]}.{data[3]:2} MHz"
         elif type == PresetType.AM_FREQUENCY:
@@ -848,80 +998,111 @@ class PresetDetail():
             name = str(data[2:])
         return PresetDetail(data[0], type, name)
 
+
 @attr.s
-class ResponsePacket():
+class VideoParameters:
+    horizontal_resolution = attr.ib(type=int)
+    vertical_resolution = attr.ib(type=int)
+    refresh_rate = attr.ib(type=int)
+    interlaced = attr.ib(type=bool)
+    aspect_ratio = attr.ib(type=IncomingVideoAspectRatio)
+    colorspace = attr.ib(type=IncomingVideoColorspace)
+
+    @staticmethod
+    def from_bytes(data: bytes) -> "VideoParameters":
+        return VideoParameters(
+            horizontal_resolution = int.from_bytes(data[0:2], "big"),
+            vertical_resolution = int.from_bytes(data[2:4], "big"),
+            refresh_rate = data[4],
+            interlaced = (data[5] == 0x01),
+            aspect_ratio = IncomingVideoAspectRatio.from_int(data[6]),
+            colorspace = IncomingVideoColorspace.from_int(data[7])
+        )
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "horizontal_resolution": self.horizontal_resolution,
+            "vertical_resolution": self.vertical_resolution,
+            "refresh_rate": self.refresh_rate,
+            "interlaced": self.interlaced,
+            "aspect_ratio": self.aspect_ratio,
+            "colorspace": self.colorspace,
+        }
+
+
+@attr.s
+class ResponsePacket:
     """Represent a response from device."""
+
     zn = attr.ib(type=int)
     cc = attr.ib(type=int)
     ac = attr.ib(type=int)
     data = attr.ib(type=bytes)
 
-    def respons_to(self, request: Union['AmxDuetRequest', 'CommandPacket']):
+    def respons_to(self, request: Union["AmxDuetRequest", "CommandPacket"]):
         if not isinstance(request, CommandPacket):
             return False
-        return (self.zn == request.zn and
-            self.cc == request.cc)
+        return self.zn == request.zn and self.cc == request.cc
 
     @staticmethod
-    def from_bytes(data: bytes) -> 'ResponsePacket':
+    def from_bytes(data: bytes) -> "ResponsePacket":
         if len(data) < 6:
             raise InvalidPacket("Packet to short {!r}".format(data))
 
-        if data[4] != len(data)-6:
+        if data[4] != len(data) - 6:
             raise InvalidPacket("Invalid length in data {!r}".format(data))
 
         return ResponsePacket(
             data[1],
             CommandCodes.from_int(data[2]),
             AnswerCodes.from_int(data[3]),
-            data[5:5+data[4]])
+            data[5 : 5 + data[4]],
+        )
 
     def to_bytes(self):
-        return bytes([
-            *PROTOCOL_STR,
-            self.zn,
-            self.cc,
-            self.ac,
-            len(self.data),
-            *self.data,
-            *PROTOCOL_ETR
-        ])
+        return bytes(
+            [
+                *PROTOCOL_STR,
+                self.zn,
+                self.cc,
+                self.ac,
+                len(self.data),
+                *self.data,
+                *PROTOCOL_ETR,
+            ]
+        )
+
 
 @attr.s
-class CommandPacket():
+class CommandPacket:
     """Represent a command sent to device."""
+
     zn = attr.ib(type=int)
     cc = attr.ib(type=int)
     data = attr.ib(type=bytes)
 
     def to_bytes(self):
-        return bytes([
-            *PROTOCOL_STR,
-            self.zn,
-            self.cc,
-            len(self.data),
-            *self.data,
-            *PROTOCOL_ETR
-        ])
+        return bytes(
+            [*PROTOCOL_STR, self.zn, self.cc, len(self.data), *self.data, *PROTOCOL_ETR]
+        )
 
     @staticmethod
-    def from_bytes(data: bytes) -> 'CommandPacket':
+    def from_bytes(data: bytes) -> "CommandPacket":
         if len(data) < 5:
             raise InvalidPacket("Packet to short {!r}".format(data))
 
-        if data[3] != len(data)-5:
+        if data[3] != len(data) - 5:
             raise InvalidPacket("Invalid length in data {!r}".format(data))
 
         return CommandPacket(
-            data[1],
-            CommandCodes.from_int(data[2]),
-            data[4:4+data[3]])
+            data[1], CommandCodes.from_int(data[2]), data[4 : 4 + data[3]]
+        )
+
 
 @attr.s
-class AmxDuetRequest():
-    
+class AmxDuetRequest:
     @staticmethod
-    def from_bytes(data: bytes) -> 'AmxDuetRequest':
+    def from_bytes(data: bytes) -> "AmxDuetRequest":
         if not data == b"AMX\r":
             raise InvalidPacket("Packet is not a amx request {!r}".format(data))
         return AmxDuetRequest()
@@ -929,9 +1110,9 @@ class AmxDuetRequest():
     def to_bytes(self):
         return b"AMX\r"
 
-@attr.s
-class AmxDuetResponse():
 
+@attr.s
+class AmxDuetResponse:
     values = attr.ib(type=dict)
 
     @property
@@ -956,7 +1137,7 @@ class AmxDuetResponse():
         return True
 
     @staticmethod
-    def from_bytes(data: bytes) -> 'AmxDuetResponse':
+    def from_bytes(data: bytes) -> "AmxDuetResponse":
         if not data.startswith(b"AMXB"):
             raise InvalidPacket("Packet is not a amx response {!r}".format(data))
 
@@ -964,10 +1145,11 @@ class AmxDuetResponse():
         return AmxDuetResponse(dict(tags))
 
     def to_bytes(self):
-        res = "AMXB" + "".join([
-            f"<{key}={value}>"
-            for key, value in self.values.items() 
-        ]) + "\r"
+        res = (
+            "AMXB"
+            + "".join([f"<{key}={value}>" for key, value in self.values.items()])
+            + "\r"
+        )
         return res.encode("ASCII")
 
 
@@ -979,9 +1161,9 @@ async def _read_delimited(reader: asyncio.StreamReader, header_len) -> Optional[
             return None
 
         if start == PROTOCOL_STR:
-            header = await reader.read(header_len-1)
+            header = await reader.read(header_len - 1)
             data_len = await reader.read(1)
-            data = await reader.read(int.from_bytes(data_len, 'big'))
+            data = await reader.read(int.from_bytes(data_len, "big"))
             etr = await reader.read(1)
 
             if etr != PROTOCOL_ETR:
@@ -993,16 +1175,18 @@ async def _read_delimited(reader: asyncio.StreamReader, header_len) -> Optional[
             header = await reader.read(4)
             if header != b"^AMX":
                 raise InvalidPacket("Unexpected AMX header: {!r}".format(header))
-        
+
             data = await reader.readuntil(PROTOCOL_ETR)
-            packet =  bytes([*b"AMX", *data])
+            packet = bytes([*b"AMX", *data])
         elif start == b"A":
             header = await reader.read(2)
             if header != b"MX":
                 raise InvalidPacket("Unexpected AMX header")
 
             data = await reader.readuntil(PROTOCOL_ETR)
-            packet =  bytes([*start, *header, *data])
+            packet = bytes([*start, *header, *data])
+        elif start == b"\x00":
+            raise NullPacket()
         else:
             raise InvalidPacket("unexpected str byte {!r}".format(start))
 
@@ -1018,7 +1202,9 @@ async def _read_delimited(reader: asyncio.StreamReader, header_len) -> Optional[
         raise ConnectionFailed() from exception
 
 
-async def _read_response(reader: asyncio.StreamReader) -> Optional[Union[ResponsePacket, AmxDuetResponse]]:
+async def _read_response(
+    reader: asyncio.StreamReader,
+) -> Optional[Union[ResponsePacket, AmxDuetResponse]]:
     data = await _read_delimited(reader, 4)
     if not data:
         return None
@@ -1029,17 +1215,24 @@ async def _read_response(reader: asyncio.StreamReader) -> Optional[Union[Respons
         return ResponsePacket.from_bytes(data)
 
 
-async def read_response(reader: asyncio.StreamReader) -> Optional[Union[ResponsePacket, AmxDuetResponse]]:
+async def read_response(
+    reader: asyncio.StreamReader,
+) -> Optional[Union[ResponsePacket, AmxDuetResponse]]:
     while True:
         try:
             data = await _read_response(reader)
         except InvalidPacket as e:
             _LOGGER.warning(str(e))
             continue
+        except NullPacket:
+            _LOGGER.debug("Ignoring 0x00 start byte sent from some devices")
+            continue
         return data
 
 
-async def _read_command(reader: asyncio.StreamReader) -> Optional[Union[CommandPacket, AmxDuetRequest]]:
+async def _read_command(
+    reader: asyncio.StreamReader,
+) -> Optional[Union[CommandPacket, AmxDuetRequest]]:
     data = await _read_delimited(reader, 3)
     if not data:
         return None
@@ -1049,7 +1242,9 @@ async def _read_command(reader: asyncio.StreamReader) -> Optional[Union[CommandP
         return CommandPacket.from_bytes(data)
 
 
-async def read_command(reader: asyncio.StreamReader) -> Optional[Union[CommandPacket, AmxDuetRequest]]:
+async def read_command(
+    reader: asyncio.StreamReader,
+) -> Optional[Union[CommandPacket, AmxDuetRequest]]:
     while True:
         try:
             data = await _read_command(reader)
@@ -1059,11 +1254,10 @@ async def read_command(reader: asyncio.StreamReader) -> Optional[Union[CommandPa
         return data
 
 
-async def write_packet(writer: asyncio.StreamWriter,
-                       packet: Union[CommandPacket,
-                                     ResponsePacket,
-                                     AmxDuetRequest,
-                                     AmxDuetResponse]) -> None:
+async def write_packet(
+    writer: asyncio.StreamWriter,
+    packet: Union[CommandPacket, ResponsePacket, AmxDuetRequest, AmxDuetResponse],
+) -> None:
     try:
         data = packet.to_bytes()
         writer.write(data)

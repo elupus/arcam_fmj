@@ -3,54 +3,83 @@ import asyncio
 import logging
 import sys
 
-from . import APIVERSION_450_SERIES, APIVERSION_860_SERIES, APIVERSION_HDA_SERIES, ApiModel, CommandCodes, CommandInvalidAtThisTime, SourceCodes, IncomingAudioFormat, IncomingAudioConfig, DecodeMode2CH, DecodeModeMCH, CommandNotRecognised, _LOGGER, ResponsePacket, AnswerCodes, RC5CODE_SOURCE, RC5CODE_DECODE_MODE_2CH, RC5CODE_DECODE_MODE_MCH
+from . import (
+    APIVERSION_450_SERIES,
+    APIVERSION_860_SERIES,
+    APIVERSION_HDA_SERIES,
+    ApiModel,
+    CommandCodes,
+    CommandInvalidAtThisTime,
+    SourceCodes,
+    IncomingVideoAspectRatio,
+    IncomingVideoColorspace,
+    IncomingAudioFormat,
+    IncomingAudioConfig,
+    DecodeMode2CH,
+    DecodeModeMCH,
+    CommandNotRecognised,
+    _LOGGER,
+    VideoParameters,
+    ResponsePacket,
+    AnswerCodes,
+    RC5CODE_SOURCE,
+    RC5CODE_DECODE_MODE_2CH,
+    RC5CODE_DECODE_MODE_MCH,
+)
 from .client import Client, ClientContext
 from .server import Server, ServerContext
 from .state import State
 
 # pylint: disable=invalid-name
 
+
 def auto_int(x):
     return int(x, 0)
+
 
 def auto_bytes(x):
     print(x)
     return bytes.decode(x)
 
+
 def auto_source(x):
     return SourceCodes[x]
 
-parser = argparse.ArgumentParser(description='Communicate with arcam receivers.')
-parser.add_argument('--verbose', action='store_true')
+
+parser = argparse.ArgumentParser(description="Communicate with arcam receivers.")
+parser.add_argument("--verbose", action="store_true")
 
 subparsers = parser.add_subparsers(dest="subcommand")
 
-parser_state = subparsers.add_parser('state')
-parser_state.add_argument('--host', required=True)
-parser_state.add_argument('--port', default=50000)
-parser_state.add_argument('--zone', default=1, type=int)
-parser_state.add_argument('--volume', type=int)
-parser_state.add_argument('--source', type=auto_source)
-parser_state.add_argument('--monitor', action='store_true')
+parser_state = subparsers.add_parser("state")
+parser_state.add_argument("--host", required=True)
+parser_state.add_argument("--port", default=50000)
+parser_state.add_argument("--zone", default=1, type=int)
+parser_state.add_argument("--volume", type=int)
+parser_state.add_argument("--source", type=auto_source)
+parser_state.add_argument("--monitor", action="store_true")
+parser_state.add_argument("--power-on", action=argparse.BooleanOptionalAction)
+parser_state.add_argument("--power-off", action=argparse.BooleanOptionalAction)
 
-parser_client = subparsers.add_parser('client')
-parser_client.add_argument('--host', required=True)
-parser_client.add_argument('--port', default=50000)
-parser_client.add_argument('--zone', default=1, type=int)
-parser_client.add_argument('--command', type=auto_int)
-parser_client.add_argument('--data', nargs='+', default=[0xF0], type=auto_int)
+parser_client = subparsers.add_parser("client")
+parser_client.add_argument("--host", required=True)
+parser_client.add_argument("--port", default=50000)
+parser_client.add_argument("--zone", default=1, type=int)
+parser_client.add_argument("--command", type=auto_int, required=True)
+parser_client.add_argument("--data", nargs="+", default=[0xF0], type=auto_int)
 
-parser_server = subparsers.add_parser('server')
-parser_server.add_argument('--host', default='localhost')
-parser_server.add_argument('--port', default=50000)
-parser_server.add_argument('--model', default="AVR450")
+parser_server = subparsers.add_parser("server")
+parser_server.add_argument("--host", default="localhost")
+parser_server.add_argument("--port", default=50000)
+parser_server.add_argument("--model", default="AVR450")
 
 
 async def run_client(args):
     client = Client(args.host, args.port)
     async with ClientContext(client):
-        result = await client.request(args.zone, args.command, bytes(args.data))
+        result = await client.request(args.zone, CommandCodes(args.command), bytes(args.data))
         print(result)
+
 
 async def run_state(args):
     client = Client(args.host, args.port)
@@ -63,6 +92,12 @@ async def run_state(args):
 
         if args.source is not None:
             await state.set_source(args.source)
+
+        if args.power_on is not None:
+            await state.set_power(True)
+
+        if args.power_off is not None:
+            await state.set_power(False)
 
         if args.monitor:
             async with state:
@@ -79,7 +114,6 @@ async def run_state(args):
 
 async def run_server(args):
     class DummyServer(Server):
-
         def __init__(self, host, port, model):
             super().__init__(host, port, model)
 
@@ -96,40 +130,93 @@ async def run_server(args):
 
             self._volume = bytes([10])
             self._source = bytes([SourceCodes.PVR])
-            self._audio_format = bytes([IncomingAudioFormat.PCM, IncomingAudioConfig.STEREO_ONLY])
-            self._decode_mode_2ch = bytes([next(iter(RC5CODE_DECODE_MODE_2CH[rc5_key]))])
-            self._decode_mode_mch = bytes([next(iter(RC5CODE_DECODE_MODE_MCH[rc5_key]))])
-            self._tuner_preset = b'\0xff'
+            self._video_parameters = VideoParameters(
+                horizontal_resolution = 1920,
+                vertical_resolution = 1080,
+                refresh_rate = 60,
+                interlaced = False,
+                aspect_ratio = IncomingVideoAspectRatio.ASPECT_16_9,
+                colorspace = IncomingVideoColorspace.NORMAL
+            )
+            self._audio_format = bytes(
+                [IncomingAudioFormat.PCM, IncomingAudioConfig.STEREO_ONLY]
+            )
+            self._audio_sample_rate = 48000
+            self._decode_mode_2ch = bytes(
+                [next(iter(RC5CODE_DECODE_MODE_2CH[rc5_key]))]
+            )
+            self._decode_mode_mch = bytes(
+                [next(iter(RC5CODE_DECODE_MODE_MCH[rc5_key]))]
+            )
+            self._tuner_preset = b"\0xff"
             self._presets = {
-                b'\x01': b'\x03SR P1   ',
-                b'\x02': b'\x03SR Klass',
-                b'\x03' : b'\x03P3 Star ',
-                b'\x04': b'\x02SR P4   ',
-                b'\x05': b'\x02SR P4   ',
-                b'\x06': b'\x01jP',
+                b"\x01": b"\x03SR P1   ",
+                b"\x02": b"\x03SR Klass",
+                b"\x03": b"\x03P3 Star ",
+                b"\x04": b"\x02SR P4   ",
+                b"\x05": b"\x02SR P4   ",
+                b"\x06": b"\x01jP",
             }
 
             def invert_rc5(data):
-                return {
-                    value: key
-                    for key, value in data[rc5_key].items()
-                }
+                return {value: key for key, value in data[rc5_key].items()}
 
             self._source_rc5 = invert_rc5(RC5CODE_SOURCE)
             self._decode_mode_2ch_rc5 = invert_rc5(RC5CODE_DECODE_MODE_2CH)
             self._decode_mode_mch_rc5 = invert_rc5(RC5CODE_DECODE_MODE_MCH)
 
-            self.register_handler(0x01, CommandCodes.POWER, bytes([0xF0]), self.get_power)
-            self.register_handler(0x01, CommandCodes.VOLUME, bytes([0xF0]), self.get_volume)
+            self.register_handler(
+                0x01, CommandCodes.POWER, bytes([0xF0]), self.get_power
+            )
+            self.register_handler(
+                0x01, CommandCodes.VOLUME, bytes([0xF0]), self.get_volume
+            )
             self.register_handler(0x01, CommandCodes.VOLUME, None, self.set_volume)
-            self.register_handler(0x01, CommandCodes.CURRENT_SOURCE, bytes([0xF0]), self.get_source)
-            self.register_handler(0x01, CommandCodes.INCOMING_AUDIO_FORMAT, bytes([0xF0]), self.get_incoming_audio_format)
-            self.register_handler(0x01, CommandCodes.DECODE_MODE_STATUS_2CH, bytes([0xF0]), self.get_decode_mode_2ch)
-            self.register_handler(0x01, CommandCodes.DECODE_MODE_STATUS_MCH, bytes([0xF0]), self.get_decode_mode_mch)
-            self.register_handler(0x01, CommandCodes.SIMULATE_RC5_IR_COMMAND, None, self.ir_command)
-            self.register_handler(0x01, CommandCodes.PRESET_DETAIL, None, self.get_preset_detail)
-            self.register_handler(0x01, CommandCodes.TUNER_PRESET, bytes([0xF0]), self.get_tuner_preset)
-            self.register_handler(0x01, CommandCodes.TUNER_PRESET, None, self.set_tuner_preset)
+            self.register_handler(
+                0x01, CommandCodes.CURRENT_SOURCE, bytes([0xF0]), self.get_source
+            )
+            self.register_handler(
+                0x01,
+                CommandCodes.INCOMING_VIDEO_PARAMETERS,
+                bytes([0xF0]),
+                self.get_incoming_video_parameters,
+            )
+            self.register_handler(
+                0x01,
+                CommandCodes.INCOMING_AUDIO_FORMAT,
+                bytes([0xF0]),
+                self.get_incoming_audio_format,
+            )
+            self.register_handler(
+                0x01,
+                CommandCodes.INCOMING_AUDIO_SAMPLE_RATE,
+                bytes([0xF0]),
+                self.get_incoming_audio_sample_rate,
+            )
+            self.register_handler(
+                0x01,
+                CommandCodes.DECODE_MODE_STATUS_2CH,
+                bytes([0xF0]),
+                self.get_decode_mode_2ch,
+            )
+            self.register_handler(
+                0x01,
+                CommandCodes.DECODE_MODE_STATUS_MCH,
+                bytes([0xF0]),
+                self.get_decode_mode_mch,
+            )
+            self.register_handler(
+                0x01, CommandCodes.SIMULATE_RC5_IR_COMMAND, None, self.ir_command
+            )
+            self.register_handler(
+                0x01, CommandCodes.PRESET_DETAIL, None, self.get_preset_detail
+            )
+            self.register_handler(
+                0x01, CommandCodes.TUNER_PRESET, bytes([0xF0]), self.get_tuner_preset
+            )
+            self.register_handler(
+                0x01, CommandCodes.TUNER_PRESET, None, self.set_tuner_preset
+            )
 
         def get_power(self, **kwargs):
             return bytes([1])
@@ -150,7 +237,7 @@ async def run_server(args):
 
         def ir_command(self, data, **kwargs):
             status = None
-            
+
             source = self._source_rc5.get(data)
             if source:
                 self.set_source(bytes([source]))
@@ -159,14 +246,14 @@ async def run_server(args):
                         zn=0x01,
                         cc=CommandCodes.SIMULATE_RC5_IR_COMMAND,
                         ac=AnswerCodes.STATUS_UPDATE,
-                        data=data
+                        data=data,
                     ),
                     ResponsePacket(
                         zn=0x01,
                         cc=CommandCodes.CURRENT_SOURCE,
                         ac=AnswerCodes.STATUS_UPDATE,
-                        data=bytes([source])
-                    )
+                        data=bytes([source]),
+                    ),
                 ]
             decode_mode_2ch = self._decode_mode_2ch_rc5.get(data)
             if decode_mode_2ch:
@@ -176,14 +263,14 @@ async def run_server(args):
                         zn=0x01,
                         cc=CommandCodes.SIMULATE_RC5_IR_COMMAND,
                         ac=AnswerCodes.STATUS_UPDATE,
-                        data=data
+                        data=data,
                     ),
                     ResponsePacket(
                         zn=0x01,
                         cc=CommandCodes.DECODE_MODE_STATUS_2CH,
                         ac=AnswerCodes.STATUS_UPDATE,
-                        data=self._decode_mode_2ch
-                    )
+                        data=self._decode_mode_2ch,
+                    ),
                 ]
 
             decode_mode_mch = self._decode_mode_mch_rc5.get(data)
@@ -194,14 +281,14 @@ async def run_server(args):
                         zn=0x01,
                         cc=CommandCodes.SIMULATE_RC5_IR_COMMAND,
                         ac=AnswerCodes.STATUS_UPDATE,
-                        data=data
+                        data=data,
                     ),
                     ResponsePacket(
                         zn=0x01,
                         cc=CommandCodes.DECODE_MODE_STATUS_MCH,
                         ac=AnswerCodes.STATUS_UPDATE,
-                        data=self._decode_mode_mch
-                    )
+                        data=self._decode_mode_mch,
+                    ),
                 ]
 
             raise CommandNotRecognised()
@@ -212,8 +299,14 @@ async def run_server(args):
         def get_decode_mode_mch(self, **kwargs):
             return self._decode_mode_mch
 
+        def get_incoming_video_parameters(self, **kwargs):
+            return self._video_parameters
+
         def get_incoming_audio_format(self, **kwargs):
             return self._audio_format
+
+        def get_incoming_audio_sample_rate(self, **kwargs):
+            return self._audio_sample_rate
 
         def get_tuner_preset(self, **kwargs):
             return self._tuner_preset
@@ -234,8 +327,8 @@ async def run_server(args):
         while True:
             await asyncio.sleep(delay=1)
 
-def main():
 
+def main():
     args = parser.parse_args()
 
     if args.verbose:
@@ -244,16 +337,19 @@ def main():
 
         channel = logging.StreamHandler(sys.stdout)
         channel.setLevel(logging.DEBUG)
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        formatter = logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        )
         channel.setFormatter(formatter)
         root.addHandler(channel)
 
-    if args.subcommand == 'client':
+    if args.subcommand == "client":
         asyncio.run(run_client(args))
-    elif args.subcommand == 'state':
+    elif args.subcommand == "state":
         asyncio.run(run_state(args))
-    elif args.subcommand == 'server':
+    elif args.subcommand == "server":
         asyncio.run(run_server(args))
+
 
 if __name__ == "__main__":
     main()

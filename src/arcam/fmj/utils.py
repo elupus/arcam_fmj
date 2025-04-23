@@ -1,17 +1,18 @@
 import asyncio
-import aiohttp
 import functools
 import logging
 from datetime import datetime, timedelta
 from typing import List, Optional
 
+import aiohttp
+from async_upnp_client.aiohttp import AiohttpSessionRequester
+from async_upnp_client.client_factory import UpnpFactory
 from async_upnp_client.search import async_search
 from async_upnp_client.ssdp import SSDP_PORT
 from async_upnp_client.utils import CaseInsensitiveDict
-from async_upnp_client.aiohttp import AiohttpSessionRequester
-from async_upnp_client.client_factory import UpnpFactory
 
 _LOGGER = logging.getLogger(__name__)
+
 
 def async_retry(attempts=2, allowed_exceptions=()):
     def decorator(f):
@@ -29,7 +30,9 @@ def async_retry(attempts=2, allowed_exceptions=()):
                     _LOGGER.warning("Retrying: %s %s", f, args)
 
         return wrapper
+
     return decorator
+
 
 class Throttle:
     def __init__(self, delay: float) -> None:
@@ -59,7 +62,6 @@ def get_uniqueid_from_udn(data) -> Optional[str]:
         _log_exception("Unable to get unique id from %s", data)
         return None
 
-
 async def get_upnp_headers(host: str) -> Optional[CaseInsensitiveDict]:
     """Get search response headers from a host based on ssdp/upnp."""
     search_target = "upnp:rootdevice"
@@ -83,7 +85,6 @@ async def get_upnp_headers(host: str) -> Optional[CaseInsensitiveDict]:
         return None
 
     return responses[0]
-
 
 async def get_upnp_field(host: str, field_name: str) -> Optional[str]:
     """Get a search response header from a host based on ssdp/upnp."""

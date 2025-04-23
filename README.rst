@@ -1,9 +1,8 @@
 ********************************
 Arcam IP Control
 ********************************
-This module support controlling an arcam fmj received over it's network.
-It's built mainly for use with home-assistant project, but should work
-for other projects as well.
+This module supports controlling an Arcam FMJ receiver (as well as JBL and AudioControl processors) over the network.
+It's built mainly for use with the Home Assistant project, but should work for other projects as well.
 
 Status
 ______
