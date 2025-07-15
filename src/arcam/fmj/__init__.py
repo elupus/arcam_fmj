@@ -116,7 +116,7 @@ APIVERSION_HDA_SERIES = {
     "AVR10",
     "AVR20",
     "AVR30",
-    "AVR4",
+    "AV40",
     "AVR11",
     "AVR21",
     "AVR31",
