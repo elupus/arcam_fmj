@@ -142,7 +142,7 @@ APIVERSION_HDA_MULTI_ZONE_SERIES = {
     "AV40",
     "AVR21",
     "AVR31",
-    "AVR41",
+    "AV41",
     "SDP-55",
     "SDP-58",
 }
