@@ -94,6 +94,7 @@ class ClientBase:
                 await _process_heartbeat
             except asyncio.CancelledError:
                 pass
+            self._writer.close()
 
     @property
     def connected(self) -> bool:
