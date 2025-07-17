@@ -64,9 +64,8 @@ class ClientBase:
         try:
             while True:
                 try:
-                    packet = await asyncio.wait_for(
-                        read_response(reader), _HEARTBEAT_TIMEOUT.total_seconds()
-                    )
+                    async with asyncio.timeout(_HEARTBEAT_TIMEOUT.total_seconds()):
+                        packet = await read_response(reader)
                 except asyncio.TimeoutError as exception:
                     _LOGGER.debug("Missed all pings")
                     raise ConnectionFailed() from exception
@@ -130,14 +129,12 @@ class ClientBase:
 
         await self._throttle.get()
 
-        async def req() -> Union[ResponsePacket, AmxDuetResponse]:
+        async with asyncio.timeout(_REQUEST_TIMEOUT.total_seconds()):
             _LOGGER.debug("Requesting %s", request)
             with self.listen(listen):
                 await write_packet(writer, request)
                 self._timestamp = datetime.now()
                 return await future
-
-        return await asyncio.wait_for(req(), _REQUEST_TIMEOUT.total_seconds())
 
     async def send(self, zn: int, cc: CommandCodes, data: bytes) -> None:
         if not self._writer:
