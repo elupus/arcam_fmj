@@ -7,6 +7,7 @@ import pytest
 from arcam.fmj import (
     AmxDuetResponse,
     CommandPacket,
+    ConnectionFailed,
     InvalidPacket,
     ResponsePacket,
     _read_response,
@@ -25,7 +26,7 @@ async def test_reader_valid(event_loop):
 
 async def test_reader_invalid_data(event_loop):
     reader = asyncio.StreamReader(loop=event_loop)
-    reader.feed_data(b'\x21\x01\x08\x00\x02\x10\x0D')
+    reader.feed_data(b'\x21\x01\x08\x00\x02\x10\x0D\x00')
     reader.feed_eof()
     with pytest.raises(InvalidPacket):
         await _read_response(reader)
@@ -46,7 +47,7 @@ async def test_reader_short(event_loop):
     reader = asyncio.StreamReader(loop=event_loop)
     reader.feed_data(b'\x21\x10\x0D')
     reader.feed_eof()
-    with pytest.raises(InvalidPacket):
+    with pytest.raises(ConnectionFailed):
         await _read_response(reader)
 
 

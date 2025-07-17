@@ -1155,16 +1155,16 @@ class AmxDuetResponse:
 
 async def _read_delimited(reader: asyncio.StreamReader, header_len) -> Optional[bytes]:
     try:
-        start = await reader.read(1)
+        start = await reader.readexactly(1)
         if start == PROTOCOL_EOF:
             _LOGGER.debug("eof")
             return None
 
         if start == PROTOCOL_STR:
-            header = await reader.read(header_len - 1)
-            data_len = await reader.read(1)
-            data = await reader.read(int.from_bytes(data_len, "big"))
-            etr = await reader.read(1)
+            header = await reader.readexactly(header_len - 1)
+            data_len = await reader.readexactly(1)
+            data = await reader.readexactly(int.from_bytes(data_len, "big"))
+            etr = await reader.readexactly(1)
 
             if etr != PROTOCOL_ETR:
                 raise InvalidPacket("unexpected etr byte {!r}".format(etr))
@@ -1172,14 +1172,14 @@ async def _read_delimited(reader: asyncio.StreamReader, header_len) -> Optional[
             packet = bytes([*start, *header, *data_len, *data, *etr])
         elif start == b"\x01":
             """Sometime the AMX header seem to be sent as \x01^AMX"""
-            header = await reader.read(4)
+            header = await reader.readexactly(4)
             if header != b"^AMX":
                 raise InvalidPacket("Unexpected AMX header: {!r}".format(header))
 
             data = await reader.readuntil(PROTOCOL_ETR)
             packet = bytes([*b"AMX", *data])
         elif start == b"A":
-            header = await reader.read(2)
+            header = await reader.readexactly(2)
             if header != b"MX":
                 raise InvalidPacket("Unexpected AMX header")
 
