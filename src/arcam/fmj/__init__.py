@@ -1261,7 +1261,8 @@ async def write_packet(
     try:
         data = packet.to_bytes()
         writer.write(data)
-        await asyncio.wait_for(writer.drain(), _WRITE_TIMEOUT)
+        async with asyncio.timeout(_WRITE_TIMEOUT):
+            await writer.drain()
     except asyncio.TimeoutError as exception:
         raise ConnectionFailed() from exception
     except ConnectionError as exception:

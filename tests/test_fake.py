@@ -134,7 +134,8 @@ async def test_cancellation(event_loop, silent_server):
             await c.stop()
 
     task = asyncio.create_task(runner())
-    await asyncio.wait_for(e.wait(), 5)
+    async with asyncio.timeout(5):
+        await e.wait()
     task.cancel()
 
     with pytest.raises(asyncio.CancelledError):
