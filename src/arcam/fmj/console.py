@@ -77,7 +77,9 @@ parser_server.add_argument("--model", default="AVR450")
 async def run_client(args):
     client = Client(args.host, args.port)
     async with ClientContext(client):
-        result = await client.request(args.zone, CommandCodes(args.command), bytes(args.data))
+        result = await client.request(
+            args.zone, CommandCodes(args.command), bytes(args.data)
+        )
         print(result)
 
 
@@ -131,12 +133,12 @@ async def run_server(args):
             self._volume = bytes([10])
             self._source = bytes([SourceCodes.PVR])
             self._video_parameters = VideoParameters(
-                horizontal_resolution = 1920,
-                vertical_resolution = 1080,
-                refresh_rate = 60,
-                interlaced = False,
-                aspect_ratio = IncomingVideoAspectRatio.ASPECT_16_9,
-                colorspace = IncomingVideoColorspace.NORMAL
+                horizontal_resolution=1920,
+                vertical_resolution=1080,
+                refresh_rate=60,
+                interlaced=False,
+                aspect_ratio=IncomingVideoAspectRatio.ASPECT_16_9,
+                colorspace=IncomingVideoColorspace.NORMAL,
             )
             self._audio_format = bytes(
                 [IncomingAudioFormat.PCM, IncomingAudioConfig.STEREO_ONLY]

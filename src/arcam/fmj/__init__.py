@@ -1,4 +1,5 @@
 """Arcam AV Control"""
+
 import asyncio
 import enum
 import logging
@@ -17,7 +18,7 @@ from collections.abc import Iterable
 import attr
 
 PROTOCOL_STR = b"\x21"
-PROTOCOL_ETR = b"\x0D"
+PROTOCOL_ETR = b"\x0d"
 PROTOCOL_EOF = b""
 
 _LOGGER = logging.getLogger(__name__)
@@ -36,8 +37,10 @@ class ConnectionFailed(ArcamException):
 class NotConnectedException(ArcamException):
     pass
 
+
 class UnsupportedZone(ArcamException):
     pass
+
 
 class ResponseException(ArcamException):
     def __init__(self, ac=None, zn=None, cc=None, data=None):
@@ -45,9 +48,7 @@ class ResponseException(ArcamException):
         self.zn = zn
         self.cc = cc
         self.data = data
-        super().__init__(
-            f"'ac':{ac}, 'zn':{zn}, 'cc':{cc}, 'data':{data}"
-        )
+        super().__init__(f"'ac':{ac}, 'zn':{zn}, 'cc':{cc}, 'data':{data}")
 
     @staticmethod
     def from_response(response: "ResponsePacket"):
@@ -104,7 +105,16 @@ class NullPacket(ArcamException):
 
 
 APIVERSION_450_SERIES = {"AVR380", "AVR450", "AVR750"}
-APIVERSION_860_SERIES = {"AV860", "AVR850", "AVR550", "AVR390", "SR250", "RV-6", "RV-9", "MC-10"}
+APIVERSION_860_SERIES = {
+    "AV860",
+    "AVR850",
+    "AVR550",
+    "AVR390",
+    "SR250",
+    "RV-6",
+    "RV-9",
+    "MC-10",
+}
 APIVERSION_SA_SERIES = {"SA10", "SA20", "SA30", "SA750"}
 APIVERSION_HDA_SERIES = {
     "AVR5",
@@ -145,7 +155,9 @@ APIVERSION_PA_SERIES = {"PA720", "PA240", "PA410"}
 APIVERSION_ST_SERIES = {"ST60"}
 
 APIVERSION_DAB_SERIES = {"AVR450", "AVR750"}
-APIVERSION_DAB_SERIES.update("AV860", "AVR850", "AVR550", "AVR390", "RV-6", "RV-9", "MC-10")
+APIVERSION_DAB_SERIES.update(
+    "AV860", "AVR850", "AVR550", "AVR390", "RV-6", "RV-9", "MC-10"
+)
 APIVERSION_DAB_SERIES.update(APIVERSION_HDA_SERIES)
 
 APIVERSION_ZONE2_SERIES = set()
@@ -197,6 +209,7 @@ class ApiModel(enum.Enum):
 
 _T = TypeVar("_T", bound="IntOrTypeEnum")
 
+
 class EnumFlags(enum.IntFlag):
     ZONE_SUPPORT = enum.auto()
     SEND_ONLY = enum.auto()
@@ -224,7 +237,7 @@ class IntOrTypeEnum(enum.IntEnum):
             pseudo_member = cls._value2member_map_.setdefault(value, obj)
         return pseudo_member
 
-    def __new__(cls, value: int, version: set[str] | None = None, flags = EnumFlags(0)):
+    def __new__(cls, value: int, version: set[str] | None = None, flags=EnumFlags(0)):
         obj = int.__new__(cls, value)
         obj._value_ = value
         obj.version = version
@@ -236,7 +249,13 @@ class IntOrTypeEnum(enum.IntEnum):
         return cls(value)
 
     @classmethod
-    def from_bytes(cls: type[_T], bytes: Iterable[SupportsIndex] | SupportsBytes, byteorder: Literal["little", "big"] = "big", *, signed: bool = False) -> _T:  # type: ignore[override]
+    def from_bytes(
+        cls: type[_T],
+        bytes: Iterable[SupportsIndex] | SupportsBytes,
+        byteorder: Literal["little", "big"] = "big",
+        *,
+        signed: bool = False,
+    ) -> _T:  # type: ignore[override]
         return cls.from_int(int.from_bytes(bytes, byteorder=byteorder, signed=signed))
 
 
@@ -402,9 +421,7 @@ class SourceCodes(enum.Enum):
         try:
             table = SOURCE_CODES[(model, zn)]
         except KeyError:
-            raise ValueError(
-                f"Unknown source map for model {model} and zone {zn}"
-            )
+            raise ValueError(f"Unknown source map for model {model} and zone {zn}")
         for key, value in table.items():
             if value == data:
                 return key
@@ -418,9 +435,7 @@ class SourceCodes(enum.Enum):
         try:
             table = SOURCE_CODES[(model, zn)]
         except KeyError:
-            raise ValueError(
-                f"Unknown source map for model {model} and zone {zn}"
-            )
+            raise ValueError(f"Unknown source map for model {model} and zone {zn}")
         if data := table.get(self):
             return data
         raise ValueError(
@@ -1006,12 +1021,12 @@ class VideoParameters:
     @staticmethod
     def from_bytes(data: bytes) -> "VideoParameters":
         return VideoParameters(
-            horizontal_resolution = int.from_bytes(data[0:2], "big"),
-            vertical_resolution = int.from_bytes(data[2:4], "big"),
-            refresh_rate = data[4],
-            interlaced = (data[5] == 0x01),
-            aspect_ratio = IncomingVideoAspectRatio.from_int(data[6]),
-            colorspace = IncomingVideoColorspace.from_int(data[7])
+            horizontal_resolution=int.from_bytes(data[0:2], "big"),
+            vertical_resolution=int.from_bytes(data[2:4], "big"),
+            refresh_rate=data[4],
+            interlaced=(data[5] == 0x01),
+            aspect_ratio=IncomingVideoAspectRatio.from_int(data[6]),
+            colorspace=IncomingVideoColorspace.from_int(data[7]),
         )
 
     def to_dict(self) -> dict[str, Any]:
