@@ -50,7 +50,7 @@ def _log_exception(msg, *args):
     _LOGGER.error(msg, *args, exc_info=_LOGGER.getEffectiveLevel() == logging.DEBUG)
 
 
-def get_uniqueid_from_udn(data) -> Optional[str]:
+def get_uniqueid_from_udn(data) -> str | None:
     """Extract a unique id from udn."""
     try:
         return data[5:].split("-")[4]
@@ -68,7 +68,7 @@ def get_possibly_invalid_xml(data) -> Any:
         return ElementTree.fromstring(data)
 
 
-def get_udn_from_xml(xml: Any) -> Optional[str]:
+def get_udn_from_xml(xml: Any) -> str | None:
     return xml.findtext(
         "d:device/d:UDN", None, {"d": "urn:schemas-upnp-org:device-1-0"}
     )
@@ -85,7 +85,7 @@ async def get_uniqueid_from_device_description(
             xml = get_possibly_invalid_xml(data)
             udn = get_udn_from_xml(xml)
             return get_uniqueid_from_udn(udn)
-    except (aiohttp.ClientError, asyncio.TimeoutError, ElementTree.ParseError):
+    except (aiohttp.ClientError, TimeoutError, ElementTree.ParseError):
         _log_exception("Unable to get device description from %s", url)
         return None
 
