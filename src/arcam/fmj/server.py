@@ -46,6 +46,7 @@ class Server:
         finally:
             _LOGGER.debug("Client disconnected")
             self._tasks.remove(task)
+            writer.close()
 
     async def process_runner(
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
