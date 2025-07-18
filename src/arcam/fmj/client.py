@@ -2,10 +2,10 @@
 import asyncio
 from asyncio.streams import StreamReader, StreamWriter
 import logging
-import sys
 from datetime import datetime, timedelta
 from contextlib import contextmanager
-from typing import Callable, Optional, Set, Union, overload
+from typing import Union, overload
+from collections.abc import Callable
 
 from . import (
     AmxDuetRequest,
@@ -35,10 +35,10 @@ _HEARTBEAT_TIMEOUT = _HEARTBEAT_INTERVAL + _HEARTBEAT_INTERVAL
 
 class ClientBase:
     def __init__(self) -> None:
-        self._reader: Optional[StreamReader] = None
-        self._writer: Optional[StreamWriter] = None
+        self._reader: StreamReader | None = None
+        self._writer: StreamWriter | None = None
         self._task = None
-        self._listen: Set[Callable] = set()
+        self._listen: set[Callable] = set()
         self._throttle = Throttle(_REQUEST_THROTTLE)
         self._timestamp = datetime.now()
 
@@ -66,7 +66,7 @@ class ClientBase:
                 try:
                     async with asyncio.timeout(_HEARTBEAT_TIMEOUT.total_seconds()):
                         packet = await read_response(reader)
-                except asyncio.TimeoutError as exception:
+                except TimeoutError as exception:
                     _LOGGER.debug("Missed all pings")
                     raise ConnectionFailed() from exception
 
@@ -113,16 +113,16 @@ class ClientBase:
 
     @async_retry(2, asyncio.TimeoutError)
     async def request_raw(
-        self, request: Union[CommandPacket, AmxDuetRequest]
-    ) -> Union[ResponsePacket, AmxDuetResponse]:
+        self, request: CommandPacket | AmxDuetRequest
+    ) -> ResponsePacket | AmxDuetResponse:
         if not self._writer:
             raise NotConnectedException()
         writer = self._writer  # keep copy around if stopped by another task
-        future: "asyncio.Future[Union[ResponsePacket, AmxDuetResponse]]" = (
+        future: asyncio.Future[ResponsePacket | AmxDuetResponse] = (
             asyncio.Future()
         )
 
-        def listen(response: Union[ResponsePacket, AmxDuetResponse]):
+        def listen(response: ResponsePacket | AmxDuetResponse):
             if response.respons_to(request):
                 if not (future.cancelled() or future.done()):
                     future.set_result(response)
@@ -200,8 +200,7 @@ class Client(ClientBase):
             try:
                 _LOGGER.info("Disconnecting from %s:%d", self._host, self._port)
                 self._writer.close()
-                if sys.version_info >= (3, 7):
-                    await self._writer.wait_closed()
+                await self._writer.wait_closed()
             except (ConnectionError, OSError):
                 pass
             finally:
@@ -211,7 +210,7 @@ class Client(ClientBase):
 class ClientContext:
     def __init__(self, client: Client):
         self._client = client
-        self._task: Optional[asyncio.Task] = None
+        self._task: asyncio.Task | None = None
 
     async def __aenter__(self) -> Client:
         await self._client.start()

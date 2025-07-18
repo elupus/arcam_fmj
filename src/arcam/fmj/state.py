@@ -1,7 +1,7 @@
 """Zone state"""
 import asyncio
 import logging
-from typing import Any, Dict, List, Optional, Tuple, TypeVar, Union
+from typing import Any, TypeVar
 
 from . import (
     APIVERSION_450_SERIES,
@@ -47,8 +47,8 @@ _T = TypeVar("_T")
 
 
 class State:
-    _state: Dict[int, Optional[bytes]]
-    _presets: Dict[int, PresetDetail]
+    _state: dict[int, bytes | None]
+    _presets: dict[int, PresetDetail]
 
     def __init__(
         self, client: Client, zn: int, api_model: ApiModel = ApiModel.API450_SERIES
@@ -57,7 +57,7 @@ class State:
         self._client = client
         self._state = dict()
         self._presets = dict()
-        self._amxduet: Optional[AmxDuetResponse] = None
+        self._amxduet: AmxDuetResponse | None = None
         self._api_model = api_model
 
     async def start(self) -> None:
@@ -75,7 +75,7 @@ class State:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.stop()
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "POWER": self.get_power(),
             "VOLUME": self.get_volume(),
@@ -99,7 +99,7 @@ class State:
             self.to_dict(), self._amxduet.values if self._amxduet else {}
         )
 
-    def _listen(self, packet: Union[ResponsePacket, AmxDuetResponse]) -> None:
+    def _listen(self, packet: ResponsePacket | AmxDuetResponse) -> None:
         if isinstance(packet, AmxDuetResponse):
             self._amxduet = packet
             return
@@ -121,19 +121,19 @@ class State:
         return self._client
 
     @property
-    def model(self) -> Optional[str]:
+    def model(self) -> str | None:
         if self._amxduet:
             return self._amxduet.device_model
         return None
 
     @property
-    def revision(self) -> Optional[str]:
+    def revision(self) -> str | None:
         if self._amxduet:
             return self._amxduet.device_revision
         return None
 
     def get_rc5code(
-        self, table: Dict[Tuple[ApiModel, int], Dict[_T, bytes]], value: _T
+        self, table: dict[tuple[ApiModel, int], dict[_T, bytes]], value: _T
     ) -> bytes:
         lookup = table.get((self._api_model, self._zn))
         if not lookup:
@@ -155,7 +155,7 @@ class State:
     def get(self, cc):
         return self._state[cc]
     
-    def get_incoming_video_parameters(self) -> Optional[VideoParameters]:
+    def get_incoming_video_parameters(self) -> VideoParameters | None:
         value = self._state.get(CommandCodes.INCOMING_VIDEO_PARAMETERS)
         if value is None:
             return None
@@ -163,7 +163,7 @@ class State:
 
     def get_incoming_audio_format(
         self,
-    ) -> Union[Tuple[IncomingAudioFormat, IncomingAudioConfig], Tuple[None, None]]:
+    ) -> tuple[IncomingAudioFormat, IncomingAudioConfig] | tuple[None, None]:
         value = self._state.get(CommandCodes.INCOMING_AUDIO_FORMAT)
         if value is None:
             return None, None
@@ -187,7 +187,7 @@ class State:
         }
         return map.get(value[0], 0)
 
-    def get_decode_mode_2ch(self) -> Optional[DecodeMode2CH]:
+    def get_decode_mode_2ch(self) -> DecodeMode2CH | None:
         value = self._state.get(CommandCodes.DECODE_MODE_STATUS_2CH)
         if value is None:
             return None
@@ -199,7 +199,7 @@ class State:
             self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command
         )
 
-    def get_decode_mode_mch(self) -> Optional[DecodeModeMCH]:
+    def get_decode_mode_mch(self) -> DecodeModeMCH | None:
         value = self._state.get(CommandCodes.DECODE_MODE_STATUS_MCH)
         if value is None:
             return None
@@ -224,7 +224,7 @@ class State:
             )
         )
 
-    def get_decode_mode(self) -> Optional[Union[DecodeModeMCH, DecodeMode2CH]]:
+    def get_decode_mode(self) -> DecodeModeMCH | DecodeMode2CH | None:
         if self.get_2ch():
             return self.get_decode_mode_2ch()
         else:
@@ -232,14 +232,14 @@ class State:
 
     def get_decode_modes(
         self,
-    ) -> Optional[Union[List[DecodeModeMCH], List[DecodeMode2CH]]]:
+    ) -> list[DecodeModeMCH] | list[DecodeMode2CH] | None:
         if self.get_2ch():
             return list(RC5CODE_DECODE_MODE_2CH[(self._api_model, self._zn)])
         else:
             return list(RC5CODE_DECODE_MODE_MCH[(self._api_model, self._zn)])
 
     async def set_decode_mode(
-        self, mode: Union[str, DecodeModeMCH, DecodeMode2CH]
+        self, mode: str | DecodeModeMCH | DecodeMode2CH
     ) -> None:
         if self.get_2ch():
             if isinstance(mode, str):
@@ -254,7 +254,7 @@ class State:
                 raise ValueError("Decode mode not supported at this time")
             await self.set_decode_mode_mch(mode)
 
-    def get_power(self) -> Optional[bool]:
+    def get_power(self) -> bool | None:
         value = self._state.get(CommandCodes.POWER)
         if value is None:
             return None
@@ -284,13 +284,13 @@ class State:
                     self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command
                 )
 
-    def get_menu(self) -> Optional[MenuCodes]:
+    def get_menu(self) -> MenuCodes | None:
         value = self._state.get(CommandCodes.MENU)
         if value is None:
             return None
         return MenuCodes.from_bytes(value)
 
-    def get_mute(self) -> Optional[bool]:
+    def get_mute(self) -> bool | None:
         value = self._state.get(CommandCodes.MUTE)
         if value is None:
             return None
@@ -308,7 +308,7 @@ class State:
                 self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command
             )
 
-    def get_source(self) -> Optional[SourceCodes]:
+    def get_source(self) -> SourceCodes | None:
         value = self._state.get(CommandCodes.CURRENT_SOURCE)
         if value is None:
             return None
@@ -317,7 +317,7 @@ class State:
         except ValueError:
             return None
 
-    def get_source_list(self) -> List[SourceCodes]:
+    def get_source_list(self) -> list[SourceCodes]:
         return list(RC5CODE_SOURCE[(self._api_model, self._zn)].keys())
 
     async def set_source(self, src: SourceCodes) -> None:
@@ -330,7 +330,7 @@ class State:
                 self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command
             )
 
-    def get_volume(self) -> Optional[int]:
+    def get_volume(self) -> int | None:
         value = self._state.get(CommandCodes.VOLUME)
         if value is None:
             return None
@@ -357,19 +357,19 @@ class State:
                 self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command
             )
 
-    def get_dab_station(self) -> Optional[str]:
+    def get_dab_station(self) -> str | None:
         value = self._state.get(CommandCodes.DAB_STATION)
         if value is None:
             return None
         return value.decode("utf8").rstrip()
 
-    def get_dls_pdt(self) -> Optional[str]:
+    def get_dls_pdt(self) -> str | None:
         value = self._state.get(CommandCodes.DLS_PDT_INFO)
         if value is None:
             return None
         return value.decode("utf8").rstrip()
 
-    def get_rds_information(self) -> Optional[str]:
+    def get_rds_information(self) -> str | None:
         value = self._state.get(CommandCodes.RDS_INFORMATION)
         if value is None:
             return None
@@ -378,13 +378,13 @@ class State:
     async def set_tuner_preset(self, preset: int) -> None:
         await self._client.request(self._zn, CommandCodes.TUNER_PRESET, bytes([preset]))
 
-    def get_tuner_preset(self) -> Optional[int]:
+    def get_tuner_preset(self) -> int | None:
         value = self._state.get(CommandCodes.TUNER_PRESET)
         if value is None or value == b"\xff":
             return None
         return int.from_bytes(value, "big")
 
-    def get_preset_details(self) -> Dict[int, PresetDetail]:
+    def get_preset_details(self) -> dict[int, PresetDetail]:
         return self._presets
 
     async def update(self) -> None:
@@ -400,7 +400,7 @@ class State:
             except NotConnectedException as e:
                 _LOGGER.debug("Not connected skipping %s", cc)
                 self._state[cc] = None
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 _LOGGER.error("Timeout requesting %s", cc)
 
         async def _update_presets() -> None:
@@ -420,7 +420,7 @@ class State:
                 except NotConnectedException as e:
                     _LOGGER.debug("Not connected skipping preset %s", preset)
                     return
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     _LOGGER.error("Timeout requesting preset %s", preset)
                     return
             self._presets = presets
@@ -452,7 +452,7 @@ class State:
                 _LOGGER.debug("Response error skipping %s", e.ac)
             except NotConnectedException as e:
                 _LOGGER.debug("Not connected skipping amx")
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 _LOGGER.error("Timeout requesting amx")
 
         if self._client.connected:

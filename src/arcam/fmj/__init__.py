@@ -6,18 +6,13 @@ import re
 from asyncio.exceptions import IncompleteReadError
 from typing import (
     Any,
-    Dict,
-    Iterable,
-    Optional,
     SupportsBytes,
-    Tuple,
-    Type,
     TypeVar,
     Union,
-    Set,
     Literal,
     SupportsIndex,
 )
+from collections.abc import Iterable
 
 import attr
 
@@ -51,7 +46,7 @@ class ResponseException(ArcamException):
         self.cc = cc
         self.data = data
         super().__init__(
-            "'ac':{}, 'zn':{}, 'cc':{}, 'data':{}".format(ac, zn, cc, data)
+            f"'ac':{ac}, 'zn':{zn}, 'cc':{cc}, 'data':{data}"
         )
 
     @staticmethod
@@ -208,7 +203,7 @@ class EnumFlags(enum.IntFlag):
 
 
 class IntOrTypeEnum(enum.IntEnum):
-    version: Optional[Set[str]]
+    version: set[str] | None
     flags: EnumFlags
 
     @classmethod
@@ -229,7 +224,7 @@ class IntOrTypeEnum(enum.IntEnum):
             pseudo_member = cls._value2member_map_.setdefault(value, obj)
         return pseudo_member
 
-    def __new__(cls, value: int, version: Optional[Set[str]] = None, flags = EnumFlags(0)):
+    def __new__(cls, value: int, version: set[str] | None = None, flags = EnumFlags(0)):
         obj = int.__new__(cls, value)
         obj._value_ = value
         obj.version = version
@@ -237,11 +232,11 @@ class IntOrTypeEnum(enum.IntEnum):
         return obj
 
     @classmethod
-    def from_int(cls: Type[_T], value: int) -> _T:
+    def from_int(cls: type[_T], value: int) -> _T:
         return cls(value)
 
     @classmethod
-    def from_bytes(cls: Type[_T], bytes: Union[Iterable[SupportsIndex], SupportsBytes], byteorder: Literal["little", "big"] = "big", *, signed: bool = False) -> _T:  # type: ignore[override]
+    def from_bytes(cls: type[_T], bytes: Iterable[SupportsIndex] | SupportsBytes, byteorder: Literal["little", "big"] = "big", *, signed: bool = False) -> _T:  # type: ignore[override]
         return cls.from_int(int.from_bytes(bytes, byteorder=byteorder, signed=signed))
 
 
@@ -408,7 +403,7 @@ class SourceCodes(enum.Enum):
             table = SOURCE_CODES[(model, zn)]
         except KeyError:
             raise ValueError(
-                "Unknown source map for model {} and zone {}".format(model, zn)
+                f"Unknown source map for model {model} and zone {zn}"
             )
         for key, value in table.items():
             if value == data:
@@ -424,7 +419,7 @@ class SourceCodes(enum.Enum):
             table = SOURCE_CODES[(model, zn)]
         except KeyError:
             raise ValueError(
-                "Unknown source map for model {} and zone {}".format(model, zn)
+                f"Unknown source map for model {model} and zone {zn}"
             )
         if data := table.get(self):
             return data
@@ -577,7 +572,7 @@ SOURCE_CODES = {
     (ApiModel.APIST_SERIES, 1): ST_SOURCE_MAPPING,
 }
 
-RC5CODE_DECODE_MODE_MCH: Dict[Tuple[ApiModel, int], Dict[DecodeModeMCH, bytes]] = {
+RC5CODE_DECODE_MODE_MCH: dict[tuple[ApiModel, int], dict[DecodeModeMCH, bytes]] = {
     (ApiModel.API450_SERIES, 1): {
         DecodeModeMCH.STEREO_DOWNMIX: bytes([16, 107]),
         DecodeModeMCH.MULTI_CHANNEL: bytes([16, 106]),
@@ -613,7 +608,7 @@ RC5CODE_DECODE_MODE_MCH: Dict[Tuple[ApiModel, int], Dict[DecodeModeMCH, bytes]] 
     (ApiModel.APIPA_SERIES, 2): {},
 }
 
-RC5CODE_DECODE_MODE_2CH: Dict[Tuple[ApiModel, int], Dict[DecodeMode2CH, bytes]] = {
+RC5CODE_DECODE_MODE_2CH: dict[tuple[ApiModel, int], dict[DecodeMode2CH, bytes]] = {
     (ApiModel.API450_SERIES, 1): {
         DecodeMode2CH.STEREO: bytes([16, 107]),
         DecodeMode2CH.DOLBY_PLII_IIx_MOVIE: bytes([16, 103]),
@@ -656,7 +651,7 @@ RC5CODE_DECODE_MODE_2CH: Dict[Tuple[ApiModel, int], Dict[DecodeMode2CH, bytes]] 
     (ApiModel.APIST_SERIES, 2): {},
 }
 
-RC5CODE_SOURCE: Dict[Tuple[ApiModel, int], Dict[SourceCodes, bytes]] = {
+RC5CODE_SOURCE: dict[tuple[ApiModel, int], dict[SourceCodes, bytes]] = {
     (ApiModel.API450_SERIES, 1): {
         SourceCodes.STB: bytes([16, 1]),
         SourceCodes.AV: bytes([16, 2]),
@@ -1019,7 +1014,7 @@ class VideoParameters:
             colorspace = IncomingVideoColorspace.from_int(data[7])
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "horizontal_resolution": self.horizontal_resolution,
             "vertical_resolution": self.vertical_resolution,
@@ -1047,10 +1042,10 @@ class ResponsePacket:
     @staticmethod
     def from_bytes(data: bytes) -> "ResponsePacket":
         if len(data) < 6:
-            raise InvalidPacket("Packet to short {!r}".format(data))
+            raise InvalidPacket(f"Packet to short {data!r}")
 
         if data[4] != len(data) - 6:
-            raise InvalidPacket("Invalid length in data {!r}".format(data))
+            raise InvalidPacket(f"Invalid length in data {data!r}")
 
         return ResponsePacket(
             data[1],
@@ -1089,10 +1084,10 @@ class CommandPacket:
     @staticmethod
     def from_bytes(data: bytes) -> "CommandPacket":
         if len(data) < 5:
-            raise InvalidPacket("Packet to short {!r}".format(data))
+            raise InvalidPacket(f"Packet to short {data!r}")
 
         if data[3] != len(data) - 5:
-            raise InvalidPacket("Invalid length in data {!r}".format(data))
+            raise InvalidPacket(f"Invalid length in data {data!r}")
 
         return CommandPacket(
             data[1], CommandCodes.from_int(data[2]), data[4 : 4 + data[3]]
@@ -1104,7 +1099,7 @@ class AmxDuetRequest:
     @staticmethod
     def from_bytes(data: bytes) -> "AmxDuetRequest":
         if not data == b"AMX\r":
-            raise InvalidPacket("Packet is not a amx request {!r}".format(data))
+            raise InvalidPacket(f"Packet is not a amx request {data!r}")
         return AmxDuetRequest()
 
     def to_bytes(self):
@@ -1116,22 +1111,22 @@ class AmxDuetResponse:
     values = attr.ib(type=dict)
 
     @property
-    def device_class(self) -> Optional[str]:
+    def device_class(self) -> str | None:
         return self.values.get("Device-SDKClass")
 
     @property
-    def device_make(self) -> Optional[str]:
+    def device_make(self) -> str | None:
         return self.values.get("Device-Make")
 
     @property
-    def device_model(self) -> Optional[str]:
+    def device_model(self) -> str | None:
         return self.values.get("Device-Model")
 
     @property
-    def device_revision(self) -> Optional[str]:
+    def device_revision(self) -> str | None:
         return self.values.get("Device-Revision")
 
-    def respons_to(self, packet: Union[AmxDuetRequest, CommandPacket]):
+    def respons_to(self, packet: AmxDuetRequest | CommandPacket):
         if not isinstance(packet, AmxDuetRequest):
             return False
         return True
@@ -1139,7 +1134,7 @@ class AmxDuetResponse:
     @staticmethod
     def from_bytes(data: bytes) -> "AmxDuetResponse":
         if not data.startswith(b"AMXB"):
-            raise InvalidPacket("Packet is not a amx response {!r}".format(data))
+            raise InvalidPacket(f"Packet is not a amx response {data!r}")
 
         tags = re.findall(r"<(.+?)=(.+?)>", data[4:].decode("ASCII"))
         return AmxDuetResponse(dict(tags))
@@ -1153,7 +1148,7 @@ class AmxDuetResponse:
         return res.encode("ASCII")
 
 
-async def _read_delimited(reader: asyncio.StreamReader, header_len) -> Optional[bytes]:
+async def _read_delimited(reader: asyncio.StreamReader, header_len) -> bytes | None:
     try:
         start = await reader.readexactly(1)
         if start == PROTOCOL_EOF:
@@ -1167,14 +1162,14 @@ async def _read_delimited(reader: asyncio.StreamReader, header_len) -> Optional[
             etr = await reader.readexactly(1)
 
             if etr != PROTOCOL_ETR:
-                raise InvalidPacket("unexpected etr byte {!r}".format(etr))
+                raise InvalidPacket(f"unexpected etr byte {etr!r}")
 
             packet = bytes([*start, *header, *data_len, *data, *etr])
         elif start == b"\x01":
             """Sometime the AMX header seem to be sent as \x01^AMX"""
             header = await reader.readexactly(4)
             if header != b"^AMX":
-                raise InvalidPacket("Unexpected AMX header: {!r}".format(header))
+                raise InvalidPacket(f"Unexpected AMX header: {header!r}")
 
             data = await reader.readuntil(PROTOCOL_ETR)
             packet = bytes([*b"AMX", *data])
@@ -1188,7 +1183,7 @@ async def _read_delimited(reader: asyncio.StreamReader, header_len) -> Optional[
         elif start == b"\x00":
             raise NullPacket()
         else:
-            raise InvalidPacket("unexpected str byte {!r}".format(start))
+            raise InvalidPacket(f"unexpected str byte {start!r}")
 
         return packet
 
@@ -1204,7 +1199,7 @@ async def _read_delimited(reader: asyncio.StreamReader, header_len) -> Optional[
 
 async def _read_response(
     reader: asyncio.StreamReader,
-) -> Optional[Union[ResponsePacket, AmxDuetResponse]]:
+) -> ResponsePacket | AmxDuetResponse | None:
     data = await _read_delimited(reader, 4)
     if not data:
         return None
@@ -1217,7 +1212,7 @@ async def _read_response(
 
 async def read_response(
     reader: asyncio.StreamReader,
-) -> Optional[Union[ResponsePacket, AmxDuetResponse]]:
+) -> ResponsePacket | AmxDuetResponse | None:
     while True:
         try:
             data = await _read_response(reader)
@@ -1232,7 +1227,7 @@ async def read_response(
 
 async def _read_command(
     reader: asyncio.StreamReader,
-) -> Optional[Union[CommandPacket, AmxDuetRequest]]:
+) -> CommandPacket | AmxDuetRequest | None:
     data = await _read_delimited(reader, 3)
     if not data:
         return None
@@ -1244,7 +1239,7 @@ async def _read_command(
 
 async def read_command(
     reader: asyncio.StreamReader,
-) -> Optional[Union[CommandPacket, AmxDuetRequest]]:
+) -> CommandPacket | AmxDuetRequest | None:
     while True:
         try:
             data = await _read_command(reader)
@@ -1256,14 +1251,14 @@ async def read_command(
 
 async def write_packet(
     writer: asyncio.StreamWriter,
-    packet: Union[CommandPacket, ResponsePacket, AmxDuetRequest, AmxDuetResponse],
+    packet: CommandPacket | ResponsePacket | AmxDuetRequest | AmxDuetResponse,
 ) -> None:
     try:
         data = packet.to_bytes()
         writer.write(data)
         async with asyncio.timeout(_WRITE_TIMEOUT):
             await writer.drain()
-    except asyncio.TimeoutError as exception:
+    except TimeoutError as exception:
         raise ConnectionFailed() from exception
     except ConnectionError as exception:
         raise ConnectionFailed() from exception

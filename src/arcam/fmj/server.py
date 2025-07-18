@@ -1,7 +1,7 @@
 """Fake server"""
 import asyncio
 import logging
-from typing import Callable, Dict, List, Optional, Tuple, Union
+from collections.abc import Callable
 
 from . import (
     AmxDuetRequest,
@@ -20,13 +20,13 @@ _LOGGER = logging.getLogger(__name__)
 
 class Server:
     def __init__(self, host: str, port: int, model: str) -> None:
-        self._server: Optional[asyncio.AbstractServer] = None
+        self._server: asyncio.AbstractServer | None = None
         self._host = host
         self._port = port
-        self._handlers: Dict[
-            Union[Tuple[int, int], Tuple[int, int, bytes]], Callable
+        self._handlers: dict[
+            tuple[int, int] | tuple[int, int, bytes], Callable
         ] = dict()
-        self._tasks: List[asyncio.Task] = list()
+        self._tasks: list[asyncio.Task] = list()
         self._amxduet = AmxDuetResponse(
             {
                 "Device-SDKClass": "Receiver",
@@ -62,7 +62,7 @@ class Server:
             for response in responses:
                 await write_packet(writer, response)
 
-    async def process_request(self, request: Union[CommandPacket, AmxDuetRequest]):
+    async def process_request(self, request: CommandPacket | AmxDuetRequest):
         if isinstance(request, AmxDuetRequest):
             return [self._amxduet]
 
@@ -85,7 +85,7 @@ class Server:
             else:
                 raise CommandNotRecognised()
         except ResponseException as e:
-            response = [ResponsePacket(request.zn, request.cc, e.ac, e.data or bytes())]
+            response = [ResponsePacket(request.zn, request.cc, e.ac, e.data or b'')]
 
         return response
 
