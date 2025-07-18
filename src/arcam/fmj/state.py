@@ -1,4 +1,5 @@
 """Zone state"""
+
 import asyncio
 import logging
 from typing import Any, TypeVar
@@ -154,7 +155,7 @@ class State:
 
     def get(self, cc):
         return self._state[cc]
-    
+
     def get_incoming_video_parameters(self) -> VideoParameters | None:
         value = self._state.get(CommandCodes.INCOMING_VIDEO_PARAMETERS)
         if value is None:
@@ -238,9 +239,7 @@ class State:
         else:
             return list(RC5CODE_DECODE_MODE_MCH[(self._api_model, self._zn)])
 
-    async def set_decode_mode(
-        self, mode: str | DecodeModeMCH | DecodeMode2CH
-    ) -> None:
+    async def set_decode_mode(self, mode: str | DecodeModeMCH | DecodeMode2CH) -> None:
         if self.get_2ch():
             if isinstance(mode, str):
                 mode = DecodeMode2CH[mode]

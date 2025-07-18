@@ -1,4 +1,5 @@
 """Standard tests for component"""
+
 import asyncio
 from unittest.mock import MagicMock, call
 
@@ -12,21 +13,21 @@ from arcam.fmj import (
     ResponsePacket,
     _read_response,
     write_packet,
-    IntOrTypeEnum
+    IntOrTypeEnum,
 )
 
 
 async def test_reader_valid(event_loop):
     reader = asyncio.StreamReader(loop=event_loop)
-    reader.feed_data(b'\x21\x01\x08\x00\x02\x10\x10\x0D')
+    reader.feed_data(b"\x21\x01\x08\x00\x02\x10\x10\x0d")
     reader.feed_eof()
     packet = await _read_response(reader)
-    assert packet == ResponsePacket(1, 8, 0, b'\x10\x10')
+    assert packet == ResponsePacket(1, 8, 0, b"\x10\x10")
 
 
 async def test_reader_invalid_data(event_loop):
     reader = asyncio.StreamReader(loop=event_loop)
-    reader.feed_data(b'\x21\x01\x08\x00\x02\x10\x0D\x00')
+    reader.feed_data(b"\x21\x01\x08\x00\x02\x10\x0d\x00")
     reader.feed_eof()
     with pytest.raises(InvalidPacket):
         await _read_response(reader)
@@ -34,18 +35,18 @@ async def test_reader_invalid_data(event_loop):
 
 async def test_reader_invalid_data_recover(event_loop):
     reader = asyncio.StreamReader(loop=event_loop)
-    reader.feed_data(b'\x21\x01\x08\x00\x02\x10\x0D\x00')
-    reader.feed_data(b'\x21\x01\x08\x00\x02\x10\x10\x0D')
+    reader.feed_data(b"\x21\x01\x08\x00\x02\x10\x0d\x00")
+    reader.feed_data(b"\x21\x01\x08\x00\x02\x10\x10\x0d")
     reader.feed_eof()
     with pytest.raises(InvalidPacket):
         packet = await _read_response(reader)
     packet = await _read_response(reader)
-    assert packet == ResponsePacket(1, 8, 0, b'\x10\x10')
+    assert packet == ResponsePacket(1, 8, 0, b"\x10\x10")
 
 
 async def test_reader_short(event_loop):
     reader = asyncio.StreamReader(loop=event_loop)
-    reader.feed_data(b'\x21\x10\x0D')
+    reader.feed_data(b"\x21\x10\x0d")
     reader.feed_eof()
     with pytest.raises(ConnectionFailed):
         await _read_response(reader)
@@ -56,10 +57,12 @@ async def test_writer_valid(event_loop):
     writer.write.return_value = None
     writer.drain.return_value = asyncio.Future()
     writer.drain.return_value.set_result(None)
-    await write_packet(writer, CommandPacket(1, 8, b'\x10\x10'))
-    writer.write.assert_has_calls([
-        call(b'\x21\x01\x08\x02\x10\x10\x0D'),
-    ])
+    await write_packet(writer, CommandPacket(1, 8, b"\x10\x10"))
+    writer.write.assert_has_calls(
+        [
+            call(b"\x21\x01\x08\x02\x10\x10\x0d"),
+        ]
+    )
 
 
 async def test_intenum(event_loop):

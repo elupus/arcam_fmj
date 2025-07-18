@@ -1,4 +1,5 @@
 """Fake server"""
+
 import asyncio
 import logging
 from collections.abc import Callable
@@ -23,9 +24,9 @@ class Server:
         self._server: asyncio.AbstractServer | None = None
         self._host = host
         self._port = port
-        self._handlers: dict[
-            tuple[int, int] | tuple[int, int, bytes], Callable
-        ] = dict()
+        self._handlers: dict[tuple[int, int] | tuple[int, int, bytes], Callable] = (
+            dict()
+        )
         self._tasks: list[asyncio.Task] = list()
         self._amxduet = AmxDuetResponse(
             {
@@ -85,7 +86,7 @@ class Server:
             else:
                 raise CommandNotRecognised()
         except ResponseException as e:
-            response = [ResponsePacket(request.zn, request.cc, e.ac, e.data or b'')]
+            response = [ResponsePacket(request.zn, request.cc, e.ac, e.data or b"")]
 
         return response
 

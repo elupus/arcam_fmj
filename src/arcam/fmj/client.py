@@ -1,4 +1,5 @@
 """Client code"""
+
 import asyncio
 from asyncio.streams import StreamReader, StreamWriter
 import logging
@@ -104,12 +105,10 @@ class ClientBase:
         return self._writer is not None
 
     @overload
-    async def request_raw(self, request: CommandPacket) -> ResponsePacket:
-        ...
+    async def request_raw(self, request: CommandPacket) -> ResponsePacket: ...
 
     @overload
-    async def request_raw(self, request: AmxDuetRequest) -> AmxDuetResponse:
-        ...
+    async def request_raw(self, request: AmxDuetRequest) -> AmxDuetResponse: ...
 
     @async_retry(2, asyncio.TimeoutError)
     async def request_raw(
@@ -118,9 +117,7 @@ class ClientBase:
         if not self._writer:
             raise NotConnectedException()
         writer = self._writer  # keep copy around if stopped by another task
-        future: asyncio.Future[ResponsePacket | AmxDuetResponse] = (
-            asyncio.Future()
-        )
+        future: asyncio.Future[ResponsePacket | AmxDuetResponse] = asyncio.Future()
 
         def listen(response: ResponsePacket | AmxDuetResponse):
             if response.respons_to(request):
@@ -166,6 +163,7 @@ class ClientBase:
 
         raise ResponseException.from_response(response)
 
+
 class Client(ClientBase):
     def __init__(self, host: str, port: int) -> None:
         super().__init__()
@@ -206,6 +204,7 @@ class Client(ClientBase):
             finally:
                 self._writer = None
                 self._reader = None
+
 
 class ClientContext:
     def __init__(self, client: Client):

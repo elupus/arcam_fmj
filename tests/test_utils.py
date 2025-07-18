@@ -1,4 +1,5 @@
 """Tests for utils."""
+
 import pytest
 
 from arcam.fmj.utils import async_retry
@@ -8,6 +9,7 @@ from aiohttp import web
 MOCK_UNIQUE_ID = "0011044feeef"
 MOCK_UDN = f"uuid:aa331113-fa23-3333-2222-{MOCK_UNIQUE_ID}"
 MOCK_SERIAL_NO = "01a0132032f01103100400010010ff00"
+
 
 def _get_dd(unique_id, serial_no, udn):
     return f"""<?xml version="1.0" encoding="utf-8"?>
@@ -70,7 +72,6 @@ def _get_dd(unique_id, serial_no, udn):
 
 
 async def test_retry_fails(event_loop):
-
     calls = 0
 
     @async_retry(2, Exception)
@@ -86,7 +87,6 @@ async def test_retry_fails(event_loop):
 
 
 async def test_retry_succeeds(event_loop):
-
     calls = 0
 
     @async_retry(2, Exception)
@@ -101,8 +101,6 @@ async def test_retry_succeeds(event_loop):
 
 
 async def test_retry_unexpected(event_loop):
-
-
     calls = 0
 
     @async_retry(2, TimeoutError)
@@ -117,13 +115,13 @@ async def test_retry_unexpected(event_loop):
 
 
 async def test_get_uniqueid_from_device_description(event_loop, aiohttp_client):
-
     response_text = ""
+
     async def device_description(request):
         return web.Response(text=response_text)
 
     app = web.Application()
-    app.router.add_get('/dd.xml', device_description)
+    app.router.add_get("/dd.xml", device_description)
     client = await aiohttp_client(app)
 
     response_text = "non xml"
@@ -133,4 +131,6 @@ async def test_get_uniqueid_from_device_description(event_loop, aiohttp_client):
     assert await get_uniqueid_from_device_description(client, "/dd.xml") is None
 
     response_text = _get_dd(MOCK_UNIQUE_ID, MOCK_SERIAL_NO, MOCK_UDN)
-    assert await get_uniqueid_from_device_description(client, "/dd.xml") == MOCK_UNIQUE_ID
+    assert (
+        await get_uniqueid_from_device_description(client, "/dd.xml") == MOCK_UNIQUE_ID
+    )
