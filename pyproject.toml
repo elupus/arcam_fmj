@@ -14,7 +14,9 @@ classifiers = [
 ]
 requires-python = ">=3.11"
 dependencies = [
+    "aiohttp>=3.13.2",
     "attrs>18.1",
+    "defusedxml>=0.7.1",
 ]
 license = "MIT"
 
@@ -23,9 +25,7 @@ Homepage = "https://github.com/elupus/arcam_fmj"
 
 [project.optional-dependencies]
 tests = [
-    "aiohttp",
     "coveralls",
-    "defusedxml",
     "pytest-aiohttp>=1.0.0",
     "pytest-asyncio==0.21.2",
     "pytest-cov>=3.0.0",
