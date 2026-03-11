@@ -7,6 +7,7 @@ from typing import Any, TypeVar
 from . import (
     APIVERSION_450_SERIES,
     APIVERSION_860_SERIES,
+    APIVERSION_LEXICON_SERIES,
     APIVERSION_HDA_SERIES,
     APIVERSION_SA_SERIES,
     APIVERSION_PA_SERIES,
@@ -88,6 +89,9 @@ class State:
             "INCOMING_AUDIO_SAMPLE_RATE": self.get_incoming_audio_sample_rate(),
             "DECODE_MODE_2CH": self.get_decode_mode_2ch(),
             "DECODE_MODE_MCH": self.get_decode_mode_mch(),
+            "ROOM_EQUALIZATION": self.get_room_equalization(),
+            "LIPSYNC_DELAY": self.get_lipsync_delay(),
+            "SUBWOOFER_TRIM": self.get_subwoofer_trim(),
             "DAB_STATION": self.get_dab_station(),
             "DLS_PDT": self.get_dls_pdt(),
             "RDS_INFORMATION": self.get_rds_information(),
@@ -289,6 +293,29 @@ class State:
             return None
         return MenuCodes.from_bytes(value)
 
+    async def navigate_menu(self, action: str) -> None:
+        """Navigate in menu using RC5 IR commands.
+        
+        Args:
+            action: One of 'menu', 'up', 'down', 'left', 'right', 'ok'
+        """
+        from . import MenuNavigationCodes, RC5CODE_MENU_NAVIGATION
+        
+        # Convert string to MenuNavigationCodes enum
+        action_upper = action.upper()
+        try:
+            nav_code = MenuNavigationCodes[action_upper]
+        except KeyError:
+            raise ValueError(
+                f"Invalid menu action: {action}. "
+                f"Valid actions: menu, up, down, left, right, ok"
+            )
+        
+        command = self.get_rc5code(RC5CODE_MENU_NAVIGATION, nav_code)
+        await self._client.request(
+            self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command
+        )
+
     def get_mute(self) -> bool | None:
         value = self._state.get(CommandCodes.MUTE)
         if value is None:
@@ -306,6 +333,72 @@ class State:
             await self._client.request(
                 self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command
             )
+            
+    def get_lipsync_delay(self) -> int | None:
+        """Return lip sync delay in milliseconds (0-250ms in 5ms steps)."""
+        value = self._state.get(CommandCodes.LIPSYNC_DELAY)
+        if value is None:
+            return None
+        byte_val = int.from_bytes(value, "big")
+        # 0x00-0x32: delay in 5ms steps (e.g. 0x0A = 50ms)
+        return byte_val * 5
+
+    async def set_lipsync_delay(self, delay_ms: int) -> None:
+        """Set lip sync delay in milliseconds (0-250ms in 5ms steps)."""
+        # Clamp to valid range
+        delay_ms = max(0, min(250, delay_ms))
+        # Round to nearest 5ms step
+        delay_ms = round(delay_ms / 5) * 5
+        # Convert to byte value (0x00-0x32)
+        byte_val = delay_ms // 5
+        await self._client.request(
+            self._zn, CommandCodes.LIPSYNC_DELAY, bytes([byte_val])
+        )
+
+    def get_subwoofer_trim(self) -> float | None:
+        """Return subwoofer trim level in dB (-10 to +10 dB in 0.5dB steps)."""
+        value = self._state.get(CommandCodes.SUBWOOFER_TRIM)
+        if value is None:
+            return None
+        byte_val = int.from_bytes(value, "big")
+        if byte_val <= 0x14:  # 0x00-0x14: positive 0 to +10dB
+            return byte_val * 0.5
+        elif 0x81 <= byte_val <= 0x94:  # 0x81-0x94: negative -0.5 to -10dB
+            return -(byte_val - 0x80) * 0.5
+        return None
+
+    async def set_subwoofer_trim(self, trim_db: float) -> None:
+        """Set subwoofer trim level in dB (-10 to +10 dB in 0.5dB steps)."""
+        # Clamp to valid range
+        trim_db = max(-10.0, min(10.0, trim_db))
+        # Round to nearest 0.5dB
+        trim_db = round(trim_db * 2) / 2
+        
+        if trim_db >= 0:
+            # Positive: 0x00-0x14 (0 to +10dB in 0.5dB steps)
+            byte_val = int(trim_db / 0.5)
+        else:
+            # Negative: 0x81-0x94 (-0.5 to -10dB in 0.5dB steps)
+            byte_val = 0x80 + int(abs(trim_db) / 0.5)
+        
+        await self._client.request(
+            self._zn, CommandCodes.SUBWOOFER_TRIM, bytes([byte_val])
+        )
+
+    def get_room_equalization(self) -> bool | None:
+        """Return room equalization (DIRAC) state."""
+        value = self._state.get(CommandCodes.ROOM_EQUALIZATION)
+        if value is None:
+            return None
+        return int.from_bytes(value, "big") == 0x01
+
+    async def set_room_equalization(self, enabled: bool) -> None:
+        """Enable or disable room equalization (DIRAC)."""
+        # 0xF1 = on, 0xF2 = off (per API spec)
+        command_byte = 0xF1 if enabled else 0xF2
+        await self._client.request(
+            self._zn, CommandCodes.ROOM_EQUALIZATION, bytes([command_byte])
+        )
 
     def get_source(self) -> SourceCodes | None:
         value = self._state.get(CommandCodes.CURRENT_SOURCE)
@@ -318,6 +411,17 @@ class State:
 
     def get_source_list(self) -> list[SourceCodes]:
         return list(RC5CODE_SOURCE[(self._api_model, self._zn)].keys())
+
+    async def get_input_name(self) -> str | None:
+        """Query the user-configured input name for the current source."""
+        try:
+            data = await self._client.request(
+                self._zn, CommandCodes.INPUT_NAME, bytes([0xF0])
+            )
+            return data.decode('utf-8', errors='replace').rstrip('\x00').strip()
+        except Exception as e:
+            _LOGGER.warning("Failed to get input name: %s", e)
+            return None
 
     async def set_source(self, src: SourceCodes) -> None:
         if self._api_model in SOURCE_WRITE_SUPPORTED:
@@ -432,6 +536,9 @@ class State:
                 if data.device_model in APIVERSION_450_SERIES:
                     self._api_model = ApiModel.API450_SERIES
 
+                if data.device_model in APIVERSION_LEXICON_SERIES:
+                    self._api_model = ApiModel.APILEXICON_SERIES
+
                 if data.device_model in APIVERSION_860_SERIES:
                     self._api_model = ApiModel.API860_SERIES
 
@@ -474,6 +581,9 @@ class State:
                     _update(CommandCodes.DLS_PDT_INFO),
                     _update(CommandCodes.RDS_INFORMATION),
                     _update(CommandCodes.TUNER_PRESET),
+                    _update(CommandCodes.ROOM_EQUALIZATION),
+                    _update(CommandCodes.LIPSYNC_DELAY),
+                    _update(CommandCodes.SUBWOOFER_TRIM),
                     _update_presets(),
                 ]
             )

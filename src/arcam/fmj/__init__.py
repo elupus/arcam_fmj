@@ -111,10 +111,8 @@ APIVERSION_860_SERIES = {
     "AVR550",
     "AVR390",
     "SR250",
-    "RV-6",
-    "RV-9",
-    "MC-10",
 }
+APIVERSION_LEXICON_SERIES = {"RV-6", "RV-9", "MC-10"}
 APIVERSION_SA_SERIES = {"SA10", "SA20", "SA30", "SA750"}
 APIVERSION_HDA_SERIES = {
     "AVR5",
@@ -156,23 +154,27 @@ APIVERSION_ST_SERIES = {"ST60"}
 
 APIVERSION_DAB_SERIES = {"AVR450", "AVR750"}
 APIVERSION_DAB_SERIES.update(
-    "AV860", "AVR850", "AVR550", "AVR390", "RV-6", "RV-9", "MC-10"
+    "AV860", "AVR850", "AVR550", "AVR390"
 )
+APIVERSION_DAB_SERIES.update(APIVERSION_LEXICON_SERIES)
 APIVERSION_DAB_SERIES.update(APIVERSION_HDA_SERIES)
 
 APIVERSION_ZONE2_SERIES = set()
 APIVERSION_ZONE2_SERIES.update(APIVERSION_450_SERIES)
 APIVERSION_ZONE2_SERIES.update(APIVERSION_860_SERIES)
+APIVERSION_ZONE2_SERIES.update(APIVERSION_LEXICON_SERIES)
 APIVERSION_ZONE2_SERIES.update(APIVERSION_HDA_MULTI_ZONE_SERIES)
 
 APIVERSION_DOLBY_PL_SERIES = APIVERSION_450_SERIES
 
 APIVERSION_DOLBY_SURROUND_SERIES = set()
 APIVERSION_DOLBY_SURROUND_SERIES.update(APIVERSION_860_SERIES)
+APIVERSION_DOLBY_SURROUND_SERIES.update(APIVERSION_LEXICON_SERIES)
 APIVERSION_DOLBY_SURROUND_SERIES.update(APIVERSION_HDA_SERIES)
 
 APIVERSION_DOLBY_ATMOS_SERIES = set()
 APIVERSION_DOLBY_ATMOS_SERIES.update(APIVERSION_860_SERIES)
+APIVERSION_DOLBY_ATMOS_SERIES.update(APIVERSION_LEXICON_SERIES)
 APIVERSION_DOLBY_ATMOS_SERIES.update(APIVERSION_HDA_SERIES)
 
 APIVERSION_DOLBY_VIRT_H_SERIES = APIVERSION_HDA_SERIES
@@ -183,6 +185,7 @@ APIVERSION_AURO_SERIES = APIVERSION_HDA_PREMIUM_SERIES
 
 APIVERSION_IMAX_SERIES = set()
 APIVERSION_IMAX_SERIES.update(APIVERSION_860_SERIES)
+APIVERSION_IMAX_SERIES.update(APIVERSION_LEXICON_SERIES)
 APIVERSION_IMAX_SERIES.update(APIVERSION_HDA_PREMIUM_SERIES)
 
 APIVERSION_AMP_DIAGNOSTICS_SERIES = set()
@@ -197,7 +200,6 @@ APIVERSION_SIMPLE_IP_SERIES = {"PA720", "PA240", "SA10", "SA20"}
 
 APIVERSION_APP_SAFETY_SERIES = {"SA30", "SA750"}
 
-
 class ApiModel(enum.Enum):
     API450_SERIES = 1
     API860_SERIES = 2
@@ -205,6 +207,7 @@ class ApiModel(enum.Enum):
     APIHDA_SERIES = 4
     APIPA_SERIES = 5
     APIST_SERIES = 6
+    APILEXICON_SERIES = 7
 
 
 _T = TypeVar("_T", bound="IntOrTypeEnum")
@@ -287,6 +290,7 @@ class CommandCodes(IntOrTypeEnum):
     SELECT_ANALOG_DIGITAL = 0x0B
     VIDEO_INPUT_TYPE = 0x0C  # IMAX_ENHANCED on 860 and HDA Series (not AVR5)
 
+
     # Output Commands
     VOLUME = 0x0D, None, EnumFlags.ZONE_SUPPORT  # Set/Request
     MUTE = 0x0E, None, EnumFlags.ZONE_SUPPORT  # Request
@@ -324,9 +328,9 @@ class CommandCodes(IntOrTypeEnum):
     LIPSYNC_DELAY = 0x40, None, EnumFlags.ZONE_SUPPORT
     COMPRESSION = 0x41, None, EnumFlags.ZONE_SUPPORT
 
-    INCOMING_VIDEO_PARAMETERS = 0x42, None
-    INCOMING_AUDIO_FORMAT = 0x43, None
-    INCOMING_AUDIO_SAMPLE_RATE = 0x44
+    INCOMING_VIDEO_PARAMETERS = 0x42, None, EnumFlags.ZONE_SUPPORT
+    INCOMING_AUDIO_FORMAT = 0x43, None, EnumFlags.ZONE_SUPPORT
+    INCOMING_AUDIO_SAMPLE_RATE = 0x44, None, EnumFlags.ZONE_SUPPORT
 
     SUB_STEREO_TRIM = 0x45  # Set/Request
     VIDEO_BRIGHTNESS = 0x46  # Set/Request
@@ -458,6 +462,15 @@ class MenuCodes(IntOrTypeEnum):
     USB = 0x0A
 
 
+class MenuNavigationCodes(IntOrTypeEnum):
+    MENU = 0x52
+    UP = 0x56
+    DOWN = 0x55
+    LEFT = 0x51
+    RIGHT = 0x50
+    OK = 0x57
+
+
 class DecodeMode2CH(IntOrTypeEnum):
     STEREO = 0x01
     DOLBY_PLII_IIx_MOVIE = 0x02, APIVERSION_DOLBY_PL_SERIES
@@ -470,6 +483,7 @@ class DecodeMode2CH(IntOrTypeEnum):
     MCH_STEREO = 0x09
 
     DTS_NEURAL_X = 0x0A, APIVERSION_DTS_X_SERIES
+    LOGIC7_IMMERSION = 0x0B, APIVERSION_LEXICON_SERIES
     DTS_VIRTUAL_X = 0x0C, APIVERSION_DTS_X_SERIES
 
     DOLBY_VIRTUAL_HEIGHT = 0x0D, APIVERSION_DOLBY_VIRT_H_SERIES
@@ -489,6 +503,7 @@ class DecodeModeMCH(IntOrTypeEnum):
     DOLBY_PLII_IIx_MUSIC = 0x05, APIVERSION_DOLBY_PL_SERIES
 
     DOLBY_SURROUND = 0x06, APIVERSION_DOLBY_SURROUND_SERIES
+    LOGIC7_IMMERSION = 0x0B, APIVERSION_LEXICON_SERIES
     DTS_VIRTUAL_X = 0x0C, APIVERSION_DTS_X_SERIES
 
     DOLBY_VIRTUAL_HEIGHT = 0x0D, APIVERSION_DOLBY_VIRT_H_SERIES
@@ -580,6 +595,8 @@ SOURCE_CODES = {
     (ApiModel.API450_SERIES, 2): DEFAULT_SOURCE_MAPPING,
     (ApiModel.API860_SERIES, 1): DEFAULT_SOURCE_MAPPING,
     (ApiModel.API860_SERIES, 2): DEFAULT_SOURCE_MAPPING,
+    (ApiModel.APILEXICON_SERIES, 1): DEFAULT_SOURCE_MAPPING,
+    (ApiModel.APILEXICON_SERIES, 2): DEFAULT_SOURCE_MAPPING,
     (ApiModel.APIHDA_SERIES, 1): HDA_SOURCE_MAPPING,
     (ApiModel.APIHDA_SERIES, 2): HDA_SOURCE_MAPPING,
     (ApiModel.APISA_SERIES, 1): SA_SOURCE_MAPPING,
@@ -605,6 +622,16 @@ RC5CODE_DECODE_MODE_MCH: dict[tuple[ApiModel, int], dict[DecodeModeMCH, bytes]] 
         DecodeModeMCH.DTS_VIRTUAL_X: bytes([16, 115]),
     },
     (ApiModel.API860_SERIES, 2): {},
+    (ApiModel.APILEXICON_SERIES, 1): {
+        DecodeModeMCH.STEREO_DOWNMIX: bytes([16, 107]),
+        DecodeModeMCH.MULTI_CHANNEL: bytes([16, 106]),
+        # We map to DTS_NEURAL_X
+        DecodeModeMCH.DOLBY_D_EX_OR_DTS_ES: bytes([16, 113]),
+        DecodeModeMCH.DOLBY_SURROUND: bytes([16, 110]),
+        DecodeModeMCH.LOGIC7_IMMERSION: bytes([16, 114]),
+        DecodeModeMCH.DTS_VIRTUAL_X: bytes([16, 115]),
+    },
+    (ApiModel.APILEXICON_SERIES, 2): {},
     (ApiModel.APIHDA_SERIES, 1): {
         DecodeModeMCH.STEREO_DOWNMIX: bytes([16, 107]),
         DecodeModeMCH.MULTI_CHANNEL: bytes([16, 106]),
@@ -645,6 +672,17 @@ RC5CODE_DECODE_MODE_2CH: dict[tuple[ApiModel, int], dict[DecodeMode2CH, bytes]] 
         DecodeMode2CH.MCH_STEREO: bytes([16, 69]),
     },
     (ApiModel.API860_SERIES, 2): {},
+    (ApiModel.APILEXICON_SERIES, 1): {
+        DecodeMode2CH.STEREO: bytes([16, 107]),
+        DecodeMode2CH.DTS_NEURAL_X: bytes([16, 113]),
+        DecodeMode2CH.LOGIC7_IMMERSION: bytes([16, 114]),
+        DecodeMode2CH.DTS_VIRTUAL_X: bytes([16, 115]),
+        DecodeMode2CH.DOLBY_PL: bytes([16, 110]),
+        DecodeMode2CH.DTS_NEO_6_CINEMA: bytes([16, 111]),
+        DecodeMode2CH.DTS_NEO_6_MUSIC: bytes([16, 112]),
+        DecodeMode2CH.MCH_STEREO: bytes([16, 69]),
+    },
+    (ApiModel.APILEXICON_SERIES, 2): {},
     (ApiModel.APIHDA_SERIES, 1): {
         DecodeMode2CH.STEREO: bytes([16, 107]),
         DecodeMode2CH.DOLBY_SURROUND: bytes([16, 110]),
@@ -714,6 +752,38 @@ RC5CODE_SOURCE: dict[tuple[ApiModel, int], dict[SourceCodes, bytes]] = {
         SourceCodes.NET: bytes([16, 92]),
     },
     (ApiModel.API860_SERIES, 2): {
+        SourceCodes.STB: bytes([23, 8]),
+        SourceCodes.AV: bytes([23, 9]),
+        SourceCodes.DAB: bytes([23, 16]),
+        SourceCodes.FM: bytes([23, 14]),
+        SourceCodes.BD: bytes([23, 7]),
+        SourceCodes.GAME: bytes([23, 11]),
+        SourceCodes.CD: bytes([23, 6]),
+        SourceCodes.AUX: bytes([23, 13]),
+        SourceCodes.PVR: bytes([23, 15]),
+        SourceCodes.USB: bytes([23, 18]),
+        SourceCodes.NET: bytes([23, 19]),
+        SourceCodes.SAT: bytes([23, 20]),
+        SourceCodes.VCR: bytes([23, 21]),
+        SourceCodes.FOLLOW_ZONE_1: bytes([16, 20]),
+    },
+    (ApiModel.APILEXICON_SERIES, 1): {
+        SourceCodes.STB: bytes([16, 100]),
+        SourceCodes.AV: bytes([16, 94]),
+        SourceCodes.DAB: bytes([16, 72]),
+        SourceCodes.FM: bytes([16, 28]),
+        SourceCodes.BD: bytes([16, 98]),
+        SourceCodes.GAME: bytes([16, 97]),
+        SourceCodes.VCR: bytes([16, 119]),
+        SourceCodes.CD: bytes([16, 118]),
+        SourceCodes.AUX: bytes([16, 99]),
+        SourceCodes.DISPLAY: bytes([16, 58]),
+        SourceCodes.SAT: bytes([16, 27]),
+        SourceCodes.PVR: bytes([16, 96]),
+        SourceCodes.USB: bytes([16, 93]),
+        SourceCodes.NET: bytes([16, 92]),
+    },
+    (ApiModel.APILEXICON_SERIES, 2): {
         SourceCodes.STB: bytes([23, 8]),
         SourceCodes.AV: bytes([23, 9]),
         SourceCodes.DAB: bytes([23, 16]),
@@ -808,6 +878,8 @@ RC5CODE_POWER = {
     (ApiModel.API450_SERIES, 2): {True: bytes([23, 123]), False: bytes([23, 124])},
     (ApiModel.API860_SERIES, 1): {True: bytes([16, 123]), False: bytes([16, 124])},
     (ApiModel.API860_SERIES, 2): {True: bytes([23, 123]), False: bytes([23, 124])},
+    (ApiModel.APILEXICON_SERIES, 1): {True: bytes([16, 123]), False: bytes([16, 124])},
+    (ApiModel.APILEXICON_SERIES, 2): {True: bytes([23, 123]), False: bytes([23, 124])},
     (ApiModel.APIHDA_SERIES, 1): {True: bytes([16, 123]), False: bytes([16, 124])},
     (ApiModel.APIHDA_SERIES, 2): {True: bytes([23, 123]), False: bytes([23, 124])},
     (ApiModel.APISA_SERIES, 1): {True: bytes([16, 123]), False: bytes([16, 124])},
@@ -828,6 +900,14 @@ RC5CODE_MUTE = {
         False: bytes([16, 120]),
     },
     (ApiModel.API860_SERIES, 2): {
+        True: bytes([23, 4]),
+        False: bytes([23, 5]),
+    },
+    (ApiModel.APILEXICON_SERIES, 1): {
+        True: bytes([16, 26]),
+        False: bytes([16, 120]),
+    },
+    (ApiModel.APILEXICON_SERIES, 2): {
         True: bytes([23, 4]),
         False: bytes([23, 5]),
     },
@@ -885,6 +965,41 @@ RC5CODE_VOLUME = {
     (ApiModel.APIST_SERIES, 1): {
         True: bytes([21, 86]),
         False: bytes([21, 85]),
+    },
+}
+
+RC5CODE_MENU_NAVIGATION = {
+    (ApiModel.API450_SERIES, 1): {
+        MenuNavigationCodes.MENU: bytes([16, 82]),
+        MenuNavigationCodes.UP: bytes([16, 86]),
+        MenuNavigationCodes.DOWN: bytes([16, 85]),
+        MenuNavigationCodes.LEFT: bytes([16, 81]),
+        MenuNavigationCodes.RIGHT: bytes([16, 80]),
+        MenuNavigationCodes.OK: bytes([16, 87]),
+    },
+    (ApiModel.API860_SERIES, 1): {
+        MenuNavigationCodes.MENU: bytes([16, 82]),
+        MenuNavigationCodes.UP: bytes([16, 86]),
+        MenuNavigationCodes.DOWN: bytes([16, 85]),
+        MenuNavigationCodes.LEFT: bytes([16, 81]),
+        MenuNavigationCodes.RIGHT: bytes([16, 80]),
+        MenuNavigationCodes.OK: bytes([16, 87]),
+    },
+    (ApiModel.APILEXICON_SERIES, 1): {
+        MenuNavigationCodes.MENU: bytes([16, 82]),
+        MenuNavigationCodes.UP: bytes([16, 86]),
+        MenuNavigationCodes.DOWN: bytes([16, 85]),
+        MenuNavigationCodes.LEFT: bytes([16, 81]),
+        MenuNavigationCodes.RIGHT: bytes([16, 80]),
+        MenuNavigationCodes.OK: bytes([16, 87]),
+    },
+    (ApiModel.APIHDA_SERIES, 1): {
+        MenuNavigationCodes.MENU: bytes([16, 82]),
+        MenuNavigationCodes.UP: bytes([16, 86]),
+        MenuNavigationCodes.DOWN: bytes([16, 85]),
+        MenuNavigationCodes.LEFT: bytes([16, 81]),
+        MenuNavigationCodes.RIGHT: bytes([16, 80]),
+        MenuNavigationCodes.OK: bytes([16, 87]),
     },
 }
 
@@ -1019,15 +1134,21 @@ class VideoParameters:
     colorspace = attr.ib(type=IncomingVideoColorspace)
 
     @staticmethod
-    def from_bytes(data: bytes) -> "VideoParameters":
-        return VideoParameters(
-            horizontal_resolution=int.from_bytes(data[0:2], "big"),
-            vertical_resolution=int.from_bytes(data[2:4], "big"),
-            refresh_rate=data[4],
-            interlaced=(data[5] == 0x01),
-            aspect_ratio=IncomingVideoAspectRatio.from_int(data[6]),
-            colorspace=IncomingVideoColorspace.from_int(data[7]),
-        )
+    def from_bytes(data: bytes) -> "VideoParameters | None":
+        # Guard against incomplete or missing data
+        if data is None or len(data) < 8:
+            return None
+        try:
+            return VideoParameters(
+                horizontal_resolution=int.from_bytes(data[0:2], "big"),
+                vertical_resolution=int.from_bytes(data[2:4], "big"),
+                refresh_rate=data[4],
+                interlaced=(data[5] == 0x01),
+                aspect_ratio=IncomingVideoAspectRatio.from_int(data[6]),
+                colorspace=IncomingVideoColorspace.from_int(data[7]),
+            )
+        except (ValueError, IndexError):
+            return None
 
     def to_dict(self) -> dict[str, Any]:
         return {

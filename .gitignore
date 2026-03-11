@@ -6,4 +6,29 @@ dist
 .vscode
 .coverage
 .mypy_cache
+
+# Virtual environments
 venv
+.venv
+.venv312
+env
+ENV
+
+# GitHub Copilot
+.github/copilot-instructions.md
+
+# Python cache
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+src/arcam/.DS_Store
+.gitignore
+.DS_Store
+.gitignore

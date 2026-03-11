@@ -28,10 +28,14 @@ class Server:
             dict()
         )
         self._tasks: list[asyncio.Task] = list()
+        
+        # Lexicon devices use "Lexicon" as Device-Make
+        device_make = "Lexicon" if model in {"RV-6", "RV-9", "MC-10"} else "ARCAM"
+        
         self._amxduet = AmxDuetResponse(
             {
                 "Device-SDKClass": "Receiver",
-                "Device-Make": "ARCAM",
+                "Device-Make": device_make,
                 "Device-Model": model,
                 "Device-Revision": "x.y.z",
             }
