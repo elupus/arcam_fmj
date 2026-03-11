@@ -360,19 +360,19 @@ class State:
         value = self._state.get(CommandCodes.DAB_STATION)
         if value is None:
             return None
-        return value.decode("utf8").rstrip()
+        return value.decode("utf8", errors="replace").rstrip()
 
     def get_dls_pdt(self) -> str | None:
         value = self._state.get(CommandCodes.DLS_PDT_INFO)
         if value is None:
             return None
-        return value.decode("utf8").rstrip()
+        return value.decode("utf8", errors="replace").rstrip()
 
     def get_rds_information(self) -> str | None:
         value = self._state.get(CommandCodes.RDS_INFORMATION)
         if value is None:
             return None
-        return value.decode("utf8").rstrip()
+        return value.decode("utf8", errors="replace").rstrip()
 
     async def set_tuner_preset(self, preset: int) -> None:
         await self._client.request(self._zn, CommandCodes.TUNER_PRESET, bytes([preset]))
