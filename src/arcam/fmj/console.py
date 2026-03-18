@@ -2,6 +2,7 @@ import argparse
 import asyncio
 import logging
 import sys
+from pprint import pprint
 
 from . import (
     APIVERSION_450_SERIES,
@@ -103,15 +104,15 @@ async def run_state(args):
 
         if args.monitor:
             async with state:
-                prev = repr(state)
+                prev = state.to_dict()
                 while client.connected:
-                    curr = repr(state)
+                    curr = state.to_dict()
                     if prev != curr:
-                        print(curr)
+                        pprint(curr)
                         prev = curr
                     await asyncio.sleep(delay=1)
         else:
-            print(state)
+            pprint(state.to_dict())
 
 
 async def run_server(args):
