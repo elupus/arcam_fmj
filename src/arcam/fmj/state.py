@@ -47,6 +47,29 @@ _LOGGER = logging.getLogger(__name__)
 _T = TypeVar("_T")
 
 
+
+def _get_scaled_negative(data: bytes | None, min_value: float, max_value: float, scale: float) -> float | None:
+    if data is None:
+        return None
+
+    neg_limit = round(-min_value / scale) + 0x80
+    pos_limit = round(max_value / scale)
+
+    byte_val = int.from_bytes(data, "big")
+    if byte_val >= 0x81 and byte_val <= neg_limit:
+        return - (byte_val - 0x80) / scale
+    if byte_val >= 0x00 and byte_val <= pos_limit:
+        return  byte_val / scale
+    return None
+
+def _set_scaled(value: float, min_value: float, max_value: float, scale: float) -> bytes:
+    value = max(min_value, min(max_value, scale))
+    value = round(value * scale)
+    if value >= 0:
+        return value
+    else:
+        return 0x80 - value
+
 class State:
     _state: dict[int, bytes | None]
     _presets: dict[int, PresetDetail]
@@ -88,6 +111,11 @@ class State:
             "INCOMING_AUDIO_SAMPLE_RATE": self.get_incoming_audio_sample_rate(),
             "DECODE_MODE_2CH": self.get_decode_mode_2ch(),
             "DECODE_MODE_MCH": self.get_decode_mode_mch(),
+            "ROOM_EQUALIZATION": self.get_room_equalization(),
+            "BASS_EQUALIZATION": self.get_bass_equalization(),
+            "TREBLE_EQUALIZATION": self.get_treble_equalization(),
+            "LIPSYNC_DELAY": self.get_lipsync_delay(),
+            "SUBWOOFER_TRIM": self.get_subwoofer_trim(),
             "DAB_STATION": self.get_dab_station(),
             "DLS_PDT": self.get_dls_pdt(),
             "RDS_INFORMATION": self.get_rds_information(),
@@ -306,6 +334,70 @@ class State:
             await self._client.request(
                 self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command
             )
+            
+    def get_lipsync_delay(self) -> int | None:
+        """Return lip sync delay in milliseconds (0-250ms in 5ms steps)."""
+        data = self._state.get(CommandCodes.LIPSYNC_DELAY)
+        return _get_scaled_negative(data, 0.0, 250.0, 5.0)
+
+    async def set_lipsync_delay(self, delay_ms: int) -> None:
+        """Set lip sync delay in milliseconds (0-250ms in 5ms steps)."""
+        byte_val = _set_scaled(delay_ms, 0.0, 250.0, 5.0)
+        await self._client.request(
+            self._zn, CommandCodes.LIPSYNC_DELAY, bytes([byte_val])
+        )
+
+    def get_subwoofer_trim(self) -> float | None:
+        """Return subwoofer trim level in dB (-10 to +10 dB in 0.5dB steps)."""
+        data = self._state.get(CommandCodes.SUBWOOFER_TRIM)
+        return _get_scaled_negative(data, -10.0, 10.0, 0.5)
+
+    async def set_subwoofer_trim(self, trim_db: float) -> None:
+        """Set subwoofer trim level in dB (-10 to +10 dB in 0.5dB steps)."""
+        byte_val = _set_scaled(trim_db, -10.0, 10.0, 0.5)
+        await self._client.request(
+            self._zn, CommandCodes.SUBWOOFER_TRIM, bytes([byte_val])
+        )
+
+    def get_treble_equalization(self) -> float | None:
+        """Return treble equalization level in dB (-12 to +12 dB in 1dB steps)."""
+        data = self._state.get(CommandCodes.TREBLE_EQUALIZATION)
+        return _get_scaled_negative(data, -12.0, 12.0, 1.0)
+
+    async def set_treble_equalization(self, trim_db: float) -> None:
+        """Set treble equalization level in dB (-12 to +12 dB in 1dB steps)."""
+        byte_val = _set_scaled(trim_db, -12.0, 12.0, 1.0)
+        await self._client.request(
+            self._zn, CommandCodes.TREBLE_EQUALIZATION, bytes([byte_val])
+        )
+
+    def get_bass_equalization(self) -> float | None:
+        """Return bass equalization level in dB (-12 to +12 dB in 1dB steps)."""
+        data = self._state.get(CommandCodes.BASS_EQUALIZATION)
+        return _get_scaled_negative(data, -12.0, 12.0, 1.0)
+
+    async def set_bass_equalization(self, trim_db: float) -> None:
+        """Set bvass equalization level in dB (-12 to +12 dB in 1dB steps)."""
+        byte_val = _set_scaled(trim_db, -12.0, 12.0, 1.0)
+        await self._client.request(
+            self._zn, CommandCodes.BASS_EQUALIZATION, bytes([byte_val])
+        )
+
+    def get_room_equalization(self) -> bool | None:
+        """Return room equalization (DIRAC) state."""
+        value = self._state.get(CommandCodes.ROOM_EQUALIZATION)
+        if value is None:
+            return None
+        return int.from_bytes(value, "big") == 0x01
+
+    async def set_room_equalization(self, enabled: bool) -> None:
+        """Enable or disable room equalization (DIRAC)."""
+        # 0xF1 = on, 0xF2 = off (per API spec)
+
+        command_byte = 0xF1 if enabled else 0xF2
+        await self._client.request(
+            self._zn, CommandCodes.ROOM_EQUALIZATION, bytes([command_byte])
+        )
 
     def get_source(self) -> SourceCodes | None:
         value = self._state.get(CommandCodes.CURRENT_SOURCE)
@@ -318,6 +410,17 @@ class State:
 
     def get_source_list(self) -> list[SourceCodes]:
         return list(RC5CODE_SOURCE[(self._api_model, self._zn)].keys())
+
+    async def get_input_name(self) -> str | None:
+        """Query the user-configured input name for the current source."""
+        try:
+            data = await self._client.request(
+                self._zn, CommandCodes.INPUT_NAME, bytes([0xF0])
+            )
+            return data.decode('utf-8', errors='replace').rstrip('\x00').strip()
+        except Exception as e:
+            _LOGGER.warning("Failed to get input name: %s", e)
+            return None
 
     async def set_source(self, src: SourceCodes) -> None:
         if self._api_model in SOURCE_WRITE_SUPPORTED:
@@ -474,6 +577,11 @@ class State:
                     _update(CommandCodes.DLS_PDT_INFO),
                     _update(CommandCodes.RDS_INFORMATION),
                     _update(CommandCodes.TUNER_PRESET),
+                    _update(CommandCodes.ROOM_EQUALIZATION),
+                    _update(CommandCodes.BASS_EQUALIZATION),
+                    _update(CommandCodes.TREBLE_EQUALIZATION),
+                    _update(CommandCodes.LIPSYNC_DELAY),
+                    _update(CommandCodes.SUBWOOFER_TRIM),
                     _update_presets(),
                 ]
             )

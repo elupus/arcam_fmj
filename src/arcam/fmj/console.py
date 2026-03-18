@@ -2,6 +2,7 @@ import argparse
 import asyncio
 import logging
 import sys
+from pprint import pprint
 
 from . import (
     APIVERSION_450_SERIES,
@@ -60,6 +61,24 @@ parser_state.add_argument("--source", type=auto_source)
 parser_state.add_argument("--monitor", action="store_true")
 parser_state.add_argument("--power-on", action=argparse.BooleanOptionalAction)
 parser_state.add_argument("--power-off", action=argparse.BooleanOptionalAction)
+parser_state.add_argument("--room-eq-on", action=argparse.BooleanOptionalAction)
+parser_state.add_argument("--room-eq-off", action=argparse.BooleanOptionalAction)
+parser_state.add_argument("--lipsync", type=int, help="Set lip sync delay in ms")
+parser_state.add_argument(
+    "--subwoofer-trim",
+    type=float,
+    help="Set subwoofer trim in dB (-12 to +12)",
+)
+parser_state.add_argument(
+    "--show-audio",
+    action="store_true",
+    help="Show audio-related fields (format, sample rate, decode, Dirac, lipsync, subwoofer)",
+)
+parser_state.add_argument(
+    "--input-name",
+    action="store_true",
+    help="Query the user-configured input name",
+)
 
 parser_client = subparsers.add_parser("client")
 parser_client.add_argument("--host", required=True)
@@ -101,17 +120,29 @@ async def run_state(args):
         if args.power_off is not None:
             await state.set_power(False)
 
+        if args.room_eq_on is not None:
+            await state.set_room_equalization(True)
+
+        if args.room_eq_off is not None:
+            await state.set_room_equalization(False)
+
+        if args.lipsync is not None:
+            await state.set_lipsync_delay(args.lipsync)
+
+        if args.subwoofer_trim is not None:
+            await state.set_subwoofer_trim(args.subwoofer_trim)
+
         if args.monitor:
             async with state:
-                prev = repr(state)
+                prev = state.to_dict()
                 while client.connected:
-                    curr = repr(state)
+                    curr = state.to_dict()
                     if prev != curr:
-                        print(curr)
+                        pprint(curr)
                         prev = curr
                     await asyncio.sleep(delay=1)
         else:
-            print(state)
+            pprint(state.to_dict())
 
 
 async def run_server(args):
