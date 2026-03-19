@@ -11,6 +11,7 @@ from . import (
     ApiModel,
     CommandCodes,
     CommandInvalidAtThisTime,
+    ConnectionFailed,
     SourceCodes,
     IncomingVideoAspectRatio,
     IncomingVideoColorspace,
@@ -30,6 +31,7 @@ from . import (
 from .client import Client, ClientContext
 from .server import Server, ServerContext
 from .state import State
+from .utils import async_retry
 
 # pylint: disable=invalid-name
 
@@ -102,6 +104,21 @@ async def run_client(args):
         print(result)
 
 
+@async_retry(5, ConnectionFailed)
+async def _monitor(client, zone):
+    async with ClientContext(client):
+        state = State(client, zone)
+        await state.update()
+        async with state:
+            prev = {}
+            while client.connected:
+                curr = state.to_dict()
+                if prev != curr:
+                    pprint(curr)
+                    prev = curr
+                await asyncio.sleep(delay=1)
+
+
 async def run_state(args):
     client = Client(args.host, args.port)
     async with ClientContext(client):
@@ -132,17 +149,11 @@ async def run_state(args):
         if args.subwoofer_trim is not None:
             await state.set_subwoofer_trim(args.subwoofer_trim)
 
-        if args.monitor:
-            async with state:
-                prev = state.to_dict()
-                while client.connected:
-                    curr = state.to_dict()
-                    if prev != curr:
-                        pprint(curr)
-                        prev = curr
-                    await asyncio.sleep(delay=1)
-        else:
+        if not args.monitor:
             pprint(state.to_dict())
+            return
+
+    await _monitor(client, args.zone)
 
 
 async def run_server(args):
