@@ -39,6 +39,8 @@ from . import (
     RC5CODE_VOLUME,
     RC5CODE_DECODE_MODE_2CH,
     RC5CODE_DECODE_MODE_MCH,
+    SAVE_RESTORE_CONFIRMATION,
+    SaveRestoreSubCommand,
     UnsupportedZone,
 )
 from .client import Client
@@ -488,6 +490,27 @@ class State:
 
     def get_preset_details(self) -> dict[int, PresetDetail]:
         return self._presets
+
+    async def save_settings(self, pin: tuple[int, int, int, int] = (1, 2, 3, 4)) -> None:
+        """Save a secure backup of device settings.
+
+        The PIN defaults to (1, 2, 3, 4), the factory default installer PIN.
+        """
+        await self._client.request(
+            1, CommandCodes.SAVE_RESTORE_COPY_OF_SETTINGS,
+            bytes([SaveRestoreSubCommand.SAVE, *SAVE_RESTORE_CONFIRMATION, *pin]),
+        )
+
+    async def restore_settings(self, pin: tuple[int, int, int, int] = (1, 2, 3, 4)) -> None:
+        """Restore settings from the secure backup.
+
+        The PIN defaults to (1, 2, 3, 4), the factory default installer PIN.
+        Raises CommandInvalidAtThisTime if no backup exists.
+        """
+        await self._client.request(
+            1, CommandCodes.SAVE_RESTORE_COPY_OF_SETTINGS,
+            bytes([SaveRestoreSubCommand.RESTORE, *SAVE_RESTORE_CONFIRMATION, *pin]),
+        )
 
     async def update(self) -> None:
         async def _update(cc: CommandCodes):

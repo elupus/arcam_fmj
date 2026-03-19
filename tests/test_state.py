@@ -10,6 +10,8 @@ from arcam.fmj import (
     IncomingAudioFormat,
     ResponsePacket,
     POWER_WRITE_SUPPORTED,
+    SAVE_RESTORE_CONFIRMATION,
+    SaveRestoreSubCommand,
 )
 
 TEST_PARAMS = [
@@ -239,3 +241,36 @@ def test_listen_amxduet():
     state._listen(amx)
     assert state.model == "AV860"
     assert state.revision == "1.2.3"
+
+
+# --- Save/Restore Settings (0x06) ---
+
+
+async def test_save_settings_default_pin():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    await state.save_settings()
+    client.request.assert_called_with(
+        1, CommandCodes.SAVE_RESTORE_COPY_OF_SETTINGS,
+        bytes([SaveRestoreSubCommand.SAVE, *SAVE_RESTORE_CONFIRMATION, 0x01, 0x02, 0x03, 0x04]),
+    )
+
+
+async def test_restore_settings_default_pin():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    await state.restore_settings()
+    client.request.assert_called_with(
+        1, CommandCodes.SAVE_RESTORE_COPY_OF_SETTINGS,
+        bytes([SaveRestoreSubCommand.RESTORE, *SAVE_RESTORE_CONFIRMATION, 0x01, 0x02, 0x03, 0x04]),
+    )
+
+
+async def test_save_settings_custom_pin():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    await state.save_settings(pin=(9, 8, 7, 6))
+    client.request.assert_called_with(
+        1, CommandCodes.SAVE_RESTORE_COPY_OF_SETTINGS,
+        bytes([SaveRestoreSubCommand.SAVE, *SAVE_RESTORE_CONFIRMATION, 0x09, 0x08, 0x07, 0x06]),
+    )
