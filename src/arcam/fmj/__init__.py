@@ -338,7 +338,7 @@ class CommandCodes(IntOrTypeEnum):
     VIDEO_MPEG_NOISE_REDUCTION = 0x4D  # Set/Request
     ZONE_1_OSD_ON_OFF = 0x4E  # Set/Request
     VIDEO_OUTPUT_SWITCHING = 0x4F  # Set/Request
-    VIDEO_OUTPUT_FRAME_RATE = 0x50  # Set/Request BLUETOOTH_STATUS on HDA series
+    BLUETOOTH_STATUS = 0x50, APIVERSION_HDA_SERIES  # Was "Output Frame Rate" in 450 (SH256E)
 
     # 2.0 Commands
     INPUT_NAME = 0x20  # Set/Request
@@ -978,6 +978,15 @@ class IncomingAudioConfig(IntOrTypeEnum):
     AURO_10_1 = 0x36
     AURO_11_1 = 0x37
     AURO_13_1 = 0x38
+
+
+class BluetoothAudioStatus(IntOrTypeEnum):
+    NO_CONNECTION = 0x00
+    PAUSED = 0x01
+    PLAYING_SBC = 0x02
+    PLAYING_AAC = 0x03
+    PLAYING_APTX = 0x04
+    PLAYING_APTX_HD = 0x05
 
 
 class PresetType(IntOrTypeEnum):

@@ -15,6 +15,7 @@ from . import (
     AmxDuetResponse,
     AnswerCodes,
     ApiModel,
+    BluetoothAudioStatus,
     CommandCodes,
     CommandInvalidAtThisTime,
     CommandNotRecognised,
@@ -121,6 +122,7 @@ class State:
             "RDS_INFORMATION": self.get_rds_information(),
             "TUNER_PRESET": self.get_tuner_preset(),
             "PRESET_DETAIL": self.get_preset_details(),
+            "BLUETOOTH_STATUS": self.get_bluetooth_status(),
         }
 
     def __repr__(self) -> str:
@@ -489,6 +491,20 @@ class State:
     def get_preset_details(self) -> dict[int, PresetDetail]:
         return self._presets
 
+    def get_bluetooth_status(
+        self,
+    ) -> tuple[BluetoothAudioStatus, str] | tuple[None, None]:
+        """Return Bluetooth audio status and track name (HDA series)."""
+        value = self._state.get(CommandCodes.BLUETOOTH_STATUS)
+        if value is None:
+            return None, None
+        status = BluetoothAudioStatus.from_int(value[0])
+        if len(value) > 1:
+            track = value[1:].decode("ascii", errors="replace").rstrip("\x00").strip()
+        else:
+            track = ""
+        return status, track
+
     async def update(self) -> None:
         async def _update(cc: CommandCodes):
             try:
@@ -582,6 +598,7 @@ class State:
                     _update(CommandCodes.TREBLE_EQUALIZATION),
                     _update(CommandCodes.LIPSYNC_DELAY),
                     _update(CommandCodes.SUBWOOFER_TRIM),
+                    _update(CommandCodes.BLUETOOTH_STATUS),
                     _update_presets(),
                 ]
             )
