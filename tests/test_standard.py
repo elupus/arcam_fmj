@@ -7,9 +7,17 @@ import pytest
 
 from arcam.fmj import (
     AmxDuetResponse,
+    AnswerCodes,
+    CommandCodes,
+    CommandInvalidAtThisTime,
+    CommandNotRecognised,
     CommandPacket,
     ConnectionFailed,
+    InvalidDataLength,
     InvalidPacket,
+    InvalidZoneException,
+    ParameterNotRecognised,
+    ResponseException,
     ResponsePacket,
     _read_response,
     write_packet,
@@ -95,3 +103,28 @@ async def test_amx():
     assert res.device_revision == "x.y.z"
 
     assert res.to_bytes() == src
+
+
+def test_response_packet_roundtrip():
+    original = ResponsePacket(1, CommandCodes.VOLUME, AnswerCodes.STATUS_UPDATE, bytes([42]))
+    rebuilt = ResponsePacket.from_bytes(original.to_bytes())
+    assert rebuilt == original
+
+
+def test_command_packet_roundtrip():
+    original = CommandPacket(1, CommandCodes.POWER, bytes([0xF0]))
+    rebuilt = CommandPacket.from_bytes(original.to_bytes())
+    assert rebuilt == original
+
+
+@pytest.mark.parametrize("ac, expected_type", [
+    (AnswerCodes.ZONE_INVALID, InvalidZoneException),
+    (AnswerCodes.COMMAND_NOT_RECOGNISED, CommandNotRecognised),
+    (AnswerCodes.PARAMETER_NOT_RECOGNISED, ParameterNotRecognised),
+    (AnswerCodes.COMMAND_INVALID_AT_THIS_TIME, CommandInvalidAtThisTime),
+    (AnswerCodes.INVALID_DATA_LENGTH, InvalidDataLength),
+])
+def test_response_exception_from_response(ac, expected_type):
+    response = ResponsePacket(1, CommandCodes.POWER, ac, b"")
+    exc = ResponseException.from_response(response)
+    assert isinstance(exc, expected_type)
