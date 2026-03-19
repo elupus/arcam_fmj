@@ -18,13 +18,18 @@ from . import (
     CommandCodes,
     CommandInvalidAtThisTime,
     CommandNotRecognised,
+    CompressionMode,
     DecodeMode2CH,
     DecodeModeMCH,
+    DolbyAudioMode,
+    IMAX_ENHANCED_SET_MAP,
+    ImaxEnhancedMode,
     IncomingAudioConfig,
     IncomingAudioFormat,
     MenuCodes,
     NotConnectedException,
     PresetDetail,
+    RoomEqMode,
     VideoParameters,
     ResponseException,
     ResponsePacket,
@@ -105,17 +110,25 @@ class State:
             "VOLUME": self.get_volume(),
             "SOURCE": self.get_source(),
             "MUTE": self.get_mute(),
+            "HEADPHONES": self.get_headphones(),
             "MENU": self.get_menu(),
+            "DISPLAY_INFO_TYPE": self.get_display_info_type(),
+            "IMAX_ENHANCED": self.get_imax_enhanced(),
             "INCOMING_VIDEO_PARAMETERS": self.get_incoming_video_parameters(),
             "INCOMING_AUDIO_FORMAT": self.get_incoming_audio_format(),
             "INCOMING_AUDIO_SAMPLE_RATE": self.get_incoming_audio_sample_rate(),
             "DECODE_MODE_2CH": self.get_decode_mode_2ch(),
             "DECODE_MODE_MCH": self.get_decode_mode_mch(),
             "ROOM_EQUALIZATION": self.get_room_equalization(),
+            "ROOM_EQ_NAMES": self.get_room_eq_names(),
+            "DOLBY_AUDIO": self.get_dolby_audio(),
             "BASS_EQUALIZATION": self.get_bass_equalization(),
             "TREBLE_EQUALIZATION": self.get_treble_equalization(),
+            "BALANCE": self.get_balance(),
             "LIPSYNC_DELAY": self.get_lipsync_delay(),
             "SUBWOOFER_TRIM": self.get_subwoofer_trim(),
+            "SUB_STEREO_TRIM": self.get_sub_stereo_trim(),
+            "COMPRESSION": self.get_compression(),
             "DAB_STATION": self.get_dab_station(),
             "DLS_PDT": self.get_dls_pdt(),
             "RDS_INFORMATION": self.get_rds_information(),
@@ -334,7 +347,27 @@ class State:
             await self._client.request(
                 self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command
             )
-            
+
+    def get_headphones(self) -> bool | None:
+        """Return whether headphones are connected."""
+        value = self._state.get(CommandCodes.HEADPHONES)
+        if value is None:
+            return None
+        return int.from_bytes(value, "big") == 0x01
+
+    def get_display_info_type(self) -> int | None:
+        """Return the current display information type."""
+        value = self._state.get(CommandCodes.DISPLAY_INFORMATION_TYPE)
+        if value is None:
+            return None
+        return int.from_bytes(value, "big")
+
+    async def set_display_info_type(self, info_type: int) -> None:
+        """Set the display information type. Use 0xE0 to cycle."""
+        await self._client.request(
+            self._zn, CommandCodes.DISPLAY_INFORMATION_TYPE, bytes([info_type])
+        )
+
     def get_lipsync_delay(self) -> int | None:
         """Return lip sync delay in milliseconds (0-250ms in 5ms steps)."""
         data = self._state.get(CommandCodes.LIPSYNC_DELAY)
@@ -357,6 +390,18 @@ class State:
         byte_val = _set_scaled(trim_db, -10.0, 10.0, 0.5)
         await self._client.request(
             self._zn, CommandCodes.SUBWOOFER_TRIM, bytes([byte_val])
+        )
+
+    def get_sub_stereo_trim(self) -> float | None:
+        """Return sub stereo trim level in dB (0 to -10 dB in 0.5dB steps)."""
+        data = self._state.get(CommandCodes.SUB_STEREO_TRIM)
+        return _get_scaled_negative(data, -10.0, 0.0, 0.5)
+
+    async def set_sub_stereo_trim(self, trim_db: float) -> None:
+        """Set sub stereo trim level in dB (0 to -10 dB in 0.5dB steps)."""
+        byte_val = _set_scaled(trim_db, -10.0, 0.0, 0.5)
+        await self._client.request(
+            self._zn, CommandCodes.SUB_STEREO_TRIM, bytes([byte_val])
         )
 
     def get_treble_equalization(self) -> float | None:
@@ -383,20 +428,80 @@ class State:
             self._zn, CommandCodes.BASS_EQUALIZATION, bytes([byte_val])
         )
 
-    def get_room_equalization(self) -> bool | None:
-        """Return room equalization (DIRAC) state."""
+    def get_room_equalization(self) -> RoomEqMode | None:
+        """Return room equalization (DIRAC) mode."""
         value = self._state.get(CommandCodes.ROOM_EQUALIZATION)
         if value is None:
             return None
-        return int.from_bytes(value, "big") == 0x01
+        return RoomEqMode.from_bytes(value)
 
-    async def set_room_equalization(self, enabled: bool) -> None:
-        """Enable or disable room equalization (DIRAC)."""
-        # 0xF1 = on, 0xF2 = off (per API spec)
-
-        command_byte = 0xF1 if enabled else 0xF2
+    async def set_room_equalization(self, mode: RoomEqMode) -> None:
+        """Set room equalization (DIRAC) mode."""
         await self._client.request(
-            self._zn, CommandCodes.ROOM_EQUALIZATION, bytes([command_byte])
+            self._zn, CommandCodes.ROOM_EQUALIZATION, bytes([mode])
+        )
+
+    def get_room_eq_names(self) -> list[str] | None:
+        """Return user-defined names for the room EQ profiles."""
+        value = self._state.get(CommandCodes.ROOM_EQ_NAMES)
+        if value is None:
+            return None
+        names = []
+        for i in range(0, len(value), 20):
+            name = value[i:i + 20].decode("ascii", errors="replace").rstrip("\x00").strip()
+            names.append(name)
+        return names
+
+    def get_dolby_audio(self) -> DolbyAudioMode | None:
+        """Return the current Dolby Audio mode."""
+        value = self._state.get(CommandCodes.DOLBY_AUDIO)
+        if value is None:
+            return None
+        return DolbyAudioMode.from_bytes(value)
+
+    async def set_dolby_audio(self, mode: DolbyAudioMode) -> None:
+        """Set the Dolby Audio mode."""
+        await self._client.request(
+            self._zn, CommandCodes.DOLBY_AUDIO, bytes([mode])
+        )
+
+    def get_balance(self) -> float | None:
+        """Return balance level (-6 to +6 in 1dB steps)."""
+        data = self._state.get(CommandCodes.BALANCE)
+        return _get_scaled_negative(data, -6.0, 6.0, 1.0)
+
+    async def set_balance(self, value: float) -> None:
+        """Set balance level (-6 to +6 in 1dB steps)."""
+        byte_val = _set_scaled(value, -6.0, 6.0, 1.0)
+        await self._client.request(
+            self._zn, CommandCodes.BALANCE, bytes([byte_val])
+        )
+
+    def get_compression(self) -> CompressionMode | None:
+        """Return the dynamic range compression setting."""
+        value = self._state.get(CommandCodes.COMPRESSION)
+        if value is None:
+            return None
+        return CompressionMode.from_bytes(value)
+
+    async def set_compression(self, mode: CompressionMode) -> None:
+        """Set the dynamic range compression setting."""
+        await self._client.request(
+            self._zn, CommandCodes.COMPRESSION, bytes([mode])
+        )
+
+    def get_imax_enhanced(self) -> ImaxEnhancedMode | None:
+        """Return the IMAX Enhanced mode (HDA premium series)."""
+        value = self._state.get(CommandCodes.IMAX_ENHANCED)
+        if value is None:
+            return None
+        return ImaxEnhancedMode.from_bytes(value)
+
+    async def set_imax_enhanced(self, mode: ImaxEnhancedMode) -> None:
+        """Set the IMAX Enhanced mode (HDA premium series)."""
+        command_byte = IMAX_ENHANCED_SET_MAP[mode]
+        await self._client.request(
+            self._zn, CommandCodes.IMAX_ENHANCED, bytes([command_byte])
         )
 
     def get_source(self) -> SourceCodes | None:
@@ -566,22 +671,30 @@ class State:
                     _update(CommandCodes.POWER),
                     _update(CommandCodes.VOLUME),
                     _update(CommandCodes.MUTE),
+                    _update(CommandCodes.HEADPHONES),
                     _update(CommandCodes.CURRENT_SOURCE),
                     _update(CommandCodes.MENU),
+                    _update(CommandCodes.DISPLAY_INFORMATION_TYPE),
+                    _update(CommandCodes.IMAX_ENHANCED),
                     _update(CommandCodes.DECODE_MODE_STATUS_2CH),
                     _update(CommandCodes.DECODE_MODE_STATUS_MCH),
                     _update(CommandCodes.INCOMING_VIDEO_PARAMETERS),
                     _update(CommandCodes.INCOMING_AUDIO_FORMAT),
                     _update(CommandCodes.INCOMING_AUDIO_SAMPLE_RATE),
+                    _update(CommandCodes.ROOM_EQ_NAMES),
                     _update(CommandCodes.DAB_STATION),
                     _update(CommandCodes.DLS_PDT_INFO),
                     _update(CommandCodes.RDS_INFORMATION),
                     _update(CommandCodes.TUNER_PRESET),
                     _update(CommandCodes.ROOM_EQUALIZATION),
+                    _update(CommandCodes.DOLBY_AUDIO),
                     _update(CommandCodes.BASS_EQUALIZATION),
                     _update(CommandCodes.TREBLE_EQUALIZATION),
+                    _update(CommandCodes.BALANCE),
                     _update(CommandCodes.LIPSYNC_DELAY),
                     _update(CommandCodes.SUBWOOFER_TRIM),
+                    _update(CommandCodes.SUB_STEREO_TRIM),
+                    _update(CommandCodes.COMPRESSION),
                     _update_presets(),
                 ]
             )
