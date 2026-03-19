@@ -36,6 +36,10 @@ tests = [
 [project.scripts]
 arcam-fmj = "arcam.fmj.console:main"
 
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
 [tool.isort]
 not_skip = "__init__.py"
 multi_line_output = 3

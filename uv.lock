@@ -128,8 +128,8 @@ wheels = [
 
 [[package]]
 name = "arcam-fmj"
-version = "2.0.0"
-source = { virtual = "." }
+version = "2.1.0"
+source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
     { name = "attrs" },
@@ -139,7 +139,6 @@ dependencies = [
 [package.optional-dependencies]
 tests = [
     { name = "coveralls" },
-    { name = "defusedxml" },
     { name = "pytest" },
     { name = "pytest-aiohttp" },
     { name = "pytest-asyncio" },
@@ -153,7 +152,6 @@ requires-dist = [
     { name = "attrs", specifier = ">18.1" },
     { name = "coveralls", marker = "extra == 'tests'" },
     { name = "defusedxml", specifier = ">=0.7.1" },
-    { name = "defusedxml", marker = "extra == 'tests'" },
     { name = "pytest", marker = "extra == 'tests'", specifier = ">3.6.4" },
     { name = "pytest-aiohttp", marker = "extra == 'tests'", specifier = ">=1.0.0" },
     { name = "pytest-asyncio", marker = "extra == 'tests'", specifier = "==0.21.2" },
