@@ -27,7 +27,7 @@ Homepage = "https://github.com/elupus/arcam_fmj"
 tests = [
     "coveralls",
     "pytest-aiohttp>=1.0.0",
-    "pytest-asyncio==0.21.2",
+    "pytest-asyncio>=1.0.0",
     "pytest-cov>=3.0.0",
     "pytest-mock",
     "pytest>3.6.4",
