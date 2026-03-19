@@ -3,9 +3,11 @@ from unittest.mock import MagicMock
 from arcam.fmj.client import Client
 from arcam.fmj.state import State, _get_scaled_negative, _set_scaled
 from arcam.fmj import (
+    AmxDuetResponse,
     AnswerCodes,
     ApiModel,
     CommandCodes,
+    IncomingAudioFormat,
     ResponsePacket,
     POWER_WRITE_SUPPORTED,
 )
@@ -125,3 +127,115 @@ def test_get_scaled_negative_fractional_scale():
 
 def test_set_scaled():
     assert _set_scaled(6.0, -12.0, 12.0, 1.0) == 6
+
+
+# --- Volume ---
+
+
+def test_get_volume_none():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    assert state.get_volume() is None
+
+
+def test_get_volume():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    state._state[CommandCodes.VOLUME] = bytes([50])
+    assert state.get_volume() == 50
+
+
+# --- Mute ---
+
+
+def test_get_mute_none():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    assert state.get_mute() is None
+
+
+@pytest.mark.parametrize("byte_val, expected", [
+    (0x00, True),   # 0 = muted
+    (0x01, False),  # 1 = unmuted
+])
+def test_get_mute(byte_val, expected):
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    state._state[CommandCodes.MUTE] = bytes([byte_val])
+    assert state.get_mute() == expected
+
+
+async def test_set_mute_write_supported():
+    """SA/PA/ST series use direct MUTE command."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.APISA_SERIES)
+    await state.set_mute(True)
+    client.request.assert_called_with(1, CommandCodes.MUTE, bytes([0x00]))
+
+
+async def test_set_mute_rc5():
+    """450/860/HDA series use RC5 IR command for mute."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.API450_SERIES)
+    await state.set_mute(True)
+    client.request.assert_called_with(
+        1, CommandCodes.SIMULATE_RC5_IR_COMMAND, bytes([16, 119])
+    )
+
+
+# --- Decode mode ---
+
+
+@pytest.mark.parametrize("fmt, expected", [
+    (IncomingAudioFormat.PCM, True),
+    (IncomingAudioFormat.ANALOGUE_DIRECT, True),
+    (IncomingAudioFormat.UNDETECTED, True),
+    (IncomingAudioFormat.DOLBY_DIGITAL, False),
+    (IncomingAudioFormat.DTS, False),
+])
+def test_get_2ch(fmt, expected):
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    state._state[CommandCodes.INCOMING_AUDIO_FORMAT] = bytes([fmt, 0x02])
+    assert state.get_2ch() == expected
+
+
+def test_get_2ch_no_audio():
+    """No audio format data defaults to 2ch."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    assert state.get_2ch() is True
+
+
+# --- Listener routing ---
+
+
+def test_listen_status_update():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    state._listen(ResponsePacket(1, CommandCodes.VOLUME, AnswerCodes.STATUS_UPDATE, bytes([42])))
+    assert state.get_volume() == 42
+
+
+def test_listen_ignores_other_zone():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    state._listen(ResponsePacket(2, CommandCodes.VOLUME, AnswerCodes.STATUS_UPDATE, bytes([42])))
+    assert state.get_volume() is None
+
+
+def test_listen_clears_on_error():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    state._state[CommandCodes.VOLUME] = bytes([42])
+    state._listen(ResponsePacket(1, CommandCodes.VOLUME, AnswerCodes.COMMAND_NOT_RECOGNISED, b""))
+    assert state.get_volume() is None
+
+
+def test_listen_amxduet():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    amx = AmxDuetResponse({"Device-Model": "AV860", "Device-Revision": "1.2.3"})
+    state._listen(amx)
+    assert state.model == "AV860"
+    assert state.revision == "1.2.3"
