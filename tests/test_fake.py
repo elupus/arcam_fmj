@@ -23,7 +23,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 @pytest.fixture
-async def server(event_loop, request):
+async def server(request):
     s = Server("localhost", 8888, "AVR450")
     async with ServerContext(s):
         s.register_handler(
@@ -36,7 +36,7 @@ async def server(event_loop, request):
 
 
 @pytest.fixture
-async def silent_server(event_loop, request):
+async def silent_server(request):
     s = Server("localhost", 8888, "AVR450")
 
     async def process(reader, writer):
@@ -50,7 +50,7 @@ async def silent_server(event_loop, request):
 
 
 @pytest.fixture
-async def client(event_loop, request):
+async def client(request):
     c = Client("localhost", 8888)
     async with ClientContext(c):
         yield c
@@ -63,12 +63,12 @@ async def speedy_client(mocker):
     mocker.patch("arcam.fmj.client._REQUEST_TIMEOUT", new=timedelta(seconds=0.5))
 
 
-async def test_power(event_loop, server, client):
+async def test_power(server, client):
     data = await client.request(0x01, CommandCodes.POWER, bytes([0xF0]))
     assert data == bytes([0x00])
 
 
-async def test_multiple(event_loop, server, client):
+async def test_multiple(server, client):
     data = await asyncio.gather(
         client.request(0x01, CommandCodes.POWER, bytes([0xF0])),
         client.request(0x01, CommandCodes.VOLUME, bytes([0xF0])),
@@ -77,29 +77,29 @@ async def test_multiple(event_loop, server, client):
     assert data[1] == bytes([0x01])
 
 
-async def test_invalid_command(event_loop, server, client):
+async def test_invalid_command(server, client):
     with pytest.raises(CommandNotRecognised):
         await client.request(0x01, CommandCodes.from_int(0xFF), bytes([0xF0]))
 
 
-async def test_state(event_loop, server, client):
+async def test_state(server, client):
     state = State(client, 0x01)
     await state.update()
     assert state.get(CommandCodes.POWER) == bytes([0x00])
     assert state.get(CommandCodes.VOLUME) == bytes([0x01])
 
 
-async def test_silent_server_request(event_loop, speedy_client, silent_server, client):
+async def test_silent_server_request(speedy_client, silent_server, client):
     with pytest.raises(asyncio.TimeoutError):
         await client.request(0x01, CommandCodes.POWER, bytes([0xF0]))
 
 
-async def test_unsupported_zone(event_loop, speedy_client, silent_server, client):
+async def test_unsupported_zone(speedy_client, silent_server, client):
     with pytest.raises(UnsupportedZone):
         await client.request(0x02, CommandCodes.DECODE_MODE_STATUS_2CH, bytes([0xF0]))
 
 
-async def test_silent_server_disconnect(event_loop, speedy_client, silent_server):
+async def test_silent_server_disconnect(speedy_client, silent_server):
     from arcam.fmj.client import _HEARTBEAT_TIMEOUT
 
     c = Client("localhost", 8888)
@@ -111,7 +111,7 @@ async def test_silent_server_disconnect(event_loop, speedy_client, silent_server
     assert not connected
 
 
-async def test_heartbeat(event_loop, speedy_client, server, client):
+async def test_heartbeat(speedy_client, server, client):
     from arcam.fmj.client import _HEARTBEAT_INTERVAL
 
     with unittest.mock.patch.object(
@@ -121,7 +121,7 @@ async def test_heartbeat(event_loop, speedy_client, server, client):
         req.assert_called_once_with(ANY)
 
 
-async def test_cancellation(event_loop, silent_server):
+async def test_cancellation(silent_server):
     from arcam.fmj.client import _HEARTBEAT_TIMEOUT
 
     e = asyncio.Event()
