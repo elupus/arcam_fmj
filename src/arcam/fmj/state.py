@@ -57,14 +57,14 @@ def _get_scaled_negative(data: bytes | None, min_value: float, max_value: float,
 
     byte_val = int.from_bytes(data, "big")
     if byte_val >= 0x81 and byte_val <= neg_limit:
-        return - (byte_val - 0x80) / scale
+        return - (byte_val - 0x80) * scale
     if byte_val >= 0x00 and byte_val <= pos_limit:
-        return  byte_val / scale
+        return  byte_val * scale
     return None
 
 def _set_scaled(value: float, min_value: float, max_value: float, scale: float) -> bytes:
-    value = max(min_value, min(max_value, scale))
-    value = round(value * scale)
+    value = max(min_value, min(max_value, value))
+    value = round(value / scale)
     if value >= 0:
         return value
     else:

@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import MagicMock
 from arcam.fmj.client import Client
-from arcam.fmj.state import State
+from arcam.fmj.state import State, _get_scaled_negative, _set_scaled
 from arcam.fmj import (
     AnswerCodes,
     ApiModel,
@@ -81,3 +81,47 @@ async def test_power_off(zn, api_model):
         code = PARAMS_TO_RC5COMMAND[zn, api_model, False]
         client.send.assert_called_with(zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, code)
     assert state.get_power() is False
+
+
+# --- Scaled value encoding ---
+
+
+def test_get_scaled_negative_none_input():
+    assert _get_scaled_negative(None, -12.0, 12.0, 1.0) is None
+
+
+def test_get_scaled_negative_zero():
+    assert _get_scaled_negative(bytes([0x00]), -12.0, 12.0, 1.0) == 0.0
+
+
+@pytest.mark.parametrize("byte_val, expected", [
+    (1, 1.0),
+    (6, 6.0),
+    (12, 12.0),
+])
+def test_get_scaled_negative_positive(byte_val, expected):
+    assert _get_scaled_negative(bytes([byte_val]), -12.0, 12.0, 1.0) == expected
+
+
+@pytest.mark.parametrize("byte_val, expected", [
+    (0x81, -1.0),
+    (0x86, -6.0),
+    (0x8C, -12.0),
+])
+def test_get_scaled_negative_negative(byte_val, expected):
+    assert _get_scaled_negative(bytes([byte_val]), -12.0, 12.0, 1.0) == expected
+
+
+def test_get_scaled_negative_out_of_range():
+    assert _get_scaled_negative(bytes([13]), -12.0, 12.0, 1.0) is None
+    assert _get_scaled_negative(bytes([0x80]), -12.0, 12.0, 1.0) is None
+    assert _get_scaled_negative(bytes([0x8D]), -12.0, 12.0, 1.0) is None
+
+
+def test_get_scaled_negative_fractional_scale():
+    """With subwoofer trim params (scale=0.5), byte_val=1 should mean 0.5 dB."""
+    assert _get_scaled_negative(bytes([1]), -10.0, 10.0, 0.5) == 0.5
+
+
+def test_set_scaled():
+    assert _set_scaled(6.0, -12.0, 12.0, 1.0) == 6
