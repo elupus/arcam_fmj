@@ -1,9 +1,7 @@
-import asyncio
 import aiohttp
 import functools
 import logging
 import re
-from datetime import datetime, timedelta
 from defusedxml import ElementTree
 from typing import Optional, Any
 
@@ -28,21 +26,6 @@ def async_retry(attempts=2, allowed_exceptions=()):
         return wrapper
 
     return decorator
-
-
-class Throttle:
-    def __init__(self, delay: float) -> None:
-        self._timestamp = datetime.now()
-        self._lock = asyncio.Lock()
-        self._delay = timedelta(seconds=delay)
-
-    async def get(self) -> None:
-        async with self._lock:
-            timestamp = datetime.now()
-            delay = (self._timestamp - timestamp).total_seconds()
-            if delay > 0:
-                await asyncio.sleep(delay)
-            self._timestamp = datetime.now() + self._delay
 
 
 def _log_exception(msg, *args):
