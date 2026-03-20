@@ -390,6 +390,14 @@ class CommandCodes(IntOrTypeEnum):
     MAXIMUM_STREAMING_VOLUME = 0x67, APIVERSION_APP_SAFETY_SERIES
 
 
+class SaveRestoreSubCommand(enum.IntEnum):
+    SAVE = 0x00
+    RESTORE = 0x01
+
+
+SAVE_RESTORE_CONFIRMATION = bytes([0x55, 0x55])
+
+
 class SourceCodes(enum.Enum):
     FOLLOW_ZONE_1 = enum.auto()
     CD = enum.auto()
