@@ -7,8 +7,12 @@ from arcam.fmj import (
     AnswerCodes,
     ApiModel,
     CommandCodes,
+    CompressionMode,
+    DolbyAudioMode,
+    ImaxEnhancedMode,
     IncomingAudioFormat,
     ResponsePacket,
+    RoomEqMode,
     POWER_WRITE_SUPPORTED,
 )
 
@@ -239,3 +243,420 @@ def test_listen_amxduet():
     state._listen(amx)
     assert state.model == "AV860"
     assert state.revision == "1.2.3"
+
+
+# --- Headphones (0x02) ---
+
+
+def test_get_headphones_none():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    assert state.get_headphones() is None
+
+
+@pytest.mark.parametrize("byte_val, expected", [
+    (0x00, False),
+    (0x01, True),
+])
+def test_get_headphones(byte_val, expected):
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    state._state[CommandCodes.HEADPHONES] = bytes([byte_val])
+    assert state.get_headphones() == expected
+
+
+# --- Display Information Type (0x09) ---
+
+
+def test_get_display_info_type_none():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    assert state.get_display_info_type() is None
+
+
+def test_get_display_info_type():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    state._state[CommandCodes.DISPLAY_INFORMATION_TYPE] = bytes([0x02])
+    assert state.get_display_info_type() == 2
+
+
+async def test_set_display_info_type():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    await state.set_display_info_type(0x03)
+    client.request.assert_called_with(
+        1, CommandCodes.DISPLAY_INFORMATION_TYPE, bytes([0x03])
+    )
+
+
+async def test_set_display_info_type_cycle():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    await state.set_display_info_type(0xE0)
+    client.request.assert_called_with(
+        1, CommandCodes.DISPLAY_INFORMATION_TYPE, bytes([0xE0])
+    )
+
+
+# --- Lipsync Delay (0x40) ---
+
+
+def test_get_lipsync_delay_none():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    assert state.get_lipsync_delay() is None
+
+
+@pytest.mark.parametrize("byte_val, expected", [
+    (0x00, 0.0),
+    (0x0A, 50.0),
+    (0x32, 250.0),
+])
+def test_get_lipsync_delay(byte_val, expected):
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    state._state[CommandCodes.LIPSYNC_DELAY] = bytes([byte_val])
+    assert state.get_lipsync_delay() == expected
+
+
+@pytest.mark.parametrize("value, expected_byte", [
+    (0, 0),
+    (50, 0x0A),
+    (250, 0x32),
+])
+async def test_set_lipsync_delay(value, expected_byte):
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    await state.set_lipsync_delay(value)
+    client.request.assert_called_with(1, CommandCodes.LIPSYNC_DELAY, bytes([expected_byte]))
+
+
+# --- Subwoofer Trim (0x3F) ---
+
+
+def test_get_subwoofer_trim_none():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    assert state.get_subwoofer_trim() is None
+
+
+@pytest.mark.parametrize("byte_val, expected", [
+    (0x00, 0.0),
+    (0x02, 1.0),
+    (0x14, 10.0),
+    (0x81, -0.5),
+    (0x82, -1.0),
+    (0x94, -10.0),
+])
+def test_get_subwoofer_trim(byte_val, expected):
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    state._state[CommandCodes.SUBWOOFER_TRIM] = bytes([byte_val])
+    assert state.get_subwoofer_trim() == expected
+
+
+@pytest.mark.parametrize("value, expected_byte", [
+    (0.0, 0),
+    (1.0, 2),
+    (10.0, 0x14),
+    (-1.0, 0x82),
+    (-10.0, 0x94),
+])
+async def test_set_subwoofer_trim(value, expected_byte):
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    await state.set_subwoofer_trim(value)
+    client.request.assert_called_with(1, CommandCodes.SUBWOOFER_TRIM, bytes([expected_byte]))
+
+
+# --- Sub Stereo Trim (0x45) ---
+
+
+def test_get_sub_stereo_trim_none():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    assert state.get_sub_stereo_trim() is None
+
+
+@pytest.mark.parametrize("byte_val, expected", [
+    (0x00, 0.0),
+    (0x81, -0.5),
+    (0x84, -2.0),
+    (0x94, -10.0),
+])
+def test_get_sub_stereo_trim(byte_val, expected):
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    state._state[CommandCodes.SUB_STEREO_TRIM] = bytes([byte_val])
+    assert state.get_sub_stereo_trim() == expected
+
+
+@pytest.mark.parametrize("value, expected_byte", [
+    (0.0, 0),
+    (-0.5, 0x81),
+    (-2.0, 0x84),
+    (-10.0, 0x94),
+])
+async def test_set_sub_stereo_trim(value, expected_byte):
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    await state.set_sub_stereo_trim(value)
+    client.request.assert_called_with(1, CommandCodes.SUB_STEREO_TRIM, bytes([expected_byte]))
+
+
+# --- Treble Equalization (0x35) ---
+
+
+def test_get_treble_equalization_none():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    assert state.get_treble_equalization() is None
+
+
+@pytest.mark.parametrize("byte_val, expected", [
+    (0x00, 0.0),
+    (0x06, 6.0),
+    (0x0C, 12.0),
+    (0x81, -1.0),
+    (0x8C, -12.0),
+])
+def test_get_treble_equalization(byte_val, expected):
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    state._state[CommandCodes.TREBLE_EQUALIZATION] = bytes([byte_val])
+    assert state.get_treble_equalization() == expected
+
+
+@pytest.mark.parametrize("value, expected_byte", [
+    (0.0, 0),
+    (6.0, 6),
+    (-6.0, 0x86),
+])
+async def test_set_treble_equalization(value, expected_byte):
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    await state.set_treble_equalization(value)
+    client.request.assert_called_with(1, CommandCodes.TREBLE_EQUALIZATION, bytes([expected_byte]))
+
+
+# --- Bass Equalization (0x36) ---
+
+
+def test_get_bass_equalization_none():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    assert state.get_bass_equalization() is None
+
+
+@pytest.mark.parametrize("byte_val, expected", [
+    (0x00, 0.0),
+    (0x06, 6.0),
+    (0x0C, 12.0),
+    (0x81, -1.0),
+    (0x8C, -12.0),
+])
+def test_get_bass_equalization(byte_val, expected):
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    state._state[CommandCodes.BASS_EQUALIZATION] = bytes([byte_val])
+    assert state.get_bass_equalization() == expected
+
+
+@pytest.mark.parametrize("value, expected_byte", [
+    (0.0, 0),
+    (6.0, 6),
+    (-6.0, 0x86),
+    (12.0, 12),
+    (-12.0, 0x8C),
+])
+async def test_set_bass_equalization(value, expected_byte):
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    await state.set_bass_equalization(value)
+    client.request.assert_called_with(1, CommandCodes.BASS_EQUALIZATION, bytes([expected_byte]))
+
+
+# --- Room EQ (0x37) ---
+
+
+def test_get_room_equalization_none():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    assert state.get_room_equalization() is None
+
+
+@pytest.mark.parametrize("byte_val, expected", [
+    (0x00, RoomEqMode.OFF),
+    (0x01, RoomEqMode.EQ1),
+    (0x02, RoomEqMode.EQ2),
+    (0x03, RoomEqMode.EQ3),
+])
+def test_get_room_equalization(byte_val, expected):
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    state._state[CommandCodes.ROOM_EQUALIZATION] = bytes([byte_val])
+    assert state.get_room_equalization() == expected
+
+
+@pytest.mark.parametrize("mode, expected_byte", [
+    (RoomEqMode.OFF, 0x00),
+    (RoomEqMode.EQ1, 0x01),
+    (RoomEqMode.EQ2, 0x02),
+    (RoomEqMode.EQ3, 0x03),
+])
+async def test_set_room_equalization(mode, expected_byte):
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    await state.set_room_equalization(mode)
+    client.request.assert_called_with(1, CommandCodes.ROOM_EQUALIZATION, bytes([expected_byte]))
+
+
+# --- Room EQ Names (0x34) ---
+
+
+def test_get_room_eq_names_none():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    assert state.get_room_eq_names() is None
+
+
+def test_get_room_eq_names():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    name1 = b"Living Room\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+    name2 = b"Flat\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+    state._state[CommandCodes.ROOM_EQ_NAMES] = name1 + name2
+    names = state.get_room_eq_names()
+    assert names == ["Living Room", "Flat"]
+
+
+# --- Dolby Audio (0x38) ---
+
+
+def test_get_dolby_audio_none():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    assert state.get_dolby_audio() is None
+
+
+@pytest.mark.parametrize("byte_val, expected", [
+    (0x00, DolbyAudioMode.OFF),
+    (0x01, DolbyAudioMode.MOVIE),
+    (0x02, DolbyAudioMode.MUSIC),
+    (0x03, DolbyAudioMode.NIGHT),
+])
+def test_get_dolby_audio(byte_val, expected):
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    state._state[CommandCodes.DOLBY_AUDIO] = bytes([byte_val])
+    assert state.get_dolby_audio() == expected
+
+
+async def test_set_dolby_audio():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    await state.set_dolby_audio(DolbyAudioMode.NIGHT)
+    client.request.assert_called_with(1, CommandCodes.DOLBY_AUDIO, bytes([0x03]))
+
+
+# --- Balance (0x3B) ---
+
+
+def test_get_balance_none():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    assert state.get_balance() is None
+
+
+@pytest.mark.parametrize("byte_val, expected", [
+    (0x00, 0.0),
+    (0x03, 3.0),
+    (0x06, 6.0),
+    (0x81, -1.0),
+    (0x83, -3.0),
+    (0x86, -6.0),
+])
+def test_get_balance(byte_val, expected):
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    state._state[CommandCodes.BALANCE] = bytes([byte_val])
+    assert state.get_balance() == expected
+
+
+@pytest.mark.parametrize("value, expected_byte", [
+    (0.0, 0),
+    (3.0, 3),
+    (-3.0, 0x83),
+    (6.0, 6),
+    (-6.0, 0x86),
+])
+async def test_set_balance(value, expected_byte):
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    await state.set_balance(value)
+    client.request.assert_called_with(1, CommandCodes.BALANCE, bytes([expected_byte]))
+
+
+# --- Compression (0x41) ---
+
+
+def test_get_compression_none():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    assert state.get_compression() is None
+
+
+@pytest.mark.parametrize("byte_val, expected", [
+    (0x00, CompressionMode.OFF),
+    (0x01, CompressionMode.MEDIUM),
+    (0x02, CompressionMode.HIGH),
+])
+def test_get_compression(byte_val, expected):
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    state._state[CommandCodes.COMPRESSION] = bytes([byte_val])
+    assert state.get_compression() == expected
+
+
+async def test_set_compression():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    await state.set_compression(CompressionMode.HIGH)
+    client.request.assert_called_with(1, CommandCodes.COMPRESSION, bytes([0x02]))
+
+
+# --- IMAX Enhanced (0x0C) ---
+
+
+def test_get_imax_enhanced_none():
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    assert state.get_imax_enhanced() is None
+
+
+@pytest.mark.parametrize("byte_val, expected", [
+    (0x00, ImaxEnhancedMode.OFF),
+    (0x01, ImaxEnhancedMode.ON),
+    (0x02, ImaxEnhancedMode.AUTO),
+])
+def test_get_imax_enhanced(byte_val, expected):
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    state._state[CommandCodes.IMAX_ENHANCED] = bytes([byte_val])
+    assert state.get_imax_enhanced() == expected
+
+
+@pytest.mark.parametrize("mode, expected_byte", [
+    (ImaxEnhancedMode.OFF, 0xF3),
+    (ImaxEnhancedMode.ON, 0xF2),
+    (ImaxEnhancedMode.AUTO, 0xF1),
+])
+async def test_set_imax_enhanced(mode, expected_byte):
+    """Set values are asymmetric: OFF->0xF3, ON->0xF2, AUTO->0xF1."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    await state.set_imax_enhanced(mode)
+    client.request.assert_called_with(
+        1, CommandCodes.IMAX_ENHANCED, bytes([expected_byte])
+    )

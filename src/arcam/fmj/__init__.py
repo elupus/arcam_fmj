@@ -285,7 +285,7 @@ class CommandCodes(IntOrTypeEnum):
     # Input Commands
     VIDEO_SELECTION = 0x0A
     SELECT_ANALOG_DIGITAL = 0x0B
-    VIDEO_INPUT_TYPE = 0x0C  # IMAX_ENHANCED on 860 and HDA Series (not AVR5)
+    IMAX_ENHANCED = 0x0C, APIVERSION_IMAX_SERIES  # Was "Video input type" in 450 (SH256E); not AVR5 (SH289E)
 
     # Output Commands
     VOLUME = 0x0D, None, EnumFlags.ZONE_SUPPORT  # Set/Request
@@ -312,7 +312,7 @@ class CommandCodes(IntOrTypeEnum):
     TREBLE_EQUALIZATION = 0x35, None, EnumFlags.ZONE_SUPPORT
     BASS_EQUALIZATION = 0x36, None, EnumFlags.ZONE_SUPPORT
     ROOM_EQUALIZATION = 0x37, None, EnumFlags.ZONE_SUPPORT
-    DOLBY_VOLUME = 0x38, None, EnumFlags.ZONE_SUPPORT  # DOLBY_AUDIO on HDA series
+    DOLBY_AUDIO = 0x38, None, EnumFlags.ZONE_SUPPORT  # Was "Dolby Volume" in 450/860 (SH256E/SH274E)
     DOLBY_LEVELER = 0x39, None, EnumFlags.ZONE_SUPPORT
     DOLBY_VOLUME_CALIBRATION_OFFSET = 0x3A, None, EnumFlags.ZONE_SUPPORT
     BALANCE = 0x3B, None, EnumFlags.ZONE_SUPPORT
@@ -978,6 +978,39 @@ class IncomingAudioConfig(IntOrTypeEnum):
     AURO_10_1 = 0x36
     AURO_11_1 = 0x37
     AURO_13_1 = 0x38
+
+
+class RoomEqMode(IntOrTypeEnum):
+    OFF = 0x00
+    EQ1 = 0x01
+    EQ2 = 0x02
+    EQ3 = 0x03
+
+
+class DolbyAudioMode(IntOrTypeEnum):
+    OFF = 0x00
+    MOVIE = 0x01  # "On" on 860 series
+    MUSIC = 0x02, APIVERSION_HDA_SERIES
+    NIGHT = 0x03, APIVERSION_HDA_SERIES
+
+
+class CompressionMode(IntOrTypeEnum):
+    OFF = 0x00
+    MEDIUM = 0x01
+    HIGH = 0x02
+
+
+class ImaxEnhancedMode(IntOrTypeEnum):
+    OFF = 0x00
+    ON = 0x01
+    AUTO = 0x02
+
+
+IMAX_ENHANCED_SET_MAP: dict[ImaxEnhancedMode, int] = {
+    ImaxEnhancedMode.AUTO: 0xF1,
+    ImaxEnhancedMode.ON: 0xF2,
+    ImaxEnhancedMode.OFF: 0xF3,
+}
 
 
 class PresetType(IntOrTypeEnum):
