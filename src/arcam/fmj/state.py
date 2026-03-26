@@ -47,6 +47,7 @@ from . import (
     SAVE_RESTORE_CONFIRMATION,
     SaveRestoreSubCommand,
     UnsupportedZone,
+    VideoSelection,
 )
 from .client import Client
 
@@ -506,6 +507,19 @@ class State:
             self._zn, CommandCodes.IMAX_ENHANCED, bytes([command_byte])
         )
 
+    def get_video_selection(self) -> VideoSelection | None:
+        """Return the IMAX Enhanced mode (HDA premium series)."""
+        value = self._state.get(CommandCodes.VIDEO_SELECTION)
+        if value is None:
+            return None
+        return VideoSelection.from_bytes(value)
+
+    async def set_video_selection(self, mode: VideoSelection) -> None:
+        """Set the IMAX Enhanced mode (HDA premium series)."""
+        await self._client.request(
+            self._zn, VideoSelection.VIDEO_SELECTION, bytes([mode])
+        )
+
     def get_source(self) -> SourceCodes | None:
         value = self._state.get(CommandCodes.CURRENT_SOURCE)
         if value is None:
@@ -701,6 +715,7 @@ class State:
                     _update(CommandCodes.IMAX_ENHANCED),
                     _update(CommandCodes.DECODE_MODE_STATUS_2CH),
                     _update(CommandCodes.DECODE_MODE_STATUS_MCH),
+                    _update(CommandCodes.VIDEO_SELECTION),
                     _update(CommandCodes.INCOMING_VIDEO_PARAMETERS),
                     _update(CommandCodes.INCOMING_AUDIO_FORMAT),
                     _update(CommandCodes.INCOMING_AUDIO_SAMPLE_RATE),

@@ -1034,6 +1034,14 @@ IMAX_ENHANCED_SET_MAP: dict[ImaxEnhancedMode, int] = {
     ImaxEnhancedMode.OFF: 0xF3,
 }
 
+class VideoSelection(IntOrTypeEnum):
+    BD = 0x00
+    SAT = 0x01
+    AV = 0x02
+    PVR = 0x03
+    VCR = 0x04
+    GAME = 0x05
+    STB = 0x06
 
 class PresetType(IntOrTypeEnum):
     """List of possible audio configurations."""
