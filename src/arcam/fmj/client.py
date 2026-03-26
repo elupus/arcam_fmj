@@ -46,8 +46,10 @@ class ClientBase:
     @contextmanager
     def listen(self, listener: Callable):
         self._listen.add(listener)
-        yield self
-        self._listen.remove(listener)
+        try:
+            yield self
+        finally:
+            self._listen.remove(listener)
 
     async def _process_heartbeat(self, writer: StreamWriter):
         while True:
