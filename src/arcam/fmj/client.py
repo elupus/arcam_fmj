@@ -28,6 +28,7 @@ from .utils import async_retry
 
 _LOGGER = logging.getLogger(__name__)
 _REQUEST_TIMEOUT = timedelta(seconds=3)
+_REQUEST_THROTTLE = 0.2
 
 _HEARTBEAT_INTERVAL = timedelta(seconds=5)
 _HEARTBEAT_TIMEOUT = _HEARTBEAT_INTERVAL + _HEARTBEAT_INTERVAL
@@ -123,11 +124,16 @@ class ClientBase:
                 if not (future.cancelled() or future.done()):
                     future.set_result(response)
 
-        async with self._request_lock, asyncio.timeout(_REQUEST_TIMEOUT.total_seconds()):
-            _LOGGER.debug("Requesting %s", request)
+        async with asyncio.timeout(_REQUEST_TIMEOUT.total_seconds()):
             with self.listen(listen):
-                await write_packet(writer, request)
-                self._timestamp = datetime.now()
+                async with self._request_lock:
+                    _LOGGER.debug("Requesting %s", request)
+                    await write_packet(writer, request)
+                    self._timestamp = datetime.now()
+                    try:
+                        return await asyncio.wait_for(asyncio.shield(future), _REQUEST_THROTTLE)
+                    except asyncio.TimeoutError:
+                        pass
                 return await future
 
     async def send(self, zn: int, cc: CommandCodes, data: bytes) -> None:
