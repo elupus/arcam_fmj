@@ -4,7 +4,7 @@ import asyncio
 from asyncio.streams import StreamReader, StreamWriter
 import logging
 from datetime import datetime, timedelta
-from contextlib import contextmanager
+from contextlib import AsyncExitStack, contextmanager, suppress
 from typing import Union, overload
 from collections.abc import Callable
 
@@ -24,7 +24,7 @@ from . import (
     read_response,
     write_packet,
 )
-from .utils import Throttle, async_retry
+from .utils import async_retry
 
 _LOGGER = logging.getLogger(__name__)
 _REQUEST_TIMEOUT = timedelta(seconds=3)
@@ -40,7 +40,7 @@ class ClientBase:
         self._writer: StreamWriter | None = None
         self._task = None
         self._listen: set[Callable] = set()
-        self._throttle = Throttle(_REQUEST_THROTTLE)
+        self._request_lock = asyncio.Lock()
         self._timestamp = datetime.now()
 
     @contextmanager
@@ -126,15 +126,19 @@ class ClientBase:
                 if not (future.cancelled() or future.done()):
                     future.set_result(response)
 
-        await self._throttle.get()
-
-        async with asyncio.timeout(_REQUEST_TIMEOUT.total_seconds()):
-            _LOGGER.debug("Requesting %s", request)
-            with self.listen(listen):
-                await write_packet(writer, request)
-                self._timestamp = datetime.now()
-                return await future
-
+        async with AsyncExitStack() as stack:
+            await stack.enter_async_context(self._request_lock)
+            async with asyncio.timeout(_REQUEST_TIMEOUT.total_seconds()):
+                with self.listen(listen):
+                    _LOGGER.debug("Requesting %s", request)
+                    await write_packet(writer, request)
+                    self._timestamp = datetime.now()
+                    with suppress(TimeoutError):
+                        async with asyncio.timeout(_REQUEST_THROTTLE):
+                            return await asyncio.shield(future)
+                    await stack.aclose()
+                    return await future
+                    
     async def send(self, zn: int, cc: CommandCodes, data: bytes) -> None:
         if not self._writer:
             raise NotConnectedException()
@@ -144,8 +148,8 @@ class ClientBase:
 
         writer = self._writer
         request = CommandPacket(zn, cc, data)
-        await self._throttle.get()
-        await write_packet(writer, request)
+        async with self._request_lock:
+            await write_packet(writer, request)
 
     async def request(self, zn: int, cc: CommandCodes, data: bytes):
         if not self._writer:
