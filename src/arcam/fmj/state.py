@@ -4,6 +4,8 @@ import asyncio
 import logging
 from typing import Any, TypeVar
 
+import attr
+
 from . import (
     APIVERSION_450_SERIES,
     APIVERSION_860_SERIES,
@@ -27,9 +29,12 @@ from . import (
     IncomingAudioConfig,
     IncomingAudioFormat,
     MenuCodes,
+    NetworkPlaybackStatus,
     NotConnectedException,
+    NowPlayingInfo,
     PresetDetail,
     RoomEqMode,
+    SAMPLE_RATE_MAP,
     VideoParameters,
     ResponseException,
     ResponsePacket,
@@ -88,6 +93,7 @@ class State:
         self._client = client
         self._state = dict()
         self._presets = dict()
+        self._now_playing: NowPlayingInfo | None = None
         self._amxduet: AmxDuetResponse | None = None
         self._api_model = api_model
 
@@ -136,6 +142,8 @@ class State:
             "RDS_INFORMATION": self.get_rds_information(),
             "TUNER_PRESET": self.get_tuner_preset(),
             "PRESET_DETAIL": self.get_preset_details(),
+            "NETWORK_PLAYBACK_STATUS": self.get_network_playback_status(),
+            "NOW_PLAYING": self.get_now_playing(),
         }
 
     def __repr__(self) -> str:
@@ -220,16 +228,7 @@ class State:
         value = self._state.get(CommandCodes.INCOMING_AUDIO_SAMPLE_RATE)
         if value is None:
             return 0
-        map = {
-            0x00: 32000,
-            0x01: 44100,
-            0x02: 48000,
-            0x03: 88200,
-            0x04: 96000,
-            0x05: 176400,
-            0x06: 192000,
-        }
-        return map.get(value[0], 0)
+        return SAMPLE_RATE_MAP.get(value[0], 0)
 
     def get_decode_mode_2ch(self) -> DecodeMode2CH | None:
         value = self._state.get(CommandCodes.DECODE_MODE_STATUS_2CH)
@@ -617,6 +616,17 @@ class State:
             bytes([SaveRestoreSubCommand.RESTORE, *SAVE_RESTORE_CONFIRMATION, *pin]),
         )
 
+    def get_network_playback_status(self) -> NetworkPlaybackStatus | None:
+        """Return the network playback status (stopped/transitioning/playing/paused)."""
+        value = self._state.get(CommandCodes.NETWORK_PLAYBACK_STATUS)
+        if value is None:
+            return None
+        return NetworkPlaybackStatus.from_bytes(value)
+
+    def get_now_playing(self) -> NowPlayingInfo | None:
+        """Return now-playing metadata (HDA series, NET/BT sources)."""
+        return self._now_playing
+
     async def update(self) -> None:
         async def _update(cc: CommandCodes):
             try:
@@ -654,6 +664,29 @@ class State:
                     _LOGGER.error("Timeout requesting preset %s", preset)
                     return
             self._presets = presets
+
+        async def _update_now_playing() -> None:
+            try:
+                kwargs = {}
+                for field in attr.fields(NowPlayingInfo):
+                    if "request" not in field.metadata:
+                        continue
+                    data = await self._client.request(
+                        self._zn, CommandCodes.NOW_PLAYING_INFO, bytes([field.metadata["request"]])
+                    )
+                    kwargs[field.name] = field.metadata["converter"](data)
+
+                self._now_playing = NowPlayingInfo(**kwargs)
+            except CommandNotRecognised:
+                _LOGGER.debug("Now playing info not supported")
+            except ResponseException as e:
+                _LOGGER.debug("Now playing info error: %s", e.ac)
+                self._now_playing = None
+            except NotConnectedException:
+                _LOGGER.debug("Not connected skipping now playing")
+                self._now_playing = None
+            except TimeoutError:
+                _LOGGER.error("Timeout requesting now playing info")
 
         async def _update_amxduet() -> None:
             try:
@@ -718,9 +751,12 @@ class State:
                     _update(CommandCodes.SUBWOOFER_TRIM),
                     _update(CommandCodes.SUB_STEREO_TRIM),
                     _update(CommandCodes.COMPRESSION),
+                    _update(CommandCodes.NETWORK_PLAYBACK_STATUS),
                     _update_presets(),
+                    _update_now_playing(),
                 ]
             )
         else:
             if self._state:
                 self._state = dict()
+                self._now_playing = None

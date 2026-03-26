@@ -1035,6 +1035,34 @@ IMAX_ENHANCED_SET_MAP: dict[ImaxEnhancedMode, int] = {
 }
 
 
+class NetworkPlaybackStatus(IntOrTypeEnum):
+    STOPPED = 0x00
+    TRANSITIONING = 0x01
+    PLAYING = 0x02
+    PAUSED = 0x03
+
+
+class NowPlayingEncoder(IntOrTypeEnum):
+    MP3 = 0x00
+    WAV = 0x01
+    WMA = 0x02
+    FLAC = 0x03
+    ALAC = 0x04
+    MQA = 0x05
+    UNKNOWN = 0x0A
+
+
+class NowPlayingRequest(IntOrTypeEnum):
+    """Sub-request codes for NOW_PLAYING_INFO command."""
+
+    TRACK = 0xF0
+    ARTIST = 0xF1
+    ALBUM = 0xF2
+    APPLICATION = 0xF3
+    SAMPLE_RATE = 0xF4
+    ENCODER = 0xF5
+
+
 class PresetType(IntOrTypeEnum):
     """List of possible audio configurations."""
 
@@ -1062,6 +1090,31 @@ class PresetDetail:
         else:
             name = str(data[2:])
         return PresetDetail(data[0], type, name)
+
+
+SAMPLE_RATE_MAP: dict[int, int] = {
+    0x00: 32000,
+    0x01: 44100,
+    0x02: 48000,
+    0x03: 88200,
+    0x04: 96000,
+    0x05: 176400,
+    0x06: 192000,
+}
+
+
+def _decode_string(data: bytes) -> str:
+    return data.decode("utf8", errors="replace").rstrip("\x00")
+
+
+@attr.s
+class NowPlayingInfo:
+    track = attr.ib(type=str, default="", metadata={"request": NowPlayingRequest.TRACK, "converter": _decode_string})
+    artist = attr.ib(type=str, default="", metadata={"request": NowPlayingRequest.ARTIST, "converter": _decode_string})
+    album = attr.ib(type=str, default="", metadata={"request": NowPlayingRequest.ALBUM, "converter": _decode_string})
+    application = attr.ib(type=str, default="", metadata={"request": NowPlayingRequest.APPLICATION, "converter": _decode_string})
+    sample_rate = attr.ib(type=int, default=0, metadata={"request": NowPlayingRequest.SAMPLE_RATE, "converter": lambda x: SAMPLE_RATE_MAP.get(x[0], 0)})
+    encoder = attr.ib(type=NowPlayingEncoder | None, default=None, metadata={"request": NowPlayingRequest.ENCODER, "converter": lambda x: NowPlayingEncoder.from_int(x[0])})
 
 
 @attr.s
