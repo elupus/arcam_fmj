@@ -4,7 +4,7 @@ import asyncio
 from asyncio.streams import StreamReader, StreamWriter
 import logging
 from datetime import datetime, timedelta
-from contextlib import contextmanager, suppress
+from contextlib import AsyncExitStack, contextmanager, suppress
 from typing import Union, overload
 from collections.abc import Callable
 
@@ -124,17 +124,19 @@ class ClientBase:
                 if not (future.cancelled() or future.done()):
                     future.set_result(response)
 
-        async with asyncio.timeout(_REQUEST_TIMEOUT.total_seconds()):
-            with self.listen(listen):
-                async with self._request_lock:
+        async with AsyncExitStack() as stack:
+            await stack.enter_async_context(self._request_lock)
+            async with asyncio.timeout(_REQUEST_TIMEOUT.total_seconds()):
+                with self.listen(listen):
                     _LOGGER.debug("Requesting %s", request)
                     await write_packet(writer, request)
                     self._timestamp = datetime.now()
                     with suppress(TimeoutError):
                         async with asyncio.timeout(_REQUEST_THROTTLE):
                             return await asyncio.shield(future)
-                return await future
-
+                    await stack.aclose()
+                    return await future
+                    
     async def send(self, zn: int, cc: CommandCodes, data: bytes) -> None:
         if not self._writer:
             raise NotConnectedException()
