@@ -40,7 +40,7 @@ class ClientBase:
         self._writer: StreamWriter | None = None
         self._task = None
         self._listen: set[Callable] = set()
-        self._request_lock = asyncio.Semaphore(1)
+        self._request_lock = asyncio.Lock()
         self._timestamp = datetime.now()
 
     @contextmanager
