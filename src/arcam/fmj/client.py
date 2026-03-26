@@ -24,11 +24,10 @@ from . import (
     read_response,
     write_packet,
 )
-from .utils import Throttle, async_retry
+from .utils import async_retry
 
 _LOGGER = logging.getLogger(__name__)
 _REQUEST_TIMEOUT = timedelta(seconds=3)
-_REQUEST_THROTTLE = 0.2
 
 _HEARTBEAT_INTERVAL = timedelta(seconds=5)
 _HEARTBEAT_TIMEOUT = _HEARTBEAT_INTERVAL + _HEARTBEAT_INTERVAL
@@ -40,7 +39,7 @@ class ClientBase:
         self._writer: StreamWriter | None = None
         self._task = None
         self._listen: set[Callable] = set()
-        self._throttle = Throttle(_REQUEST_THROTTLE)
+        self._request_lock = asyncio.Semaphore(1)
         self._timestamp = datetime.now()
 
     @contextmanager
@@ -124,9 +123,7 @@ class ClientBase:
                 if not (future.cancelled() or future.done()):
                     future.set_result(response)
 
-        await self._throttle.get()
-
-        async with asyncio.timeout(_REQUEST_TIMEOUT.total_seconds()):
+        async with self._request_lock, asyncio.timeout(_REQUEST_TIMEOUT.total_seconds()):
             _LOGGER.debug("Requesting %s", request)
             with self.listen(listen):
                 await write_packet(writer, request)
@@ -142,8 +139,8 @@ class ClientBase:
 
         writer = self._writer
         request = CommandPacket(zn, cc, data)
-        await self._throttle.get()
-        await write_packet(writer, request)
+        async with self._request_lock:
+            await write_packet(writer, request)
 
     async def request(self, zn: int, cc: CommandCodes, data: bytes):
         if not self._writer:
