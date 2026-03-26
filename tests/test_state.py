@@ -6,6 +6,7 @@ from arcam.fmj import (
     AmxDuetResponse,
     AnswerCodes,
     ApiModel,
+    BluetoothAudioStatus,
     CommandCodes,
     CompressionMode,
     DolbyAudioMode,
@@ -747,3 +748,32 @@ def test_get_now_playing():
     assert info.album == "A Night at the Opera"
     assert info.encoder == NowPlayingEncoder.FLAC
     assert info.sample_rate == 44100
+
+
+# --- Bluetooth Status (0x50) ---
+
+
+def test_get_bluetooth_status_none():
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    status, track = state.get_bluetooth_status()
+    assert status is None
+    assert track is None
+
+
+def test_get_bluetooth_status_no_connection():
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    state._state[CommandCodes.BLUETOOTH_STATUS] = bytes([0x00])
+    status, track = state.get_bluetooth_status()
+    assert status == BluetoothAudioStatus.NO_CONNECTION
+    assert track == ""
+
+
+def test_get_bluetooth_status_playing_with_track():
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    state._state[CommandCodes.BLUETOOTH_STATUS] = bytes([0x03]) + b"My Song"
+    status, track = state.get_bluetooth_status()
+    assert status == BluetoothAudioStatus.PLAYING_AAC
+    assert track == "My Song"

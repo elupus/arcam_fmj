@@ -17,6 +17,7 @@ from . import (
     AmxDuetResponse,
     AnswerCodes,
     ApiModel,
+    BluetoothAudioStatus,
     CommandCodes,
     CommandInvalidAtThisTime,
     CommandNotRecognised,
@@ -145,6 +146,7 @@ class State:
             "PRESET_DETAIL": self.get_preset_details(),
             "NETWORK_PLAYBACK_STATUS": self.get_network_playback_status(),
             "NOW_PLAYING": self.get_now_playing(),
+            "BLUETOOTH_STATUS": self.get_bluetooth_status(),
         }
 
     def __repr__(self) -> str:
@@ -628,6 +630,20 @@ class State:
         """Return now-playing metadata (HDA series, NET/BT sources)."""
         return self._now_playing
 
+    def get_bluetooth_status(
+        self,
+    ) -> tuple[BluetoothAudioStatus, str] | tuple[None, None]:
+        """Return Bluetooth audio status and track name (HDA series)."""
+        value = self._state.get(CommandCodes.BLUETOOTH_STATUS)
+        if value is None:
+            return None, None
+        status = BluetoothAudioStatus.from_int(value[0])
+        if len(value) > 1:
+            track = value[1:].decode("ascii", errors="replace").rstrip("\x00").strip()
+        else:
+            track = ""
+        return status, track
+
     async def update(self) -> None:
         async def _update(cc: CommandCodes):
             try:
@@ -760,6 +776,7 @@ class State:
                     _update(CommandCodes.SUB_STEREO_TRIM),
                     _update(CommandCodes.COMPRESSION),
                     _update(CommandCodes.NETWORK_PLAYBACK_STATUS),
+                    _update(CommandCodes.BLUETOOTH_STATUS),
                     _update_presets(),
                     _update_now_playing(),
                 ]

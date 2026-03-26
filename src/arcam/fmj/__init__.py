@@ -1063,6 +1063,15 @@ class NowPlayingRequest(IntOrTypeEnum):
     ENCODER = 0xF5
 
 
+class BluetoothAudioStatus(IntOrTypeEnum):
+    NO_CONNECTION = 0x00
+    PAUSED = 0x01
+    PLAYING_SBC = 0x02
+    PLAYING_AAC = 0x03
+    PLAYING_APTX = 0x04
+    PLAYING_APTX_HD = 0x05
+
+
 class PresetType(IntOrTypeEnum):
     """List of possible audio configurations."""
 
