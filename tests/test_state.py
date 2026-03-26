@@ -11,6 +11,9 @@ from arcam.fmj import (
     DolbyAudioMode,
     ImaxEnhancedMode,
     IncomingAudioFormat,
+    NetworkPlaybackStatus,
+    NowPlayingEncoder,
+    NowPlayingInfo,
     ResponsePacket,
     RoomEqMode,
     POWER_WRITE_SUPPORTED,
@@ -695,3 +698,52 @@ async def test_set_imax_enhanced(mode, expected_byte):
     client.request.assert_called_with(
         1, CommandCodes.IMAX_ENHANCED, bytes([expected_byte])
     )
+
+
+# --- Network Playback Status (0x1C) ---
+
+
+def test_get_network_playback_status_none():
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    assert state.get_network_playback_status() is None
+
+
+@pytest.mark.parametrize("byte_val, expected", [
+    (0x00, NetworkPlaybackStatus.STOPPED),
+    (0x01, NetworkPlaybackStatus.TRANSITIONING),
+    (0x02, NetworkPlaybackStatus.PLAYING),
+    (0x03, NetworkPlaybackStatus.PAUSED),
+])
+def test_get_network_playback_status(byte_val, expected):
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    state._state[CommandCodes.NETWORK_PLAYBACK_STATUS] = bytes([byte_val])
+    assert state.get_network_playback_status() == expected
+
+
+# --- Now Playing Info (0x64) ---
+
+
+def test_get_now_playing_none():
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    assert state.get_now_playing() is None
+
+
+def test_get_now_playing():
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    state._now_playing = NowPlayingInfo(
+        track="Bohemian Rhapsody",
+        artist="Queen",
+        album="A Night at the Opera",
+        encoder=NowPlayingEncoder.FLAC,
+        sample_rate=44100,
+    )
+    info = state.get_now_playing()
+    assert info.track == "Bohemian Rhapsody"
+    assert info.artist == "Queen"
+    assert info.album == "A Night at the Opera"
+    assert info.encoder == NowPlayingEncoder.FLAC
+    assert info.sample_rate == 44100
