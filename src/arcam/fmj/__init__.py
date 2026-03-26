@@ -1002,6 +1002,39 @@ class IncomingAudioConfig(IntOrTypeEnum):
     AURO_13_1 = 0x38
 
 
+class RoomEqMode(IntOrTypeEnum):
+    OFF = 0x00
+    EQ1 = 0x01
+    EQ2 = 0x02
+    EQ3 = 0x03
+
+
+class DolbyAudioMode(IntOrTypeEnum):
+    OFF = 0x00
+    MOVIE = 0x01  # "On" on 860 series
+    MUSIC = 0x02, APIVERSION_HDA_SERIES
+    NIGHT = 0x03, APIVERSION_HDA_SERIES
+
+
+class CompressionMode(IntOrTypeEnum):
+    OFF = 0x00
+    MEDIUM = 0x01
+    HIGH = 0x02
+
+
+class ImaxEnhancedMode(IntOrTypeEnum):
+    OFF = 0x00
+    ON = 0x01
+    AUTO = 0x02
+
+
+IMAX_ENHANCED_SET_MAP: dict[ImaxEnhancedMode, int] = {
+    ImaxEnhancedMode.AUTO: 0xF1,
+    ImaxEnhancedMode.ON: 0xF2,
+    ImaxEnhancedMode.OFF: 0xF3,
+}
+
+
 class PresetType(IntOrTypeEnum):
     """List of possible audio configurations."""
 

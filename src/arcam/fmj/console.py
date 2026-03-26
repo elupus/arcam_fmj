@@ -11,6 +11,10 @@ from . import (
     ApiModel,
     CommandCodes,
     CommandInvalidAtThisTime,
+    CompressionMode,
+    DolbyAudioMode,
+    ImaxEnhancedMode,
+    RoomEqMode,
     SourceCodes,
     IncomingVideoAspectRatio,
     IncomingVideoColorspace,
@@ -81,11 +85,54 @@ parser_state.add_argument(
     metavar=("D1", "D2", "D3", "D4"),
     help="Installer PIN for save/restore (default: 1 2 3 4)",
 )
+parser_state.add_argument(
+    "--room-eq",
+    type=lambda x: RoomEqMode[x.upper()],
+    choices=list(RoomEqMode),
+    help="Set room EQ mode (OFF, EQ1, EQ2, EQ3)",
+    metavar="MODE",
+)
 parser_state.add_argument("--lipsync", type=int, help="Set lip sync delay in ms")
 parser_state.add_argument(
     "--subwoofer-trim",
     type=float,
-    help="Set subwoofer trim in dB (-12 to +12)",
+    help="Set subwoofer trim in dB (-10 to +10)",
+)
+parser_state.add_argument("--bass", type=float, help="Set bass EQ in dB (-12 to +12)")
+parser_state.add_argument(
+    "--treble", type=float, help="Set treble EQ in dB (-12 to +12)"
+)
+parser_state.add_argument(
+    "--balance", type=float, help="Set balance (-6 to +6)"
+)
+parser_state.add_argument(
+    "--sub-stereo-trim",
+    type=float,
+    help="Set sub stereo trim in dB (-10 to 0)",
+)
+parser_state.add_argument(
+    "--dolby-audio",
+    type=lambda x: DolbyAudioMode[x.upper()],
+    choices=list(DolbyAudioMode),
+    help="Set Dolby Audio mode (OFF, MOVIE, MUSIC, NIGHT)",
+    metavar="MODE",
+)
+parser_state.add_argument(
+    "--compression",
+    type=lambda x: CompressionMode[x.upper()],
+    choices=list(CompressionMode),
+    help="Set compression (OFF, MEDIUM, HIGH)",
+    metavar="MODE",
+)
+parser_state.add_argument(
+    "--imax",
+    type=lambda x: ImaxEnhancedMode[x.upper()],
+    choices=list(ImaxEnhancedMode),
+    help="Set IMAX Enhanced mode (OFF, ON, AUTO)",
+    metavar="MODE",
+)
+parser_state.add_argument(
+    "--display-info", type=int, help="Set display info type (0xE0 to cycle)"
 )
 parser_state.add_argument(
     "--show-audio",
@@ -149,16 +196,43 @@ async def run_state(args):
             await state.set_power(False)
 
         if args.room_eq_on is not None:
-            await state.set_room_equalization(True)
+            await state.set_room_equalization(RoomEqMode.EQ1)
 
         if args.room_eq_off is not None:
-            await state.set_room_equalization(False)
+            await state.set_room_equalization(RoomEqMode.OFF)
+
+        if args.room_eq is not None:
+            await state.set_room_equalization(args.room_eq)
 
         if args.lipsync is not None:
             await state.set_lipsync_delay(args.lipsync)
 
         if args.subwoofer_trim is not None:
             await state.set_subwoofer_trim(args.subwoofer_trim)
+
+        if args.bass is not None:
+            await state.set_bass_equalization(args.bass)
+
+        if args.treble is not None:
+            await state.set_treble_equalization(args.treble)
+
+        if args.balance is not None:
+            await state.set_balance(args.balance)
+
+        if args.sub_stereo_trim is not None:
+            await state.set_sub_stereo_trim(args.sub_stereo_trim)
+
+        if args.dolby_audio is not None:
+            await state.set_dolby_audio(args.dolby_audio)
+
+        if args.compression is not None:
+            await state.set_compression(args.compression)
+
+        if args.imax is not None:
+            await state.set_imax_enhanced(args.imax)
+
+        if args.display_info is not None:
+            await state.set_display_info_type(args.display_info)
 
         if args.monitor:
             async with state:
