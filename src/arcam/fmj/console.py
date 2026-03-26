@@ -63,6 +63,24 @@ parser_state.add_argument("--power-on", action=argparse.BooleanOptionalAction)
 parser_state.add_argument("--power-off", action=argparse.BooleanOptionalAction)
 parser_state.add_argument("--room-eq-on", action=argparse.BooleanOptionalAction)
 parser_state.add_argument("--room-eq-off", action=argparse.BooleanOptionalAction)
+parser_state.add_argument(
+    "--save-settings",
+    action="store_true",
+    help="Save a secure backup of device settings",
+)
+parser_state.add_argument(
+    "--restore-settings",
+    action="store_true",
+    help="Restore device settings from secure backup",
+)
+parser_state.add_argument(
+    "--pin",
+    nargs=4,
+    type=int,
+    default=[1, 2, 3, 4],
+    metavar=("D1", "D2", "D3", "D4"),
+    help="Installer PIN for save/restore (default: 1 2 3 4)",
+)
 parser_state.add_argument("--lipsync", type=int, help="Set lip sync delay in ms")
 parser_state.add_argument(
     "--subwoofer-trim",
@@ -107,6 +125,16 @@ async def run_state(args):
     async with ClientContext(client):
         state = State(client, args.zone)
         await state.update()
+
+        pin = tuple(args.pin)
+
+        if args.save_settings:
+            await state.save_settings(pin)
+            print("Settings saved.")
+
+        if args.restore_settings:
+            await state.restore_settings(pin)
+            print("Settings restored.")
 
         if args.volume is not None:
             await state.set_volume(args.volume)
