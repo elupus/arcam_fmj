@@ -4,7 +4,7 @@ import asyncio
 from asyncio.streams import StreamReader, StreamWriter
 import logging
 from datetime import datetime, timedelta
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from typing import Union, overload
 from collections.abc import Callable
 
@@ -130,10 +130,9 @@ class ClientBase:
                     _LOGGER.debug("Requesting %s", request)
                     await write_packet(writer, request)
                     self._timestamp = datetime.now()
-                    try:
-                        return await asyncio.wait_for(asyncio.shield(future), _REQUEST_THROTTLE)
-                    except asyncio.TimeoutError:
-                        pass
+                    with suppress(TimeoutError):
+                        async with asyncio.timeout(_REQUEST_THROTTLE):
+                            return await asyncio.shield(future)
                 return await future
 
     async def send(self, zn: int, cc: CommandCodes, data: bytes) -> None:
