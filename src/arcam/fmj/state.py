@@ -21,6 +21,7 @@ from . import (
     CommandInvalidAtThisTime,
     CommandNotRecognised,
     CompressionMode,
+    ParameterNotRecognised,
     DecodeMode2CH,
     DecodeModeMCH,
     DolbyAudioMode,
@@ -666,27 +667,34 @@ class State:
             self._presets = presets
 
         async def _update_now_playing() -> None:
-            try:
-                kwargs = {}
-                for field in attr.fields(NowPlayingInfo):
-                    if "request" not in field.metadata:
-                        continue
+            kwargs = {}
+            for field in attr.fields(NowPlayingInfo):
+                if "request" not in field.metadata:
+                    continue
+                try:
                     data = await self._client.request(
                         self._zn, CommandCodes.NOW_PLAYING_INFO, bytes([field.metadata["request"]])
                     )
                     kwargs[field.name] = field.metadata["converter"](data)
+                except CommandNotRecognised:
+                    _LOGGER.debug("Now playing not supported")
+                    self._now_playing = None
+                    return
+                except ParameterNotRecognised:
+                    _LOGGER.debug("Now playing %s not supported", field.name)
+                except NotConnectedException:
+                    _LOGGER.debug("Not connected skipping now playing")
+                    self._now_playing = None
+                    return
+                except ResponseException as e:
+                    _LOGGER.debug("Now playing %s error: %s", field.name, e.ac)
+                except TimeoutError:
+                    _LOGGER.error("Timeout requesting now playing %s", field.name)
 
+            if kwargs:
                 self._now_playing = NowPlayingInfo(**kwargs)
-            except CommandNotRecognised:
-                _LOGGER.debug("Now playing info not supported")
-            except ResponseException as e:
-                _LOGGER.debug("Now playing info error: %s", e.ac)
+            else:
                 self._now_playing = None
-            except NotConnectedException:
-                _LOGGER.debug("Not connected skipping now playing")
-                self._now_playing = None
-            except TimeoutError:
-                _LOGGER.error("Timeout requesting now playing info")
 
         async def _update_amxduet() -> None:
             try:

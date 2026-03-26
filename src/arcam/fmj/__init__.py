@@ -1109,11 +1109,11 @@ def _decode_string(data: bytes) -> str:
 
 @attr.s
 class NowPlayingInfo:
-    track = attr.ib(type=str, default="", metadata={"request": NowPlayingRequest.TRACK, "converter": _decode_string})
-    artist = attr.ib(type=str, default="", metadata={"request": NowPlayingRequest.ARTIST, "converter": _decode_string})
-    album = attr.ib(type=str, default="", metadata={"request": NowPlayingRequest.ALBUM, "converter": _decode_string})
-    application = attr.ib(type=str, default="", metadata={"request": NowPlayingRequest.APPLICATION, "converter": _decode_string})
-    sample_rate = attr.ib(type=int, default=0, metadata={"request": NowPlayingRequest.SAMPLE_RATE, "converter": lambda x: SAMPLE_RATE_MAP.get(x[0], 0)})
+    track = attr.ib(type=str | None, default=None, metadata={"request": NowPlayingRequest.TRACK, "converter": _decode_string})
+    artist = attr.ib(type=str | None, default=None, metadata={"request": NowPlayingRequest.ARTIST, "converter": _decode_string})
+    album = attr.ib(type=str | None, default=None, metadata={"request": NowPlayingRequest.ALBUM, "converter": _decode_string})
+    application = attr.ib(type=str | None, default=None, metadata={"request": NowPlayingRequest.APPLICATION, "converter": _decode_string})
+    sample_rate = attr.ib(type=int | None, default=None, metadata={"request": NowPlayingRequest.SAMPLE_RATE, "converter": lambda x: SAMPLE_RATE_MAP.get(x[0], 0)})
     encoder = attr.ib(type=NowPlayingEncoder | None, default=None, metadata={"request": NowPlayingRequest.ENCODER, "converter": lambda x: NowPlayingEncoder.from_int(x[0])})
 
 
