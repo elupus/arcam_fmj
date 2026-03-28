@@ -51,16 +51,17 @@ class ClientBase:
         finally:
             self._listen.remove(listener)
 
-    async def _process_heartbeat(self, writer: StreamWriter):
+    async def _process_heartbeat(self):
         while True:
             delay = self._timestamp + _HEARTBEAT_INTERVAL - datetime.now()
             if delay > timedelta():
                 await asyncio.sleep(delay.total_seconds())
             else:
                 _LOGGER.debug("Sending ping")
-                await write_packet(
-                    writer, CommandPacket(1, CommandCodes.POWER, bytes([0xF0]))
-                )
+                try:
+                    await self.request(1, CommandCodes.POWER, bytes([0xF0]))
+                except Exception:
+                    _LOGGER.debug("Heartbeat failed")
                 self._timestamp = datetime.now()
 
     async def _process_data(self, reader: StreamReader):
@@ -87,7 +88,7 @@ class ClientBase:
         assert self._writer, "Writer missing"
         assert self._reader, "Reader missing"
 
-        _process_heartbeat = asyncio.create_task(self._process_heartbeat(self._writer))
+        _process_heartbeat = asyncio.create_task(self._process_heartbeat())
         try:
             await self._process_data(self._reader)
         finally:
