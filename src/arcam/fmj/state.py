@@ -660,9 +660,11 @@ class State:
         return status, track
 
     async def update(self, flags: EnumFlags = EnumFlags.FULL_UPDATE) -> None:
+        when_idle = not (flags & EnumFlags.FULL_UPDATE)
+
         async def _update(cc: CommandCodes):
             try:
-                data = await self._client.request(self._zn, cc, bytes([0xF0]))
+                data = await self._client.request(self._zn, cc, bytes([0xF0]), when_idle=when_idle)
                 self._state[cc] = data
             except UnsupportedZone:
                 _LOGGER.debug("Unsupported zone %s for %s", self._zn, cc)
@@ -680,7 +682,8 @@ class State:
             for preset in range(1, 51):
                 try:
                     data = await self._client.request(
-                        self._zn, CommandCodes.PRESET_DETAIL, bytes([preset])
+                        self._zn, CommandCodes.PRESET_DETAIL, bytes([preset]),
+                        when_idle=when_idle,
                     )
                     if data != b"\x00":
                         presets[preset] = PresetDetail.from_bytes(data)
@@ -704,7 +707,8 @@ class State:
                     continue
                 try:
                     data = await self._client.request(
-                        self._zn, CommandCodes.NOW_PLAYING_INFO, bytes([field.metadata["request"]])
+                        self._zn, CommandCodes.NOW_PLAYING_INFO, bytes([field.metadata["request"]]),
+                        when_idle=when_idle,
                     )
                     kwargs[field.name] = field.metadata["converter"](data)
                 except CommandNotRecognised:
