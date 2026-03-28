@@ -150,6 +150,7 @@ class ClientBase:
         request = CommandPacket(zn, cc, data)
         async with self._request_lock:
             await write_packet(writer, request)
+            await asyncio.sleep(_REQUEST_THROTTLE)
 
     async def request(self, zn: int, cc: CommandCodes, data: bytes):
         if not self._writer:
