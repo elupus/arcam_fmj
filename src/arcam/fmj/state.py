@@ -20,6 +20,7 @@ from . import (
     BluetoothAudioStatus,
     CommandCodes,
     CommandInvalidAtThisTime,
+    EnumFlags,
     CommandNotRecognised,
     CompressionMode,
     ParameterNotRecognised,
@@ -658,7 +659,7 @@ class State:
             track = ""
         return status, track
 
-    async def update(self) -> None:
+    async def update(self, flags: EnumFlags = EnumFlags.FULL_UPDATE) -> None:
         async def _update(cc: CommandCodes):
             try:
                 data = await self._client.request(self._zn, cc, bytes([0xF0]))
@@ -756,47 +757,24 @@ class State:
             except TimeoutError:
                 _LOGGER.error("Timeout requesting amx")
 
-        if self._client.connected:
-            if self._amxduet is None:
-                await _update_amxduet()
-
-            await asyncio.gather(
-                *[
-                    _update(CommandCodes.POWER),
-                    _update(CommandCodes.VOLUME),
-                    _update(CommandCodes.MUTE),
-                    _update(CommandCodes.HEADPHONES),
-                    _update(CommandCodes.CURRENT_SOURCE),
-                    _update(CommandCodes.MENU),
-                    _update(CommandCodes.DISPLAY_INFORMATION_TYPE),
-                    _update(CommandCodes.IMAX_ENHANCED),
-                    _update(CommandCodes.DECODE_MODE_STATUS_2CH),
-                    _update(CommandCodes.DECODE_MODE_STATUS_MCH),
-                    _update(CommandCodes.VIDEO_SELECTION),
-                    _update(CommandCodes.INCOMING_VIDEO_PARAMETERS),
-                    _update(CommandCodes.INCOMING_AUDIO_FORMAT),
-                    _update(CommandCodes.INCOMING_AUDIO_SAMPLE_RATE),
-                    _update(CommandCodes.ROOM_EQ_NAMES),
-                    _update(CommandCodes.DAB_STATION),
-                    _update(CommandCodes.DLS_PDT_INFO),
-                    _update(CommandCodes.RDS_INFORMATION),
-                    _update(CommandCodes.TUNER_PRESET),
-                    _update(CommandCodes.ROOM_EQUALIZATION),
-                    _update(CommandCodes.DOLBY_AUDIO),
-                    _update(CommandCodes.BASS_EQUALIZATION),
-                    _update(CommandCodes.TREBLE_EQUALIZATION),
-                    _update(CommandCodes.BALANCE),
-                    _update(CommandCodes.LIPSYNC_DELAY),
-                    _update(CommandCodes.SUBWOOFER_TRIM),
-                    _update(CommandCodes.SUB_STEREO_TRIM),
-                    _update(CommandCodes.COMPRESSION),
-                    _update(CommandCodes.NETWORK_PLAYBACK_STATUS),
-                    _update(CommandCodes.BLUETOOTH_STATUS),
-                    _update_presets(),
-                    _update_now_playing(),
-                ]
-            )
-        else:
+        if not self._client.connected:
             if self._state:
                 self._state = dict()
                 self._now_playing = None
+            return
+
+        if self._amxduet is None:
+            await _update_amxduet()
+
+        tasks: list = []
+        for cc in CommandCodes:
+            if not (cc.flags & flags):
+                continue
+            if cc == CommandCodes.NOW_PLAYING_INFO:
+                tasks.append(_update_now_playing())
+            elif cc == CommandCodes.PRESET_DETAIL:
+                tasks.append(_update_presets())
+            else:
+                tasks.append(_update(cc))
+        if tasks:
+            await asyncio.gather(*tasks)
