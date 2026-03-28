@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+from contextlib import suppress
 from typing import Any, TypeVar
 
 import attr
@@ -91,7 +92,11 @@ class State:
     _presets: dict[int, PresetDetail]
 
     def __init__(
-        self, client: Client, zn: int, api_model: ApiModel = ApiModel.API450_SERIES
+        self,
+        client: Client,
+        zn: int,
+        api_model: ApiModel = ApiModel.API450_SERIES,
+        poll_interval: float | None = 0,
     ) -> None:
         self._zn = zn
         self._client = client
@@ -100,12 +105,21 @@ class State:
         self._now_playing: NowPlayingInfo | None = None
         self._amxduet: AmxDuetResponse | None = None
         self._api_model = api_model
+        self._poll_interval = poll_interval
+        self._poll_task: asyncio.Task | None = None
 
     async def start(self) -> None:
         # pylint: disable=protected-access
         self._client._listen.add(self._listen)
+        if self._poll_interval is not None:
+            self._poll_task = asyncio.create_task(self._poll_loop())
 
     async def stop(self) -> None:
+        if self._poll_task:
+            self._poll_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await self._poll_task
+            self._poll_task = None
         # pylint: disable=protected-access
         self._client._listen.remove(self._listen)
 
@@ -658,6 +672,21 @@ class State:
         else:
             track = ""
         return status, track
+
+    async def _poll_loop(self) -> None:
+        while True:
+            await asyncio.sleep(self._poll_interval)
+            if not self._client.connected:
+                continue
+            power = self.get_power()
+            if not power:
+                continue
+            try:
+                await self.update(EnumFlags.POLL_REQUIRED)
+            except NotConnectedException:
+                _LOGGER.debug("Lost connection during poll")
+            except Exception:
+                _LOGGER.exception("Unexpected error during poll")
 
     async def update(self, flags: EnumFlags = EnumFlags.FULL_UPDATE) -> None:
         when_idle = not (flags & EnumFlags.FULL_UPDATE)
