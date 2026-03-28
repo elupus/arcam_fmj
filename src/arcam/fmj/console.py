@@ -235,14 +235,17 @@ async def run_state(args):
             await state.set_display_info_type(args.display_info)
 
         if args.monitor:
+            updated = asyncio.Event()
             async with state:
                 prev = state.to_dict()
-                while client.connected:
-                    curr = state.to_dict()
-                    if prev != curr:
-                        pprint(curr)
-                        prev = curr
-                    await asyncio.sleep(delay=1)
+                with client.listen(lambda _: updated.set()):
+                    while client.connected:
+                        await updated.wait()
+                        updated.clear()
+                        curr = state.to_dict()
+                        if prev != curr:
+                            pprint(curr)
+                            prev = curr
         else:
             pprint(state.to_dict())
 
