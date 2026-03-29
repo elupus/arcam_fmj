@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+from contextlib import suppress
 from typing import Any, TypeVar
 
 import attr
@@ -20,6 +21,7 @@ from . import (
     BluetoothAudioStatus,
     CommandCodes,
     CommandInvalidAtThisTime,
+    EnumFlags,
     CommandNotRecognised,
     CompressionMode,
     ParameterNotRecognised,
@@ -90,7 +92,11 @@ class State:
     _presets: dict[int, PresetDetail]
 
     def __init__(
-        self, client: Client, zn: int, api_model: ApiModel = ApiModel.API450_SERIES
+        self,
+        client: Client,
+        zn: int,
+        api_model: ApiModel = ApiModel.API450_SERIES,
+        poll_interval: float | None = 0,
     ) -> None:
         self._zn = zn
         self._client = client
@@ -99,12 +105,21 @@ class State:
         self._now_playing: NowPlayingInfo | None = None
         self._amxduet: AmxDuetResponse | None = None
         self._api_model = api_model
+        self._poll_interval = poll_interval
+        self._poll_task: asyncio.Task | None = None
 
     async def start(self) -> None:
         # pylint: disable=protected-access
         self._client._listen.add(self._listen)
+        if self._poll_interval is not None:
+            self._poll_task = asyncio.create_task(self._poll_loop())
 
     async def stop(self) -> None:
+        if self._poll_task:
+            self._poll_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await self._poll_task
+            self._poll_task = None
         # pylint: disable=protected-access
         self._client._listen.remove(self._listen)
 
@@ -658,10 +673,27 @@ class State:
             track = ""
         return status, track
 
-    async def update(self) -> None:
+    async def _poll_loop(self) -> None:
+        while True:
+            await asyncio.sleep(self._poll_interval)
+            if not self._client.connected:
+                continue
+            power = self.get_power()
+            if not power:
+                continue
+            try:
+                await self.update(EnumFlags.POLL_REQUIRED)
+            except NotConnectedException:
+                _LOGGER.debug("Lost connection during poll")
+            except Exception:
+                _LOGGER.exception("Unexpected error during poll")
+
+    async def update(self, flags: EnumFlags = EnumFlags.FULL_UPDATE) -> None:
+        when_idle = not (flags & EnumFlags.FULL_UPDATE)
+
         async def _update(cc: CommandCodes):
             try:
-                data = await self._client.request(self._zn, cc, bytes([0xF0]))
+                data = await self._client.request(self._zn, cc, bytes([0xF0]), when_idle=when_idle)
                 self._state[cc] = data
             except UnsupportedZone:
                 _LOGGER.debug("Unsupported zone %s for %s", self._zn, cc)
@@ -679,7 +711,8 @@ class State:
             for preset in range(1, 51):
                 try:
                     data = await self._client.request(
-                        self._zn, CommandCodes.PRESET_DETAIL, bytes([preset])
+                        self._zn, CommandCodes.PRESET_DETAIL, bytes([preset]),
+                        when_idle=when_idle,
                     )
                     if data != b"\x00":
                         presets[preset] = PresetDetail.from_bytes(data)
@@ -703,7 +736,8 @@ class State:
                     continue
                 try:
                     data = await self._client.request(
-                        self._zn, CommandCodes.NOW_PLAYING_INFO, bytes([field.metadata["request"]])
+                        self._zn, CommandCodes.NOW_PLAYING_INFO, bytes([field.metadata["request"]]),
+                        when_idle=when_idle,
                     )
                     kwargs[field.name] = field.metadata["converter"](data)
                 except CommandNotRecognised:
@@ -756,47 +790,24 @@ class State:
             except TimeoutError:
                 _LOGGER.error("Timeout requesting amx")
 
-        if self._client.connected:
-            if self._amxduet is None:
-                await _update_amxduet()
-
-            await asyncio.gather(
-                *[
-                    _update(CommandCodes.POWER),
-                    _update(CommandCodes.VOLUME),
-                    _update(CommandCodes.MUTE),
-                    _update(CommandCodes.HEADPHONES),
-                    _update(CommandCodes.CURRENT_SOURCE),
-                    _update(CommandCodes.MENU),
-                    _update(CommandCodes.DISPLAY_INFORMATION_TYPE),
-                    _update(CommandCodes.IMAX_ENHANCED),
-                    _update(CommandCodes.DECODE_MODE_STATUS_2CH),
-                    _update(CommandCodes.DECODE_MODE_STATUS_MCH),
-                    _update(CommandCodes.VIDEO_SELECTION),
-                    _update(CommandCodes.INCOMING_VIDEO_PARAMETERS),
-                    _update(CommandCodes.INCOMING_AUDIO_FORMAT),
-                    _update(CommandCodes.INCOMING_AUDIO_SAMPLE_RATE),
-                    _update(CommandCodes.ROOM_EQ_NAMES),
-                    _update(CommandCodes.DAB_STATION),
-                    _update(CommandCodes.DLS_PDT_INFO),
-                    _update(CommandCodes.RDS_INFORMATION),
-                    _update(CommandCodes.TUNER_PRESET),
-                    _update(CommandCodes.ROOM_EQUALIZATION),
-                    _update(CommandCodes.DOLBY_AUDIO),
-                    _update(CommandCodes.BASS_EQUALIZATION),
-                    _update(CommandCodes.TREBLE_EQUALIZATION),
-                    _update(CommandCodes.BALANCE),
-                    _update(CommandCodes.LIPSYNC_DELAY),
-                    _update(CommandCodes.SUBWOOFER_TRIM),
-                    _update(CommandCodes.SUB_STEREO_TRIM),
-                    _update(CommandCodes.COMPRESSION),
-                    _update(CommandCodes.NETWORK_PLAYBACK_STATUS),
-                    _update(CommandCodes.BLUETOOTH_STATUS),
-                    _update_presets(),
-                    _update_now_playing(),
-                ]
-            )
-        else:
+        if not self._client.connected:
             if self._state:
                 self._state = dict()
                 self._now_playing = None
+            return
+
+        if self._amxduet is None:
+            await _update_amxduet()
+
+        tasks: list = []
+        for cc in CommandCodes:
+            if not (cc.flags & flags):
+                continue
+            if cc == CommandCodes.NOW_PLAYING_INFO:
+                tasks.append(_update_now_playing())
+            elif cc == CommandCodes.PRESET_DETAIL:
+                tasks.append(_update_presets())
+            else:
+                tasks.append(_update(cc))
+        if tasks:
+            await asyncio.gather(*tasks)

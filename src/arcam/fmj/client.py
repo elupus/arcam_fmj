@@ -2,11 +2,12 @@
 
 import asyncio
 from asyncio.streams import StreamReader, StreamWriter
+from collections.abc import Callable
+import heapq
 import logging
 from datetime import datetime, timedelta
 from contextlib import AsyncExitStack, contextmanager, suppress
 from typing import Union, overload
-from collections.abc import Callable
 
 from . import (
     AmxDuetRequest,
@@ -33,6 +34,67 @@ _REQUEST_THROTTLE = 0.2
 _HEARTBEAT_INTERVAL = timedelta(seconds=5)
 _HEARTBEAT_TIMEOUT = _HEARTBEAT_INTERVAL + _HEARTBEAT_INTERVAL
 
+_PRIORITY_HIGH = 0
+_PRIORITY_LOW = 1
+
+
+class _PriorityLockContext:
+    __slots__ = ("_lock", "_priority")
+
+    def __init__(self, lock: "PriorityLock", priority: int) -> None:
+        self._lock = lock
+        self._priority = priority
+
+    async def __aenter__(self) -> "PriorityLock":
+        await self._lock.acquire(self._priority)
+        return self._lock
+
+    async def __aexit__(self, *args) -> None:
+        self._lock.release()
+
+
+class PriorityLock:
+    """Async lock that services waiters in priority order (lowest number first)."""
+
+    def __init__(self) -> None:
+        self._locked = False
+        self._seq = 0
+        self._heap: list[tuple[int, int, asyncio.Future[None]]] = []
+
+    def __call__(self, priority: int = 0) -> _PriorityLockContext:
+        return _PriorityLockContext(self, priority)
+
+    async def acquire(self, priority: int = 0) -> None:
+        if not self._locked:
+            self._locked = True
+            return
+        fut: asyncio.Future[None] = asyncio.get_running_loop().create_future()
+        entry = (priority, self._seq, fut)
+        self._seq += 1
+        heapq.heappush(self._heap, entry)
+        try:
+            await fut
+        except asyncio.CancelledError:
+            if not fut.done() or fut.cancelled():
+                # Still in heap; will be skipped by _wake_next.
+                pass
+            else:
+                # We were woken but also cancelled — pass the lock on.
+                self._wake_next()
+            raise
+
+    def release(self) -> None:
+        self._locked = False
+        self._wake_next()
+
+    def _wake_next(self) -> None:
+        while self._heap:
+            _, _, fut = heapq.heappop(self._heap)
+            if not fut.cancelled():
+                self._locked = True
+                fut.set_result(None)
+                return
+
 
 class ClientBase:
     def __init__(self) -> None:
@@ -40,7 +102,7 @@ class ClientBase:
         self._writer: StreamWriter | None = None
         self._task = None
         self._listen: set[Callable] = set()
-        self._request_lock = asyncio.Lock()
+        self._request_lock = PriorityLock()
         self._timestamp = datetime.now()
 
     @contextmanager
@@ -51,16 +113,17 @@ class ClientBase:
         finally:
             self._listen.remove(listener)
 
-    async def _process_heartbeat(self, writer: StreamWriter):
+    async def _process_heartbeat(self):
         while True:
             delay = self._timestamp + _HEARTBEAT_INTERVAL - datetime.now()
             if delay > timedelta():
                 await asyncio.sleep(delay.total_seconds())
             else:
                 _LOGGER.debug("Sending ping")
-                await write_packet(
-                    writer, CommandPacket(1, CommandCodes.POWER, bytes([0xF0]))
-                )
+                try:
+                    await self.request(1, CommandCodes.POWER, bytes([0xF0]), when_idle=True)
+                except Exception:
+                    _LOGGER.debug("Heartbeat failed")
                 self._timestamp = datetime.now()
 
     async def _process_data(self, reader: StreamReader):
@@ -87,7 +150,7 @@ class ClientBase:
         assert self._writer, "Writer missing"
         assert self._reader, "Reader missing"
 
-        _process_heartbeat = asyncio.create_task(self._process_heartbeat(self._writer))
+        _process_heartbeat = asyncio.create_task(self._process_heartbeat())
         try:
             await self._process_data(self._reader)
         finally:
@@ -107,14 +170,14 @@ class ClientBase:
         return self._writer is not None
 
     @overload
-    async def request_raw(self, request: CommandPacket) -> ResponsePacket: ...
+    async def request_raw(self, request: CommandPacket, *, when_idle: bool = False) -> ResponsePacket: ...
 
     @overload
-    async def request_raw(self, request: AmxDuetRequest) -> AmxDuetResponse: ...
+    async def request_raw(self, request: AmxDuetRequest, *, when_idle: bool = False) -> AmxDuetResponse: ...
 
     @async_retry(2, asyncio.TimeoutError)
     async def request_raw(
-        self, request: CommandPacket | AmxDuetRequest
+        self, request: CommandPacket | AmxDuetRequest, *, when_idle: bool = False
     ) -> ResponsePacket | AmxDuetResponse:
         if not self._writer:
             raise NotConnectedException()
@@ -126,8 +189,9 @@ class ClientBase:
                 if not (future.cancelled() or future.done()):
                     future.set_result(response)
 
+        priority = _PRIORITY_LOW if when_idle else _PRIORITY_HIGH
         async with AsyncExitStack() as stack:
-            await stack.enter_async_context(self._request_lock)
+            await stack.enter_async_context(self._request_lock(priority))
             async with asyncio.timeout(_REQUEST_TIMEOUT.total_seconds()):
                 with self.listen(listen):
                     _LOGGER.debug("Requesting %s", request)
@@ -148,11 +212,11 @@ class ClientBase:
 
         writer = self._writer
         request = CommandPacket(zn, cc, data)
-        async with self._request_lock:
+        async with self._request_lock():
             await write_packet(writer, request)
             await asyncio.sleep(_REQUEST_THROTTLE)
 
-    async def request(self, zn: int, cc: CommandCodes, data: bytes):
+    async def request(self, zn: int, cc: CommandCodes, data: bytes, *, when_idle: bool = False):
         if not self._writer:
             raise NotConnectedException()
 
@@ -163,7 +227,7 @@ class ClientBase:
             await self.send(zn, cc, data)
             return
 
-        response = await self.request_raw(CommandPacket(zn, cc, data))
+        response = await self.request_raw(CommandPacket(zn, cc, data), when_idle=when_idle)
 
         if response.ac == AnswerCodes.STATUS_UPDATE:
             return response.data
