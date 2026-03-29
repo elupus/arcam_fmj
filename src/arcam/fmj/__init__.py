@@ -1007,6 +1007,7 @@ class RoomEqMode(IntOrTypeEnum):
     EQ1 = 0x01
     EQ2 = 0x02
     EQ3 = 0x03
+    NOT_CALCULATED = 0x04
 
 
 class DolbyAudioMode(IntOrTypeEnum):
