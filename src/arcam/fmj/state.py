@@ -29,6 +29,7 @@ from . import (
     RC5CodePlayback,
     RC5CodeToggle,
     RC5CodeMenuAccess,
+    RC5CodeColor,
     APIVERSION_RC5_NUMERIC_SERIES,
     RC5CODE_NAVIGATION,
     RC5CODE_PLAYBACK,
@@ -42,6 +43,10 @@ from . import (
     RC5CODE_DIRECT_MODE,
     RC5CODE_DISPLAY_BRIGHTNESS,
     RC5CODE_HDMI_OUTPUT,
+    RC5CODE_COLOR,
+    RC5CODE_DOLBY_PLIIX_CENTRE_WIDTH,
+    RC5CODE_DOLBY_PLIIX_DIMENSION,
+    RC5CODE_DOLBY_PLIIX_PANORAMA,
     DecodeMode2CH,
     DecodeModeMCH,
     DolbyAudioMode,
@@ -525,6 +530,21 @@ class State:
             self._zn, CommandCodes.DOLBY_AUDIO, bytes([mode])
         )
 
+    async def inc_dolby_pliix_centre_width(self) -> None:
+        await self._send_rc5(RC5CODE_DOLBY_PLIIX_CENTRE_WIDTH, True)
+
+    async def dec_dolby_pliix_centre_width(self) -> None:
+        await self._send_rc5(RC5CODE_DOLBY_PLIIX_CENTRE_WIDTH, False)
+
+    async def inc_dolby_pliix_dimension(self) -> None:
+        await self._send_rc5(RC5CODE_DOLBY_PLIIX_DIMENSION, True)
+
+    async def dec_dolby_pliix_dimension(self) -> None:
+        await self._send_rc5(RC5CODE_DOLBY_PLIIX_DIMENSION, False)
+
+    async def set_dolby_pliix_panorama(self, on: bool) -> None:
+        await self._send_rc5(RC5CODE_DOLBY_PLIIX_PANORAMA, on)
+
     def get_balance(self) -> float | None:
         """Return balance level (-6 to +6 in 1dB steps)."""
         data = self._state.get(CommandCodes.BALANCE)
@@ -700,6 +720,9 @@ class State:
         await self._client.request(
             self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, bytes([0x10, digit])
         )
+
+    async def send_color(self, color: RC5CodeColor) -> None:
+        await self._send_rc5(RC5CODE_COLOR, color)
 
     async def save_settings(self, pin: tuple[int, int, int, int] = (1, 2, 3, 4)) -> None:
         """Save a secure backup of device settings.
