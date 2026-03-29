@@ -1109,7 +1109,7 @@ class PresetDetail:
         return PresetDetail(data[0], type, name)
 
 
-SAMPLE_RATE_MAP: dict[int, int] = {
+SAMPLE_RATE_MAP: dict[int, int | None] = {
     0x00: 32000,
     0x01: 44100,
     0x02: 48000,
@@ -1117,6 +1117,8 @@ SAMPLE_RATE_MAP: dict[int, int] = {
     0x04: 96000,
     0x05: 176400,
     0x06: 192000,
+    0x07: None,  # Unknown
+    0x08: None,  # Undetected
 }
 
 

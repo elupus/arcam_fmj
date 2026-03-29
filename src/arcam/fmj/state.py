@@ -228,10 +228,10 @@ class State:
             IncomingAudioConfig.from_int(value[1]),
         )
 
-    def get_incoming_audio_sample_rate(self) -> int:
+    def get_incoming_audio_sample_rate(self) -> int | None:
         value = self._state.get(CommandCodes.INCOMING_AUDIO_SAMPLE_RATE)
         if value is None:
-            return 0
+            return None
         return SAMPLE_RATE_MAP.get(value[0], 0)
 
     def get_decode_mode_2ch(self) -> DecodeMode2CH | None:
