@@ -272,10 +272,7 @@ class State:
         return DecodeMode2CH.from_bytes(value)
 
     async def set_decode_mode_2ch(self, mode: DecodeMode2CH) -> None:
-        command = self.get_rc5code(RC5CODE_DECODE_MODE_2CH, mode)
-        await self._client.request(
-            self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command
-        )
+        await self._send_rc5(RC5CODE_DECODE_MODE_2CH, mode)
 
     def get_decode_mode_mch(self) -> DecodeModeMCH | None:
         value = self._state.get(CommandCodes.DECODE_MODE_STATUS_MCH)
@@ -284,10 +281,7 @@ class State:
         return DecodeModeMCH.from_bytes(value)
 
     async def set_decode_mode_mch(self, mode: DecodeModeMCH) -> None:
-        command = self.get_rc5code(RC5CODE_DECODE_MODE_MCH, mode)
-        await self._client.request(
-            self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command
-        )
+        await self._send_rc5(RC5CODE_DECODE_MODE_MCH, mode)
 
     def get_2ch(self) -> bool:
         """Return if source is 2 channel or not."""
@@ -348,12 +342,10 @@ class State:
                 self._zn, CommandCodes.POWER, bytes([bool_to_hex])
             )
         else:
-            command = self.get_rc5code(RC5CODE_POWER, power)
             if power:
-                await self._client.request(
-                    self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command
-                )
+                await self._send_rc5(RC5CODE_POWER, power)
             else:
+                command = self.get_rc5code(RC5CODE_POWER, power)
                 # seed with a response, since device might not
                 # respond in timely fashion, so let's just
                 # assume we succeded until response come
@@ -382,10 +374,7 @@ class State:
                 self._zn, CommandCodes.MUTE, bytes([bool_to_hex])
             )
         else:
-            command = self.get_rc5code(RC5CODE_MUTE, mute)
-            await self._client.request(
-                self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command
-            )
+            await self._send_rc5(RC5CODE_MUTE, mute)
 
     def get_headphones(self) -> bool | None:
         """Return whether headphones are connected."""
@@ -422,10 +411,10 @@ class State:
             self._zn, CommandCodes.LIPSYNC_DELAY, bytes([byte_val])
         )
 
-    async def inc_lipsync(self) -> None:
+    async def inc_lipsync_delay(self) -> None:
         await self._send_rc5(RC5CODE_LIPSYNC, True)
 
-    async def dec_lipsync(self) -> None:
+    async def dec_lipsync_delay(self) -> None:
         await self._send_rc5(RC5CODE_LIPSYNC, False)
 
     def get_subwoofer_trim(self) -> float | None:
@@ -440,10 +429,10 @@ class State:
             self._zn, CommandCodes.SUBWOOFER_TRIM, bytes([byte_val])
         )
 
-    async def inc_sub_trim(self) -> None:
+    async def inc_subwoofer_trim(self) -> None:
         await self._send_rc5(RC5CODE_SUB_TRIM, True)
 
-    async def dec_sub_trim(self) -> None:
+    async def dec_subwoofer_trim(self) -> None:
         await self._send_rc5(RC5CODE_SUB_TRIM, False)
 
     def get_sub_stereo_trim(self) -> float | None:
@@ -470,10 +459,10 @@ class State:
             self._zn, CommandCodes.TREBLE_EQUALIZATION, bytes([byte_val])
         )
 
-    async def inc_treble(self) -> None:
+    async def inc_treble_equalization(self) -> None:
         await self._send_rc5(RC5CODE_TREBLE, True)
 
-    async def dec_treble(self) -> None:
+    async def dec_treble_equalization(self) -> None:
         await self._send_rc5(RC5CODE_TREBLE, False)
 
     def get_bass_equalization(self) -> float | None:
@@ -488,10 +477,10 @@ class State:
             self._zn, CommandCodes.BASS_EQUALIZATION, bytes([byte_val])
         )
 
-    async def inc_bass(self) -> None:
+    async def inc_bass_equalization(self) -> None:
         await self._send_rc5(RC5CODE_BASS, True)
 
-    async def dec_bass(self) -> None:
+    async def dec_bass_equalization(self) -> None:
         await self._send_rc5(RC5CODE_BASS, False)
 
     def get_room_equalization(self) -> RoomEqMode | None:
@@ -637,10 +626,7 @@ class State:
             value = src.to_bytes(self._api_model, self._zn)
             await self._client.request(self._zn, CommandCodes.CURRENT_SOURCE, value)
         else:
-            command = self.get_rc5code(RC5CODE_SOURCE, src)
-            await self._client.request(
-                self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command
-            )
+            await self._send_rc5(RC5CODE_SOURCE, src)
 
     def get_volume(self) -> int | None:
         value = self._state.get(CommandCodes.VOLUME)
@@ -655,19 +641,13 @@ class State:
         if self._api_model in VOLUME_STEP_SUPPORTED:
             await self._client.request(self._zn, CommandCodes.VOLUME, bytes([0xF1]))
         else:
-            command = self.get_rc5code(RC5CODE_VOLUME, True)
-            await self._client.request(
-                self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command
-            )
+            await self._send_rc5(RC5CODE_VOLUME, True)
 
     async def dec_volume(self) -> None:
         if self._api_model in VOLUME_STEP_SUPPORTED:
             await self._client.request(self._zn, CommandCodes.VOLUME, bytes([0xF2]))
         else:
-            command = self.get_rc5code(RC5CODE_VOLUME, False)
-            await self._client.request(
-                self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command
-            )
+            await self._send_rc5(RC5CODE_VOLUME, False)
 
     def get_dab_station(self) -> str | None:
         value = self._state.get(CommandCodes.DAB_STATION)

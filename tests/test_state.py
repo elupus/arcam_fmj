@@ -865,30 +865,30 @@ def test_rc5_avr_has_navigation(model):
 # --- Bool-keyed RC5 tables ---
 
 
-async def test_inc_bass():
+async def test_inc_bass_equalization():
     client = MagicMock(spec=Client)
     state = State(client, 1, ApiModel.APIHDA_SERIES)
-    await state.inc_bass()
+    await state.inc_bass_equalization()
     client.request.assert_called_with(
         1, CommandCodes.SIMULATE_RC5_IR_COMMAND, bytes([0x10, 0x2C])
     )
 
 
-async def test_dec_bass():
+async def test_dec_bass_equalization():
     client = MagicMock(spec=Client)
     state = State(client, 1, ApiModel.APIHDA_SERIES)
-    await state.dec_bass()
+    await state.dec_bass_equalization()
     client.request.assert_called_with(
         1, CommandCodes.SIMULATE_RC5_IR_COMMAND, bytes([0x10, 0x38])
     )
 
 
-async def test_inc_bass_unsupported():
+async def test_inc_bass_equalization_unsupported():
     """SA series has no bass RC5 codes."""
     client = MagicMock(spec=Client)
     state = State(client, 1, ApiModel.APISA_SERIES)
     with pytest.raises(ValueError):
-        await state.inc_bass()
+        await state.inc_bass_equalization()
 
 
 def test_rc5_bass_table_entries_are_valid():
