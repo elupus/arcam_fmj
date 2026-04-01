@@ -211,6 +211,11 @@ APIVERSION_NOW_PLAYING_SERIES = set()
 APIVERSION_NOW_PLAYING_SERIES.update(APIVERSION_HDA_SERIES)
 APIVERSION_NOW_PLAYING_SERIES.update(APIVERSION_APP_SAFETY_SERIES)
 
+APIVERSION_RC5_NUMERIC_SERIES = set()
+APIVERSION_RC5_NUMERIC_SERIES.update(APIVERSION_450_SERIES)
+APIVERSION_RC5_NUMERIC_SERIES.update(APIVERSION_860_SERIES)
+APIVERSION_RC5_NUMERIC_SERIES.update(APIVERSION_HDA_SERIES)
+
 
 class ApiModel(enum.Enum):
     API450_SERIES = 1
@@ -519,6 +524,73 @@ class DecodeModeMCH(IntOrTypeEnum):
     AURO_2D = 0x10, APIVERSION_AURO_SERIES
 
 
+class DisplayBrightness(IntOrTypeEnum):
+    OFF = 0x00
+    L1 = 0x01
+    L2 = 0x02
+
+
+class HdmiOutput(IntOrTypeEnum):
+    OUT_1 = 0x02
+    OUT_2 = 0x03
+    OUT_1_2 = 0x04
+
+
+class RC5CodeNavigation(enum.Enum):
+    UP = enum.auto()
+    DOWN = enum.auto()
+    LEFT = enum.auto()
+    RIGHT = enum.auto()
+    OK = enum.auto()
+    MENU = enum.auto()
+    HOME = enum.auto()
+    RETURN = enum.auto()
+
+
+class RC5CodePlayback(enum.Enum):
+    PLAY = enum.auto()
+    PAUSE = enum.auto()
+    STOP = enum.auto()
+    SKIP_FORWARD = enum.auto()
+    SKIP_BACK = enum.auto()
+    FAST_FORWARD = enum.auto()
+    REWIND = enum.auto()
+    RANDOM = enum.auto()
+    REPEAT = enum.auto()
+    EJECT = enum.auto()
+
+
+class RC5CodeToggle(enum.Enum):
+    STANDBY = enum.auto()
+    MUTE = enum.auto()
+    MODE = enum.auto()
+    INFO = enum.auto()
+    DISPLAY_BRIGHTNESS = enum.auto()
+    DIRECT_MODE = enum.auto()
+    DOLBY_AUDIO = enum.auto()
+    ROOM_EQ = enum.auto()
+    RADIO = enum.auto()
+    DTS_DIALOG_CONTROL = enum.auto()
+    FOLLOW_ZONE_1 = enum.auto()
+    NEXT_ZONE = enum.auto()
+    CYCLE_OUTPUT_RESOLUTION = enum.auto()
+
+
+class RC5CodeMenuAccess(enum.Enum):
+    BASS = enum.auto()
+    TREBLE = enum.auto()
+    LIPSYNC = enum.auto()
+    SUB_TRIM = enum.auto()
+    SPEAKER_TRIM = enum.auto()
+
+
+class RC5CodeColor(enum.Enum):
+    RED = enum.auto()
+    GREEN = enum.auto()
+    YELLOW = enum.auto()
+    BLUE = enum.auto()
+
+
 POWER_WRITE_SUPPORTED = {
     ApiModel.APISA_SERIES,
     ApiModel.APIPA_SERIES,
@@ -617,7 +689,6 @@ RC5CODE_DECODE_MODE_MCH: dict[tuple[ApiModel, int], dict[DecodeModeMCH, bytes]] 
         DecodeModeMCH.DOLBY_PLII_IIx_MOVIE: bytes([16, 103]),
         DecodeModeMCH.DOLBY_PLII_IIx_MUSIC: bytes([16, 104]),
     },
-    (ApiModel.API450_SERIES, 2): {},
     (ApiModel.API860_SERIES, 1): {
         DecodeModeMCH.STEREO_DOWNMIX: bytes([16, 107]),
         DecodeModeMCH.MULTI_CHANNEL: bytes([16, 106]),
@@ -626,7 +697,6 @@ RC5CODE_DECODE_MODE_MCH: dict[tuple[ApiModel, int], dict[DecodeModeMCH, bytes]] 
         DecodeModeMCH.DOLBY_SURROUND: bytes([16, 110]),
         DecodeModeMCH.DTS_VIRTUAL_X: bytes([16, 115]),
     },
-    (ApiModel.API860_SERIES, 2): {},
     (ApiModel.APIHDA_SERIES, 1): {
         DecodeModeMCH.STEREO_DOWNMIX: bytes([16, 107]),
         DecodeModeMCH.MULTI_CHANNEL: bytes([16, 106]),
@@ -638,11 +708,6 @@ RC5CODE_DECODE_MODE_MCH: dict[tuple[ApiModel, int], dict[DecodeModeMCH, bytes]] 
         DecodeModeMCH.AURO_MATIC_3D: bytes([16, 71]),
         DecodeModeMCH.AURO_2D: bytes([16, 104]),
     },
-    (ApiModel.APIHDA_SERIES, 2): {},
-    (ApiModel.APISA_SERIES, 1): {},
-    (ApiModel.APISA_SERIES, 2): {},
-    (ApiModel.APIPA_SERIES, 1): {},
-    (ApiModel.APIPA_SERIES, 2): {},
 }
 
 RC5CODE_DECODE_MODE_2CH: dict[tuple[ApiModel, int], dict[DecodeMode2CH, bytes]] = {
@@ -656,7 +721,6 @@ RC5CODE_DECODE_MODE_2CH: dict[tuple[ApiModel, int], dict[DecodeMode2CH, bytes]] 
         DecodeMode2CH.DTS_NEO_6_MUSIC: bytes([16, 112]),
         DecodeMode2CH.MCH_STEREO: bytes([16, 69]),
     },
-    (ApiModel.API450_SERIES, 2): {},
     (ApiModel.API860_SERIES, 1): {
         DecodeMode2CH.STEREO: bytes([16, 107]),
         DecodeMode2CH.DTS_NEURAL_X: bytes([16, 113]),
@@ -666,7 +730,6 @@ RC5CODE_DECODE_MODE_2CH: dict[tuple[ApiModel, int], dict[DecodeMode2CH, bytes]] 
         DecodeMode2CH.DTS_NEO_6_MUSIC: bytes([16, 112]),
         DecodeMode2CH.MCH_STEREO: bytes([16, 69]),
     },
-    (ApiModel.API860_SERIES, 2): {},
     (ApiModel.APIHDA_SERIES, 1): {
         DecodeMode2CH.STEREO: bytes([16, 107]),
         DecodeMode2CH.DOLBY_SURROUND: bytes([16, 110]),
@@ -679,13 +742,6 @@ RC5CODE_DECODE_MODE_2CH: dict[tuple[ApiModel, int], dict[DecodeMode2CH, bytes]] 
         DecodeMode2CH.AURO_MATIC_3D: bytes([16, 71]),
         DecodeMode2CH.AURO_2D: bytes([16, 104]),
     },
-    (ApiModel.APIHDA_SERIES, 2): {},
-    (ApiModel.APISA_SERIES, 1): {},
-    (ApiModel.APISA_SERIES, 2): {},
-    (ApiModel.APIPA_SERIES, 1): {},
-    (ApiModel.APIPA_SERIES, 2): {},
-    (ApiModel.APIST_SERIES, 1): {},
-    (ApiModel.APIST_SERIES, 2): {},
 }
 
 RC5CODE_SOURCE: dict[tuple[ApiModel, int], dict[SourceCodes, bytes]] = {
@@ -820,9 +876,6 @@ RC5CODE_SOURCE: dict[tuple[ApiModel, int], dict[SourceCodes, bytes]] = {
         SourceCodes.USB: bytes([21, 93]),
         SourceCodes.NET: bytes([21, 92]),
     },
-    (ApiModel.APIST_SERIES, 2): {},
-    (ApiModel.APIPA_SERIES, 1): {},
-    (ApiModel.APIPA_SERIES, 2): {},
 }
 
 RC5CODE_POWER = {
@@ -908,6 +961,208 @@ RC5CODE_VOLUME = {
         True: bytes([21, 86]),
         False: bytes([21, 85]),
     },
+}
+
+
+
+_AVR_NAVIGATION: dict[RC5CodeNavigation, bytes] = {
+    RC5CodeNavigation.UP: bytes([0x10, 0x56]),
+    RC5CodeNavigation.DOWN: bytes([0x10, 0x55]),
+    RC5CodeNavigation.LEFT: bytes([0x10, 0x51]),
+    RC5CodeNavigation.RIGHT: bytes([0x10, 0x50]),
+    RC5CodeNavigation.OK: bytes([0x10, 0x57]),
+    RC5CodeNavigation.MENU: bytes([0x10, 0x52]),
+    RC5CodeNavigation.HOME: bytes([0x10, 0x2B]),
+}
+
+RC5CODE_NAVIGATION: dict[tuple[ApiModel, int], dict[RC5CodeNavigation, bytes]] = {
+    (ApiModel.API450_SERIES, 1): {**_AVR_NAVIGATION},
+    (ApiModel.API860_SERIES, 1): {**_AVR_NAVIGATION, RC5CodeNavigation.RETURN: bytes([0x10, 0x33])},
+    (ApiModel.APIHDA_SERIES, 1): {**_AVR_NAVIGATION, RC5CodeNavigation.RETURN: bytes([0x10, 0x33])},
+    (ApiModel.APISA_SERIES, 1): {**_AVR_NAVIGATION, RC5CodeNavigation.RETURN: bytes([0x10, 0x33])},
+}
+
+_860_HDA_PLAYBACK: dict[RC5CodePlayback, bytes] = {
+    RC5CodePlayback.PLAY: bytes([0x10, 0x35]),
+    RC5CodePlayback.PAUSE: bytes([0x10, 0x30]),
+    RC5CodePlayback.STOP: bytes([0x10, 0x36]),
+    RC5CodePlayback.SKIP_FORWARD: bytes([0x10, 0x0B]),
+    RC5CodePlayback.SKIP_BACK: bytes([0x10, 0x21]),
+    RC5CodePlayback.FAST_FORWARD: bytes([0x10, 0x34]),
+    RC5CodePlayback.REWIND: bytes([0x10, 0x79]),
+    RC5CodePlayback.RANDOM: bytes([0x10, 0x4C]),
+    RC5CodePlayback.REPEAT: bytes([0x10, 0x31]),
+}
+
+RC5CODE_PLAYBACK: dict[tuple[ApiModel, int], dict[RC5CodePlayback, bytes]] = {
+    (ApiModel.API450_SERIES, 1): {
+        RC5CodePlayback.PAUSE: bytes([0x10, 0x30]),
+        RC5CodePlayback.RANDOM: bytes([0x10, 0x31]),
+        RC5CodePlayback.EJECT: bytes([0x10, 0x2D]),
+    },
+    (ApiModel.API860_SERIES, 1): {**_860_HDA_PLAYBACK, RC5CodePlayback.EJECT: bytes([0x10, 0x2D])},
+    (ApiModel.APIHDA_SERIES, 1): {**_860_HDA_PLAYBACK, RC5CodePlayback.EJECT: bytes([0x10, 0x2D])},
+}
+
+_AVR_TOGGLES: dict[RC5CodeToggle, bytes] = {
+    RC5CodeToggle.STANDBY: bytes([0x10, 0x0C]),
+    RC5CodeToggle.MUTE: bytes([0x10, 0x0D]),
+    RC5CodeToggle.MODE: bytes([0x10, 0x20]),
+    RC5CodeToggle.INFO: bytes([0x10, 0x37]),
+    RC5CodeToggle.DISPLAY_BRIGHTNESS: bytes([0x10, 0x3B]),
+    RC5CodeToggle.DIRECT_MODE: bytes([0x10, 0x0A]),
+    RC5CodeToggle.DOLBY_AUDIO: bytes([0x10, 0x46]),
+    RC5CodeToggle.ROOM_EQ: bytes([0x10, 0x1E]),
+    RC5CodeToggle.FOLLOW_ZONE_1: bytes([0x10, 0x14]),
+    RC5CodeToggle.NEXT_ZONE: bytes([0x10, 0x5F]),
+}
+
+RC5CODE_TOGGLE: dict[tuple[ApiModel, int], dict[RC5CodeToggle, bytes]] = {
+    (ApiModel.API450_SERIES, 1): {
+        **_AVR_TOGGLES,
+        RC5CodeToggle.CYCLE_OUTPUT_RESOLUTION: bytes([0x10, 0x2F]),
+    },
+    (ApiModel.API450_SERIES, 2): {
+        RC5CodeToggle.MUTE: bytes([0x17, 0x03]),
+        RC5CodeToggle.NEXT_ZONE: bytes([0x10, 0x5F]),
+    },
+    (ApiModel.API860_SERIES, 1): {
+        **_AVR_TOGGLES,
+        RC5CodeToggle.RADIO: bytes([0x10, 0x5B]),
+        RC5CodeToggle.DTS_DIALOG_CONTROL: bytes([0x10, 0x5A]),
+    },
+    (ApiModel.API860_SERIES, 2): {
+        RC5CodeToggle.MUTE: bytes([0x17, 0x03]),
+        RC5CodeToggle.NEXT_ZONE: bytes([0x10, 0x5F]),
+    },
+    (ApiModel.APIHDA_SERIES, 1): {
+        **_AVR_TOGGLES,
+        RC5CodeToggle.RADIO: bytes([0x10, 0x5B]),
+        RC5CodeToggle.DTS_DIALOG_CONTROL: bytes([0x10, 0x5A]),
+    },
+    (ApiModel.APIHDA_SERIES, 2): {
+        RC5CodeToggle.MUTE: bytes([0x17, 0x03]),
+        RC5CodeToggle.NEXT_ZONE: bytes([0x10, 0x5F]),
+    },
+    (ApiModel.APISA_SERIES, 1): {
+        RC5CodeToggle.STANDBY: bytes([0x10, 0x0C]),
+        RC5CodeToggle.MUTE: bytes([0x10, 0x0D]),
+        RC5CodeToggle.DISPLAY_BRIGHTNESS: bytes([0x10, 0x3B]),
+    },
+}
+
+_AVR_MENU_ACCESS: dict[RC5CodeMenuAccess, bytes] = {
+    RC5CodeMenuAccess.BASS: bytes([0x10, 0x27]),
+    RC5CodeMenuAccess.TREBLE: bytes([0x10, 0x0E]),
+    RC5CodeMenuAccess.LIPSYNC: bytes([0x10, 0x32]),
+    RC5CodeMenuAccess.SUB_TRIM: bytes([0x10, 0x33]),
+    RC5CodeMenuAccess.SPEAKER_TRIM: bytes([0x10, 0x25]),
+}
+
+RC5CODE_MENU_ACCESS: dict[tuple[ApiModel, int], dict[RC5CodeMenuAccess, bytes]] = {
+    (ApiModel.API450_SERIES, 1): {**_AVR_MENU_ACCESS},
+    (ApiModel.API860_SERIES, 1): {**_AVR_MENU_ACCESS},
+    (ApiModel.APIHDA_SERIES, 1): {**_AVR_MENU_ACCESS},
+}
+
+_AVR_COLORS: dict[RC5CodeColor, bytes] = {
+    RC5CodeColor.RED: bytes([0x10, 0x29]),
+    RC5CodeColor.GREEN: bytes([0x10, 0x2A]),
+    RC5CodeColor.YELLOW: bytes([0x10, 0x2B]),
+    RC5CodeColor.BLUE: bytes([0x10, 0x37]),
+}
+
+RC5CODE_COLOR: dict[tuple[ApiModel, int], dict[RC5CodeColor, bytes]] = {
+    (ApiModel.API450_SERIES, 1): {**_AVR_COLORS},
+    (ApiModel.API860_SERIES, 1): {**_AVR_COLORS},
+    (ApiModel.APIHDA_SERIES, 1): {**_AVR_COLORS},
+}
+
+# Bool-keyed RC5 tables: True = up/increase/on, False = down/decrease/off
+RC5CODE_BASS: dict[tuple[ApiModel, int], dict[bool, bytes]] = {
+    (ApiModel.API450_SERIES, 1): {True: bytes([0x10, 0x2C]), False: bytes([0x10, 0x2D])},
+    (ApiModel.API860_SERIES, 1): {True: bytes([0x10, 0x2C]), False: bytes([0x10, 0x38])},
+    (ApiModel.APIHDA_SERIES, 1): {True: bytes([0x10, 0x2C]), False: bytes([0x10, 0x38])},
+}
+
+RC5CODE_TREBLE: dict[tuple[ApiModel, int], dict[bool, bytes]] = {
+    (ApiModel.API450_SERIES, 1): {True: bytes([0x10, 0x2E]), False: bytes([0x10, 0x62])},
+    (ApiModel.API860_SERIES, 1): {True: bytes([0x10, 0x2E]), False: bytes([0x10, 0x66])},
+    (ApiModel.APIHDA_SERIES, 1): {True: bytes([0x10, 0x2E]), False: bytes([0x10, 0x66])},
+}
+
+RC5CODE_BALANCE: dict[tuple[ApiModel, int], dict[bool, bytes]] = {
+    (ApiModel.API450_SERIES, 1): {True: bytes([0x10, 0x28]), False: bytes([0x10, 0x26])},
+    (ApiModel.API860_SERIES, 1): {True: bytes([0x10, 0x28]), False: bytes([0x10, 0x26])},
+    (ApiModel.APIHDA_SERIES, 1): {True: bytes([0x10, 0x28]), False: bytes([0x10, 0x26])},
+    (ApiModel.APISA_SERIES, 1): {True: bytes([0x10, 0x28]), False: bytes([0x10, 0x26])},
+}
+
+RC5CODE_SUB_TRIM: dict[tuple[ApiModel, int], dict[bool, bytes]] = {
+    (ApiModel.API450_SERIES, 1): {True: bytes([0x10, 0x69]), False: bytes([0x10, 0x6C])},
+    (ApiModel.API860_SERIES, 1): {True: bytes([0x10, 0x69]), False: bytes([0x10, 0x6C])},
+    (ApiModel.APIHDA_SERIES, 1): {True: bytes([0x10, 0x69]), False: bytes([0x10, 0x6C])},
+}
+
+RC5CODE_LIPSYNC: dict[tuple[ApiModel, int], dict[bool, bytes]] = {
+    (ApiModel.API450_SERIES, 1): {True: bytes([0x10, 0x29]), False: bytes([0x10, 0x65])},
+    (ApiModel.API860_SERIES, 1): {True: bytes([0x10, 0x0F]), False: bytes([0x10, 0x65])},
+    (ApiModel.APIHDA_SERIES, 1): {True: bytes([0x10, 0x0F]), False: bytes([0x10, 0x65])},
+}
+
+RC5CODE_DIRECT_MODE: dict[tuple[ApiModel, int], dict[bool, bytes]] = {
+    (ApiModel.API450_SERIES, 1): {True: bytes([0x10, 0x4E]), False: bytes([0x10, 0x4F])},
+    (ApiModel.API860_SERIES, 1): {True: bytes([0x10, 0x4E]), False: bytes([0x10, 0x4F])},
+    (ApiModel.APIHDA_SERIES, 1): {True: bytes([0x10, 0x4E]), False: bytes([0x10, 0x4F])},
+}
+
+RC5CODE_DISPLAY_BRIGHTNESS: dict[tuple[ApiModel, int], dict[DisplayBrightness, bytes]] = {
+    (ApiModel.API450_SERIES, 1): {
+        DisplayBrightness.OFF: bytes([0x10, 0x1F]),
+        DisplayBrightness.L1: bytes([0x10, 0x21]),
+        DisplayBrightness.L2: bytes([0x10, 0x23]),
+    },
+    (ApiModel.API860_SERIES, 1): {
+        DisplayBrightness.OFF: bytes([0x10, 0x1F]),
+        DisplayBrightness.L1: bytes([0x10, 0x22]),
+        DisplayBrightness.L2: bytes([0x10, 0x23]),
+    },
+    (ApiModel.APIHDA_SERIES, 1): {
+        DisplayBrightness.OFF: bytes([0x10, 0x1F]),
+        DisplayBrightness.L1: bytes([0x10, 0x22]),
+        DisplayBrightness.L2: bytes([0x10, 0x23]),
+    },
+    (ApiModel.APISA_SERIES, 1): {
+        DisplayBrightness.OFF: bytes([0x10, 0x1F]),
+        DisplayBrightness.L1: bytes([0x10, 0x22]),
+        DisplayBrightness.L2: bytes([0x10, 0x23]),
+    },
+}
+
+RC5CODE_HDMI_OUTPUT: dict[tuple[ApiModel, int], dict[HdmiOutput, bytes]] = {
+    (ApiModel.API860_SERIES, 1): {
+        HdmiOutput.OUT_1: bytes([0x10, 0x49]),
+        HdmiOutput.OUT_2: bytes([0x10, 0x4A]),
+        HdmiOutput.OUT_1_2: bytes([0x10, 0x4B]),
+    },
+    (ApiModel.APIHDA_SERIES, 1): {
+        HdmiOutput.OUT_1: bytes([0x10, 0x49]),
+        HdmiOutput.OUT_2: bytes([0x10, 0x4A]),
+        HdmiOutput.OUT_1_2: bytes([0x10, 0x4B]),
+    },
+}
+
+# 450-series Dolby PLIIx Music controls
+RC5CODE_DOLBY_PLIIX_CENTRE_WIDTH: dict[tuple[ApiModel, int], dict[bool, bytes]] = {
+    (ApiModel.API450_SERIES, 1): {True: bytes([0x10, 0x6D]), False: bytes([0x10, 0x71])},
+}
+
+RC5CODE_DOLBY_PLIIX_DIMENSION: dict[tuple[ApiModel, int], dict[bool, bytes]] = {
+    (ApiModel.API450_SERIES, 1): {True: bytes([0x10, 0x72]), False: bytes([0x10, 0x73])},
+}
+
+RC5CODE_DOLBY_PLIIX_PANORAMA: dict[tuple[ApiModel, int], dict[bool, bytes]] = {
+    (ApiModel.API450_SERIES, 1): {True: bytes([0x10, 0x74]), False: bytes([0x10, 0x75])},
 }
 
 

@@ -23,6 +23,30 @@ from . import (
     CommandNotRecognised,
     CompressionMode,
     ParameterNotRecognised,
+    DisplayBrightness,
+    HdmiOutput,
+    RC5CodeNavigation,
+    RC5CodePlayback,
+    RC5CodeToggle,
+    RC5CodeMenuAccess,
+    RC5CodeColor,
+    APIVERSION_RC5_NUMERIC_SERIES,
+    RC5CODE_NAVIGATION,
+    RC5CODE_PLAYBACK,
+    RC5CODE_TOGGLE,
+    RC5CODE_MENU_ACCESS,
+    RC5CODE_BASS,
+    RC5CODE_TREBLE,
+    RC5CODE_BALANCE,
+    RC5CODE_SUB_TRIM,
+    RC5CODE_LIPSYNC,
+    RC5CODE_DIRECT_MODE,
+    RC5CODE_DISPLAY_BRIGHTNESS,
+    RC5CODE_HDMI_OUTPUT,
+    RC5CODE_COLOR,
+    RC5CODE_DOLBY_PLIIX_CENTRE_WIDTH,
+    RC5CODE_DOLBY_PLIIX_DIMENSION,
+    RC5CODE_DOLBY_PLIIX_PANORAMA,
     DecodeMode2CH,
     DecodeModeMCH,
     DolbyAudioMode,
@@ -208,6 +232,12 @@ class State:
             )
         return command
 
+    async def _send_rc5(self, table: dict, value) -> None:
+        command = self.get_rc5code(table, value)
+        await self._client.request(
+            self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command
+        )
+
     def get(self, cc):
         return self._state[cc]
 
@@ -281,9 +311,9 @@ class State:
         self,
     ) -> list[DecodeModeMCH] | list[DecodeMode2CH] | None:
         if self.get_2ch():
-            return list(RC5CODE_DECODE_MODE_2CH[(self._api_model, self._zn)])
+            return list(RC5CODE_DECODE_MODE_2CH.get((self._api_model, self._zn), {}))
         else:
-            return list(RC5CODE_DECODE_MODE_MCH[(self._api_model, self._zn)])
+            return list(RC5CODE_DECODE_MODE_MCH.get((self._api_model, self._zn), {}))
 
     async def set_decode_mode(self, mode: str | DecodeModeMCH | DecodeMode2CH) -> None:
         if self.get_2ch():
@@ -298,6 +328,9 @@ class State:
             elif not isinstance(mode, DecodeModeMCH):
                 raise ValueError("Decode mode not supported at this time")
             await self.set_decode_mode_mch(mode)
+
+    async def set_direct_mode(self, on: bool) -> None:
+        await self._send_rc5(RC5CODE_DIRECT_MODE, on)
 
     def get_power(self) -> bool | None:
         value = self._state.get(CommandCodes.POWER)
@@ -373,6 +406,9 @@ class State:
             self._zn, CommandCodes.DISPLAY_INFORMATION_TYPE, bytes([info_type])
         )
 
+    async def set_display_brightness(self, level: DisplayBrightness) -> None:
+        await self._send_rc5(RC5CODE_DISPLAY_BRIGHTNESS, level)
+
     def get_lipsync_delay(self) -> int | None:
         """Return lip sync delay in milliseconds (0-250ms in 5ms steps)."""
         data = self._state.get(CommandCodes.LIPSYNC_DELAY)
@@ -385,6 +421,12 @@ class State:
             self._zn, CommandCodes.LIPSYNC_DELAY, bytes([byte_val])
         )
 
+    async def inc_lipsync(self) -> None:
+        await self._send_rc5(RC5CODE_LIPSYNC, True)
+
+    async def dec_lipsync(self) -> None:
+        await self._send_rc5(RC5CODE_LIPSYNC, False)
+
     def get_subwoofer_trim(self) -> float | None:
         """Return subwoofer trim level in dB (-10 to +10 dB in 0.5dB steps)."""
         data = self._state.get(CommandCodes.SUBWOOFER_TRIM)
@@ -396,6 +438,12 @@ class State:
         await self._client.request(
             self._zn, CommandCodes.SUBWOOFER_TRIM, bytes([byte_val])
         )
+
+    async def inc_sub_trim(self) -> None:
+        await self._send_rc5(RC5CODE_SUB_TRIM, True)
+
+    async def dec_sub_trim(self) -> None:
+        await self._send_rc5(RC5CODE_SUB_TRIM, False)
 
     def get_sub_stereo_trim(self) -> float | None:
         """Return sub stereo trim level in dB (0 to -10 dB in 0.5dB steps)."""
@@ -421,17 +469,29 @@ class State:
             self._zn, CommandCodes.TREBLE_EQUALIZATION, bytes([byte_val])
         )
 
+    async def inc_treble(self) -> None:
+        await self._send_rc5(RC5CODE_TREBLE, True)
+
+    async def dec_treble(self) -> None:
+        await self._send_rc5(RC5CODE_TREBLE, False)
+
     def get_bass_equalization(self) -> float | None:
         """Return bass equalization level in dB (-12 to +12 dB in 1dB steps)."""
         data = self._state.get(CommandCodes.BASS_EQUALIZATION)
         return _get_scaled_negative(data, -12.0, 12.0, 1.0)
 
     async def set_bass_equalization(self, trim_db: float) -> None:
-        """Set bvass equalization level in dB (-12 to +12 dB in 1dB steps)."""
+        """Set bass equalization level in dB (-12 to +12 dB in 1dB steps)."""
         byte_val = _set_scaled(trim_db, -12.0, 12.0, 1.0)
         await self._client.request(
             self._zn, CommandCodes.BASS_EQUALIZATION, bytes([byte_val])
         )
+
+    async def inc_bass(self) -> None:
+        await self._send_rc5(RC5CODE_BASS, True)
+
+    async def dec_bass(self) -> None:
+        await self._send_rc5(RC5CODE_BASS, False)
 
     def get_room_equalization(self) -> RoomEqMode | None:
         """Return room equalization (DIRAC) mode."""
@@ -470,6 +530,21 @@ class State:
             self._zn, CommandCodes.DOLBY_AUDIO, bytes([mode])
         )
 
+    async def inc_dolby_pliix_centre_width(self) -> None:
+        await self._send_rc5(RC5CODE_DOLBY_PLIIX_CENTRE_WIDTH, True)
+
+    async def dec_dolby_pliix_centre_width(self) -> None:
+        await self._send_rc5(RC5CODE_DOLBY_PLIIX_CENTRE_WIDTH, False)
+
+    async def inc_dolby_pliix_dimension(self) -> None:
+        await self._send_rc5(RC5CODE_DOLBY_PLIIX_DIMENSION, True)
+
+    async def dec_dolby_pliix_dimension(self) -> None:
+        await self._send_rc5(RC5CODE_DOLBY_PLIIX_DIMENSION, False)
+
+    async def set_dolby_pliix_panorama(self, on: bool) -> None:
+        await self._send_rc5(RC5CODE_DOLBY_PLIIX_PANORAMA, on)
+
     def get_balance(self) -> float | None:
         """Return balance level (-6 to +6 in 1dB steps)."""
         data = self._state.get(CommandCodes.BALANCE)
@@ -481,6 +556,14 @@ class State:
         await self._client.request(
             self._zn, CommandCodes.BALANCE, bytes([byte_val])
         )
+
+    async def inc_balance(self) -> None:
+        """Shift balance right."""
+        await self._send_rc5(RC5CODE_BALANCE, True)
+
+    async def dec_balance(self) -> None:
+        """Shift balance left."""
+        await self._send_rc5(RC5CODE_BALANCE, False)
 
     def get_compression(self) -> CompressionMode | None:
         """Return the dynamic range compression setting."""
@@ -522,6 +605,9 @@ class State:
             self._zn, VideoSelection.VIDEO_SELECTION, bytes([mode])
         )
 
+    async def set_hdmi_output(self, output: HdmiOutput) -> None:
+        await self._send_rc5(RC5CODE_HDMI_OUTPUT, output)
+
     def get_source(self) -> SourceCodes | None:
         value = self._state.get(CommandCodes.CURRENT_SOURCE)
         if value is None:
@@ -532,7 +618,7 @@ class State:
             return None
 
     def get_source_list(self) -> list[SourceCodes]:
-        return list(RC5CODE_SOURCE[(self._api_model, self._zn)].keys())
+        return list(RC5CODE_SOURCE.get((self._api_model, self._zn), {}).keys())
 
     async def get_input_name(self) -> str | None:
         """Query the user-configured input name for the current source."""
@@ -611,6 +697,32 @@ class State:
 
     def get_preset_details(self) -> dict[int, PresetDetail]:
         return self._presets
+
+    async def send_navigation(self, code: RC5CodeNavigation) -> None:
+        await self._send_rc5(RC5CODE_NAVIGATION, code)
+
+    async def send_playback(self, code: RC5CodePlayback) -> None:
+        await self._send_rc5(RC5CODE_PLAYBACK, code)
+
+    async def send_toggle(self, code: RC5CodeToggle) -> None:
+        await self._send_rc5(RC5CODE_TOGGLE, code)
+
+    async def send_menu_access(self, code: RC5CodeMenuAccess) -> None:
+        await self._send_rc5(RC5CODE_MENU_ACCESS, code)
+
+    async def send_numeric(self, digit: int) -> None:
+        if not 0 <= digit <= 9:
+            raise ValueError(f"Digit must be 0-9, got {digit}")
+        if self.model and self.model not in APIVERSION_RC5_NUMERIC_SERIES:
+            raise ValueError(
+                f"Numeric RC5 not supported on {self.model}"
+            )
+        await self._client.request(
+            self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, bytes([0x10, digit])
+        )
+
+    async def send_color(self, color: RC5CodeColor) -> None:
+        await self._send_rc5(RC5CODE_COLOR, color)
 
     async def save_settings(self, pin: tuple[int, int, int, int] = (1, 2, 3, 4)) -> None:
         """Save a secure backup of device settings.

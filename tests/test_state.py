@@ -15,6 +15,17 @@ from arcam.fmj import (
     NetworkPlaybackStatus,
     NowPlayingEncoder,
     NowPlayingInfo,
+    DisplayBrightness,
+    HdmiOutput,
+    RC5CodeNavigation,
+    RC5CodePlayback,
+    RC5CodeToggle,
+    RC5CODE_NAVIGATION,
+    RC5CODE_PLAYBACK,
+    RC5CODE_TOGGLE,
+    RC5CODE_BASS,
+    RC5CODE_DISPLAY_BRIGHTNESS,
+    RC5CODE_HDMI_OUTPUT,
     ResponsePacket,
     RoomEqMode,
     POWER_WRITE_SUPPORTED,
@@ -777,3 +788,167 @@ def test_get_bluetooth_status_playing_with_track():
     status, track = state.get_bluetooth_status()
     assert status == BluetoothAudioStatus.PLAYING_AAC
     assert track == "My Song"
+
+
+# --- RC5 typed tables ---
+
+
+async def test_send_playback():
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    await state.send_playback(RC5CodePlayback.PLAY)
+    client.request.assert_called_with(
+        1, CommandCodes.SIMULATE_RC5_IR_COMMAND, bytes([0x10, 0x35])
+    )
+
+
+async def test_send_navigation():
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    await state.send_navigation(RC5CodeNavigation.UP)
+    client.request.assert_called_with(
+        1, CommandCodes.SIMULATE_RC5_IR_COMMAND, bytes([0x10, 0x56])
+    )
+
+
+async def test_send_toggle():
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    await state.send_toggle(RC5CodeToggle.RADIO)
+    client.request.assert_called_with(
+        1, CommandCodes.SIMULATE_RC5_IR_COMMAND, bytes([0x10, 0x5B])
+    )
+
+
+async def test_send_playback_unsupported_model():
+    """PA series has no playback."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.APIPA_SERIES)
+    with pytest.raises(ValueError):
+        await state.send_playback(RC5CodePlayback.PLAY)
+    client.request.assert_not_called()
+
+
+async def test_send_playback_unsupported_code():
+    """SA series lacks playback codes."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.APISA_SERIES)
+    with pytest.raises(ValueError):
+        await state.send_playback(RC5CodePlayback.PLAY)
+    client.request.assert_not_called()
+
+
+@pytest.mark.parametrize("table", [
+    RC5CODE_NAVIGATION, RC5CODE_PLAYBACK, RC5CODE_TOGGLE,
+])
+def test_rc5_table_entries_are_valid(table):
+    """All table entries should map to 2-byte RC5 commands."""
+    for key, codes in table.items():
+        for code, data in codes.items():
+            assert len(data) == 2, f"Bad data for {key} {code}: {data!r}"
+
+
+@pytest.mark.parametrize("model", [
+    ApiModel.API450_SERIES,
+    ApiModel.API860_SERIES,
+    ApiModel.APIHDA_SERIES,
+])
+def test_rc5_avr_has_navigation(model):
+    """AVR series should all have navigation codes."""
+    table = RC5CODE_NAVIGATION[(model, 1)]
+    for code in [RC5CodeNavigation.UP, RC5CodeNavigation.DOWN,
+                 RC5CodeNavigation.LEFT, RC5CodeNavigation.RIGHT,
+                 RC5CodeNavigation.OK, RC5CodeNavigation.MENU]:
+        assert code in table
+
+
+# --- Bool-keyed RC5 tables ---
+
+
+async def test_inc_bass():
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    await state.inc_bass()
+    client.request.assert_called_with(
+        1, CommandCodes.SIMULATE_RC5_IR_COMMAND, bytes([0x10, 0x2C])
+    )
+
+
+async def test_dec_bass():
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    await state.dec_bass()
+    client.request.assert_called_with(
+        1, CommandCodes.SIMULATE_RC5_IR_COMMAND, bytes([0x10, 0x38])
+    )
+
+
+async def test_inc_bass_unsupported():
+    """SA series has no bass RC5 codes."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.APISA_SERIES)
+    with pytest.raises(ValueError):
+        await state.inc_bass()
+
+
+def test_rc5_bass_table_entries_are_valid():
+    for key, codes in RC5CODE_BASS.items():
+        for direction, data in codes.items():
+            assert isinstance(direction, bool)
+            assert len(data) == 2
+
+
+# --- Enum-keyed RC5 tables ---
+
+
+async def test_set_display_brightness():
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    await state.set_display_brightness(DisplayBrightness.L2)
+    client.request.assert_called_with(
+        1, CommandCodes.SIMULATE_RC5_IR_COMMAND, bytes([0x10, 0x23])
+    )
+
+
+async def test_set_hdmi_output():
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    await state.set_hdmi_output(HdmiOutput.OUT_1_2)
+    client.request.assert_called_with(
+        1, CommandCodes.SIMULATE_RC5_IR_COMMAND, bytes([0x10, 0x4B])
+    )
+
+
+async def test_set_hdmi_output_unsupported():
+    """450 series has no HDMI output codes."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.API450_SERIES)
+    with pytest.raises(ValueError):
+        await state.set_hdmi_output(HdmiOutput.OUT_1)
+
+
+def test_rc5_display_brightness_table_entries_are_valid():
+    for key, codes in RC5CODE_DISPLAY_BRIGHTNESS.items():
+        for level, data in codes.items():
+            assert isinstance(level, DisplayBrightness)
+            assert len(data) == 2
+
+
+def test_rc5_hdmi_output_table_entries_are_valid():
+    for key, codes in RC5CODE_HDMI_OUTPUT.items():
+        for output, data in codes.items():
+            assert isinstance(output, HdmiOutput)
+            assert len(data) == 2
+
+
+async def test_set_direct_mode():
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    await state.set_direct_mode(True)
+    client.request.assert_called_with(
+        1, CommandCodes.SIMULATE_RC5_IR_COMMAND, bytes([0x10, 0x4E])
+    )
+    await state.set_direct_mode(False)
+    client.request.assert_called_with(
+        1, CommandCodes.SIMULATE_RC5_IR_COMMAND, bytes([0x10, 0x4F])
+    )
