@@ -510,14 +510,14 @@ class State:
         )
 
     def get_video_selection(self) -> VideoSelection | None:
-        """Return the IMAX Enhanced mode (HDA premium series)."""
+        """Return the video input selection (pre-HDA AVR series)."""
         value = self._state.get(CommandCodes.VIDEO_SELECTION)
         if value is None:
             return None
         return VideoSelection.from_bytes(value)
 
     async def set_video_selection(self, mode: VideoSelection) -> None:
-        """Set the IMAX Enhanced mode (HDA premium series)."""
+        """Set the video input selection (pre-HDA AVR series)."""
         await self._client.request(
             self._zn, VideoSelection.VIDEO_SELECTION, bytes([mode])
         )
