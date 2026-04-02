@@ -4,6 +4,7 @@ import asyncio
 from asyncio.streams import StreamReader, StreamWriter
 import logging
 from datetime import datetime, timedelta
+from arcam.fmj.priority_lock import PriorityLock
 from contextlib import AsyncExitStack, contextmanager, suppress
 from typing import Union, overload
 from collections.abc import Callable
@@ -40,7 +41,7 @@ class ClientBase:
         self._writer: StreamWriter | None = None
         self._task = None
         self._listen: set[Callable] = set()
-        self._request_lock = asyncio.Lock()
+        self._request_lock = PriorityLock()
         self._timestamp = datetime.now()
 
     @contextmanager
@@ -109,14 +110,14 @@ class ClientBase:
         return self._writer is not None
 
     @overload
-    async def request_raw(self, request: CommandPacket) -> ResponsePacket: ...
+    async def request_raw(self, request: CommandPacket, priority: int = 0) -> ResponsePacket: ...
 
     @overload
-    async def request_raw(self, request: AmxDuetRequest) -> AmxDuetResponse: ...
+    async def request_raw(self, request: AmxDuetRequest, priority: int = 0) -> AmxDuetResponse: ...
 
     @async_retry(2, asyncio.TimeoutError)
     async def request_raw(
-        self, request: CommandPacket | AmxDuetRequest
+        self, request: CommandPacket | AmxDuetRequest, priority: int = 0
     ) -> ResponsePacket | AmxDuetResponse:
         if not self._writer:
             raise NotConnectedException()
@@ -129,7 +130,7 @@ class ClientBase:
                     future.set_result(response)
 
         async with AsyncExitStack() as stack:
-            await stack.enter_async_context(self._request_lock)
+            await stack.enter_async_context(self._request_lock(priority))
             async with asyncio.timeout(_REQUEST_TIMEOUT.total_seconds()):
                 with self.listen(listen):
                     _LOGGER.debug("Requesting %s", request)
@@ -141,7 +142,7 @@ class ClientBase:
                     await stack.aclose()
                     return await future
                     
-    async def send(self, zn: int, cc: CommandCodes, data: bytes) -> None:
+    async def send(self, zn: int, cc: CommandCodes, data: bytes, priority: int = 0) -> None:
         if not self._writer:
             raise NotConnectedException()
 
@@ -150,11 +151,11 @@ class ClientBase:
 
         writer = self._writer
         request = CommandPacket(zn, cc, data)
-        async with self._request_lock:
+        async with self._request_lock(priority):
             await write_packet(writer, request)
             await asyncio.sleep(_REQUEST_THROTTLE)
 
-    async def request(self, zn: int, cc: CommandCodes, data: bytes):
+    async def request(self, zn: int, cc: CommandCodes, data: bytes, priority: int = 0):
         if not self._writer:
             raise NotConnectedException()
 
@@ -162,10 +163,10 @@ class ClientBase:
             raise UnsupportedZone()
 
         if cc.flags & EnumFlags.SEND_ONLY:
-            await self.send(zn, cc, data)
+            await self.send(zn, cc, data, priority)
             return
 
-        response = await self.request_raw(CommandPacket(zn, cc, data))
+        response = await self.request_raw(CommandPacket(zn, cc, data), priority)
 
         if response.ac == AnswerCodes.STATUS_UPDATE:
             return response.data
