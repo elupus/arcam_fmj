@@ -1006,7 +1006,7 @@ class VideoParameters:
     refresh_rate = attr.ib(type=int)
     interlaced = attr.ib(type=bool)
     aspect_ratio = attr.ib(type=IncomingVideoAspectRatio)
-    colorspace = attr.ib(type=IncomingVideoColorspace)
+    colorspace = attr.ib(type=IncomingVideoColorspace | None, default=None)
 
     @staticmethod
     def from_bytes(data: bytes) -> "VideoParameters":
@@ -1016,7 +1016,8 @@ class VideoParameters:
             refresh_rate = data[4],
             interlaced = (data[5] == 0x01),
             aspect_ratio = IncomingVideoAspectRatio.from_int(data[6]),
-            colorspace = IncomingVideoColorspace.from_int(data[7])
+            # Colorspace is not reported pre-HDA
+            colorspace = IncomingVideoColorspace.from_int(data[7]) if len(data) >= 8 else None,
         )
 
     def to_dict(self) -> Dict[str, Any]:
