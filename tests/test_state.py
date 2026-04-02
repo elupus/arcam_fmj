@@ -28,6 +28,7 @@ from arcam.fmj import (
     RC5CODE_HDMI_OUTPUT,
     ResponsePacket,
     RoomEqMode,
+    UnsupportedCommand,
     POWER_WRITE_SUPPORTED,
     SAVE_RESTORE_CONFIRMATION,
     SaveRestoreSubCommand,
@@ -952,3 +953,143 @@ async def test_set_direct_mode():
     client.request.assert_called_with(
         1, CommandCodes.SIMULATE_RC5_IR_COMMAND, bytes([0x10, 0x4F])
     )
+
+
+# --- Command support checking ---
+
+
+def test_is_command_supported_universal():
+    """Commands with version=None are always supported."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.APISA_SERIES)
+    state._amxduet = AmxDuetResponse({"Device-Model": "SA30"})
+    assert state._is_command_supported(CommandCodes.POWER) is True
+    assert state._is_command_supported(CommandCodes.VOLUME) is True
+
+
+def test_is_command_supported_matching_model():
+    """Commands with version set are supported when model is in the set."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    state._amxduet = AmxDuetResponse({"Device-Model": "AVR30"})
+    # IMAX_ENHANCED has version=APIVERSION_IMAX_SERIES which includes AVR30
+    assert state._is_command_supported(CommandCodes.IMAX_ENHANCED) is True
+    # BLUETOOTH_STATUS has version=APIVERSION_HDA_SERIES which includes AVR30
+    assert state._is_command_supported(CommandCodes.BLUETOOTH_STATUS) is True
+
+
+def test_is_command_supported_non_matching_model():
+    """Commands with version set are NOT supported when model is not in the set."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.APISA_SERIES)
+    state._amxduet = AmxDuetResponse({"Device-Model": "SA30"})
+    # IMAX_ENHANCED is not supported on SA series
+    assert state._is_command_supported(CommandCodes.IMAX_ENHANCED) is False
+    # BLUETOOTH_STATUS is HDA-only
+    assert state._is_command_supported(CommandCodes.BLUETOOTH_STATUS) is False
+    # VIDEO_SELECTION is PRE_HDA_AVR only
+    assert state._is_command_supported(CommandCodes.VIDEO_SELECTION) is False
+
+
+def test_is_command_supported_no_model_is_permissive():
+    """When model is unknown, version-restricted commands are allowed."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    # No AMX discovery yet, model is None
+    assert state.model is None
+    assert state._is_command_supported(CommandCodes.IMAX_ENHANCED) is True
+
+
+def test_is_command_supported_runtime_blocklist():
+    """Commands in the runtime blocklist are not supported regardless of version."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    state._amxduet = AmxDuetResponse({"Device-Model": "AVR30"})
+    assert state._is_command_supported(CommandCodes.VOLUME) is True
+    state._unsupported_commands.add(CommandCodes.VOLUME)
+    assert state._is_command_supported(CommandCodes.VOLUME) is False
+
+
+def test_require_command_raises_for_unsupported():
+    """_require_command raises UnsupportedCommand for unsupported commands."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.APISA_SERIES)
+    state._amxduet = AmxDuetResponse({"Device-Model": "SA30"})
+    with pytest.raises(UnsupportedCommand) as exc_info:
+        state._require_command(CommandCodes.IMAX_ENHANCED)
+    assert exc_info.value.cc == CommandCodes.IMAX_ENHANCED
+    assert exc_info.value.model == "SA30"
+
+
+def test_require_command_passes_for_supported():
+    """_require_command does not raise for supported commands."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    state._amxduet = AmxDuetResponse({"Device-Model": "AVR30"})
+    state._require_command(CommandCodes.POWER)  # should not raise
+    state._require_command(CommandCodes.IMAX_ENHANCED)  # should not raise
+
+
+def test_require_command_raises_for_runtime_blocked():
+    """_require_command raises for commands blocked at runtime."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    state._unsupported_commands.add(CommandCodes.VOLUME)
+    with pytest.raises(UnsupportedCommand):
+        state._require_command(CommandCodes.VOLUME)
+
+
+async def test_setter_raises_for_unsupported_command():
+    """Setter methods raise UnsupportedCommand when the command is not supported."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.APISA_SERIES)
+    state._amxduet = AmxDuetResponse({"Device-Model": "SA30"})
+    with pytest.raises(UnsupportedCommand):
+        await state.set_imax_enhanced(ImaxEnhancedMode.AUTO)
+    client.request.assert_not_called()
+
+
+async def test_setter_raises_for_runtime_blocked_command():
+    """Setter methods raise UnsupportedCommand for runtime-blocked commands."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    state._unsupported_commands.add(CommandCodes.VOLUME)
+    with pytest.raises(UnsupportedCommand):
+        await state.set_volume(50)
+    client.request.assert_not_called()
+
+
+async def test_update_skips_unsupported_commands():
+    """update() should not request commands that are not supported by the device."""
+    from arcam.fmj import CommandInvalidAtThisTime
+
+    client = MagicMock(spec=Client)
+    client.connected = True
+    # Make all requests raise so we purely test which commands are attempted
+    client.request.side_effect = CommandInvalidAtThisTime()
+    state = State(client, 1, ApiModel.APISA_SERIES)
+    state._amxduet = AmxDuetResponse({"Device-Model": "SA30"})
+
+    await state.update()
+    requested_commands = [call.args[1] for call in client.request.call_args_list]
+    # These commands have version restrictions that exclude SA30
+    assert CommandCodes.IMAX_ENHANCED not in requested_commands
+    assert CommandCodes.BLUETOOTH_STATUS not in requested_commands
+    assert CommandCodes.VIDEO_SELECTION not in requested_commands
+    # But universal commands like POWER should still be requested
+    assert CommandCodes.POWER in requested_commands
+
+
+async def test_update_records_command_not_recognised():
+    """update() should record COMMAND_NOT_RECOGNISED in the runtime blocklist."""
+    from arcam.fmj import CommandNotRecognised
+
+    client = MagicMock(spec=Client)
+    client.connected = True
+    client.request.side_effect = CommandNotRecognised(cc=CommandCodes.MENU)
+    state = State(client, 1, ApiModel.API450_SERIES)
+    state._amxduet = AmxDuetResponse({"Device-Model": "AVR450"})
+
+    assert CommandCodes.MENU not in state._unsupported_commands
+    await state.update()
+    assert CommandCodes.MENU in state._unsupported_commands

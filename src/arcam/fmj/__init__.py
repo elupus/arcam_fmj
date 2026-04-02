@@ -42,6 +42,13 @@ class UnsupportedZone(ArcamException):
     pass
 
 
+class UnsupportedCommand(ArcamException):
+    def __init__(self, cc=None, model=None):
+        self.cc = cc
+        self.model = model
+        super().__init__(f"Command {cc} not supported on {model}")
+
+
 class ResponseException(ArcamException):
     def __init__(self, ac=None, zn=None, cc=None, data=None):
         self.ac = ac
