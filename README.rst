@@ -58,6 +58,7 @@ Protocol Specifications
 - `SA30 <https://www.arcam.co.uk/ugc/tor/SA30/Custom%20Installation%20Notes/SH306E_RS232_SA30_4.pdf>`_
 - `SA750 <https://www.jbl.com/on/demandware.static/-/Sites-masterCatalog_Harman/default/dwabc088c9/pdfs/SH320E_RS232_SA750_iss1.pdf>`_
 - `PA720/PA240/PA410 <https://www.arcam.co.uk/ugc/tor/PA240/Custom%20Installation%20Notes/RS232_PA720_PA240_PA410_SH305E_3.pdf>`_
+- `ST60 <https://www.arcam.co.uk/ugc/tor/ST60/Custom%20Installation%20Notes/SH309_RS232_ST60_C.pdf>`_
 - `AV860/AVR850/AVR550/AVR390/SR250 <https://www.arcam.co.uk/ugc/tor/avr390/RS232/RS232_860_850_550_390_250_SH274E_D_181018.pdf>`_
 - `SA10/SA20 <https://www.arcam.co.uk/ugc/tor/SA20/Custom%20Installation%20Notes/SH277E_RS232_SA10_SA20_B.pdf>`_
 - `AVR750/AVR450/AVR380 <https://www.arcam.co.uk/ugc/tor/avr380/RS232/RS232_AVR750450380_SH256E_3.pdf>`_
