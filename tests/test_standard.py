@@ -13,12 +13,15 @@ from arcam.fmj import (
     CommandNotRecognised,
     CommandPacket,
     ConnectionFailed,
+    IncomingVideoAspectRatio,
+    IncomingVideoColorspace,
     InvalidDataLength,
     InvalidPacket,
     InvalidZoneException,
     ParameterNotRecognised,
     ResponseException,
     ResponsePacket,
+    VideoParameters,
     _read_response,
     write_packet,
     IntOrTypeEnum,
@@ -128,3 +131,29 @@ def test_response_exception_from_response(ac, expected_type):
     response = ResponsePacket(1, CommandCodes.POWER, ac, b"")
     exc = ResponseException.from_response(response)
     assert isinstance(exc, expected_type)
+
+
+def test_video_parameters_8_bytes():
+    """HDA-series: 8-byte response includes colorspace."""
+    # 1280x720, 50Hz, progressive, 16:9, HDR10
+    data = bytes([0x05, 0x00, 0x02, 0xD0, 0x32, 0x00, 0x02, 0x01])
+    vp = VideoParameters.from_bytes(data)
+    assert vp.horizontal_resolution == 1280
+    assert vp.vertical_resolution == 720
+    assert vp.refresh_rate == 50
+    assert vp.interlaced is False
+    assert vp.aspect_ratio == IncomingVideoAspectRatio.ASPECT_16_9
+    assert vp.colorspace == IncomingVideoColorspace.HDR10
+
+
+def test_video_parameters_7_bytes():
+    """860/450-series: 7-byte response has no colorspace."""
+    # 1280x720, 50Hz, progressive, 16:9
+    data = bytes([0x05, 0x00, 0x02, 0xD0, 0x32, 0x00, 0x02])
+    vp = VideoParameters.from_bytes(data)
+    assert vp.horizontal_resolution == 1280
+    assert vp.vertical_resolution == 720
+    assert vp.refresh_rate == 50
+    assert vp.interlaced is False
+    assert vp.aspect_ratio == IncomingVideoAspectRatio.ASPECT_16_9
+    assert vp.colorspace is None
