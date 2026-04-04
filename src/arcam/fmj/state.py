@@ -256,6 +256,73 @@ class State:
             return self._amxduet.device_revision
         return None
 
+    @property
+    def api_model(self) -> ApiModel:
+        """The detected or manually configured API model series.
+
+        This determines which commands, source mappings, and RC5 tables
+        are available. Set automatically by ``detect_model()`` or
+        ``update()``, but can also be set manually if AMX detection is
+        unreliable for your device (e.g. if the JBL SDP-58 reports a
+        non-standard model string).
+        """
+        return self._api_model
+
+    @api_model.setter
+    def api_model(self, value: ApiModel) -> None:
+        self._api_model = value
+
+    async def detect_model(self) -> ApiModel:
+        """Detect the device model via AMX Duet protocol.
+
+        Uses a cached AMX beacon if one has already been received (the
+        listener stores any incoming beacon in ``_amxduet``). Otherwise,
+        sends an active AMX query and waits for a response.
+
+        Sets ``api_model`` based on the device's model string and returns
+        the detected model. Falls back to the current ``api_model`` if
+        detection fails.
+
+        This is called automatically by ``update()`` on first run, but
+        callers can also invoke it explicitly during connection setup for
+        earlier model detection.
+        """
+        if self._amxduet is None:
+            try:
+                data = await self._client.request_raw(AmxDuetRequest())
+                self._amxduet = data
+            except (ResponseException, NotConnectedException, TimeoutError) as e:
+                _LOGGER.warning("AMX model detection failed: %s", e)
+                return self._api_model
+
+        model_name = self._amxduet.device_model
+        if model_name is None:
+            return self._api_model
+
+        # Check model name against known series sets. Order matters:
+        # HDA must be checked before 860 because some model strings
+        # could theoretically appear in multiple sets.
+        model_map = [
+            (APIVERSION_HDA_SERIES, ApiModel.APIHDA_SERIES),
+            (APIVERSION_860_SERIES, ApiModel.API860_SERIES),
+            (APIVERSION_450_SERIES, ApiModel.API450_SERIES),
+            (APIVERSION_SA_SERIES, ApiModel.APISA_SERIES),
+            (APIVERSION_PA_SERIES, ApiModel.APIPA_SERIES),
+            (APIVERSION_ST_SERIES, ApiModel.APIST_SERIES),
+        ]
+
+        for series_set, api_model in model_map:
+            if model_name in series_set:
+                self._api_model = api_model
+                _LOGGER.info("Detected model %s -> %s", model_name, api_model)
+                return self._api_model
+
+        _LOGGER.warning(
+            "Unknown model '%s', keeping current api_model=%s",
+            model_name, self._api_model,
+        )
+        return self._api_model
+
     def _is_command_supported(self, cc: CommandCodes) -> bool:
         """Check if a command is supported by the current device."""
         if cc in self._unsupported_commands:
@@ -895,44 +962,16 @@ class State:
             else:
                 self._now_playing = None
 
-        async def _update_amxduet() -> None:
-            try:
-                data = await self._client.request_raw(AmxDuetRequest())
-                self._amxduet = data
-
-                if data.device_model in APIVERSION_450_SERIES:
-                    self._api_model = ApiModel.API450_SERIES
-
-                if data.device_model in APIVERSION_860_SERIES:
-                    self._api_model = ApiModel.API860_SERIES
-
-                if data.device_model in APIVERSION_HDA_SERIES:
-                    self._api_model = ApiModel.APIHDA_SERIES
-
-                if data.device_model in APIVERSION_SA_SERIES:
-                    self._api_model = ApiModel.APISA_SERIES
-
-                if data.device_model in APIVERSION_PA_SERIES:
-                    self._api_model = ApiModel.APIPA_SERIES
-
-                if data.device_model in APIVERSION_ST_SERIES:
-                    self._api_model = ApiModel.APIST_SERIES
-
-            except ResponseException as e:
-                _LOGGER.debug("Response error skipping %s", e.ac)
-            except NotConnectedException as e:
-                _LOGGER.debug("Not connected skipping amx")
-            except TimeoutError:
-                _LOGGER.error("Timeout requesting amx")
-
         if not self._client.connected:
             if self._state:
                 self._state = dict()
                 self._now_playing = None
             return
 
+        # Auto-detect the device model on first update so that
+        # command filtering and source/RC5 tables are correct.
         if self._amxduet is None:
-            await _update_amxduet()
+            await self.detect_model()
 
         # Execute commands sequentially — one at a time. This is
         # intentional: the receiver's IP control is single-threaded and

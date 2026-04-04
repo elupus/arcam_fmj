@@ -1128,3 +1128,89 @@ async def test_set_video_selection(zn, api_model):
     client.request.assert_called_once_with(
         zn, CommandCodes.VIDEO_SELECTION, bytes([VideoSelection.BD])
     )
+
+
+# --- Model auto-detection API ---
+
+
+async def test_api_model_property_default():
+    """Default api_model should be API450_SERIES."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    assert state.api_model == ApiModel.API450_SERIES
+
+
+async def test_api_model_property_setter():
+    """api_model can be set manually for devices with unreliable AMX."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    state.api_model = ApiModel.APIHDA_SERIES
+    assert state.api_model == ApiModel.APIHDA_SERIES
+
+
+async def test_detect_model_from_cached_beacon():
+    """detect_model() should use a cached AMX beacon if available."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+
+    # Simulate a cached AMX response (as if _listen received a beacon)
+    state._amxduet = AmxDuetResponse({
+        "Device-SDKClass": "Receiver",
+        "Device-Make": "ARCAM",
+        "Device-Model": "AVR30",
+        "Device-Revision": "1.0",
+    })
+
+    result = await state.detect_model()
+    assert result == ApiModel.APIHDA_SERIES
+    assert state.api_model == ApiModel.APIHDA_SERIES
+    # Should not have sent any AMX query since beacon was cached
+    client.request_raw.assert_not_called()
+
+
+async def test_detect_model_from_amx_query():
+    """detect_model() sends AMX query if no beacon is cached."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+
+    amx_response = AmxDuetResponse({
+        "Device-SDKClass": "Receiver",
+        "Device-Make": "ARCAM",
+        "Device-Model": "SA30",
+        "Device-Revision": "2.0",
+    })
+    client.request_raw.return_value = amx_response
+
+    result = await state.detect_model()
+    assert result == ApiModel.APISA_SERIES
+    assert state.api_model == ApiModel.APISA_SERIES
+    assert state.model == "SA30"
+
+
+@pytest.mark.parametrize("model_str, expected_api", [
+    ("AVR30", ApiModel.APIHDA_SERIES),
+    ("SDP-58", ApiModel.APIHDA_SERIES),
+    ("AVR850", ApiModel.API860_SERIES),
+    ("AVR450", ApiModel.API450_SERIES),
+    ("SA30", ApiModel.APISA_SERIES),
+    ("PA720", ApiModel.APIPA_SERIES),
+    ("ST60", ApiModel.APIST_SERIES),
+])
+async def test_detect_model_all_series(model_str, expected_api):
+    """detect_model() maps all known model strings correctly."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    state._amxduet = AmxDuetResponse({"Device-Model": model_str})
+
+    result = await state.detect_model()
+    assert result == expected_api
+
+
+async def test_detect_model_unknown_keeps_current():
+    """Unknown model strings should keep the current api_model."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    state._amxduet = AmxDuetResponse({"Device-Model": "UNKNOWN-9000"})
+
+    result = await state.detect_model()
+    assert result == ApiModel.APIHDA_SERIES  # unchanged
