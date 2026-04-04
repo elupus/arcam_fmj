@@ -228,11 +228,11 @@ class State:
         if not self._is_command_supported(cc):
             raise UnsupportedCommand(cc=cc, model=self.model)
 
-    async def _request(self, zn: int, cc: CommandCodes, data: bytes) -> bytes:
+    async def _request(self, zn: int, cc: CommandCodes, data: bytes, priority: int = 0) -> bytes:
         """Check command support, then send a request."""
         self._require_command(cc)
         try:
-            return await self._client.request(zn, cc, data)
+            return await self._client.request(zn, cc, data, priority)
         except CommandNotRecognised:
             _LOGGER.debug("Command not recognised, marking %s as unsupported", cc)
             self._unsupported_commands.add(cc)
@@ -751,9 +751,11 @@ class State:
         return status, track
 
     async def update(self, flags: EnumFlags = EnumFlags.FULL_UPDATE) -> None:
+        priority = flags.priority
+
         async def _update(cc: CommandCodes):
             try:
-                data = await self._request(self._zn, cc, bytes([0xF0]))
+                data = await self._request(self._zn, cc, bytes([0xF0]), priority)
                 self._state[cc] = data
             except UnsupportedZone:
                 _LOGGER.debug("Unsupported zone %s for %s", self._zn, cc)
@@ -773,7 +775,7 @@ class State:
             for preset in range(1, 51):
                 try:
                     data = await self._request(
-                        self._zn, CommandCodes.PRESET_DETAIL, bytes([preset])
+                        self._zn, CommandCodes.PRESET_DETAIL, bytes([preset]), priority
                     )
                     if data != b"\x00":
                         presets[preset] = PresetDetail.from_bytes(data)
@@ -797,7 +799,7 @@ class State:
                     continue
                 try:
                     data = await self._request(
-                        self._zn, CommandCodes.NOW_PLAYING_INFO, bytes([field.metadata["request"]])
+                        self._zn, CommandCodes.NOW_PLAYING_INFO, bytes([field.metadata["request"]]), priority
                     )
                     kwargs[field.name] = field.metadata["converter"](data)
                 except CommandNotRecognised:
@@ -822,7 +824,7 @@ class State:
 
         async def _update_amxduet() -> None:
             try:
-                data = await self._client.request_raw(AmxDuetRequest())
+                data = await self._client.request_raw(AmxDuetRequest(), priority)
                 self._amxduet = data
 
                 if data.device_model in APIVERSION_450_SERIES:
