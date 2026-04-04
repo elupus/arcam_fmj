@@ -1,4 +1,23 @@
-"""Zone state"""
+"""Zone state.
+
+Update strategy
+---------------
+``State.update()`` queries the receiver for current state. Commands are
+executed **sequentially** — one at a time — to respect the device's
+single-threaded IP control processor. Previous versions used
+``asyncio.gather()`` to fire all queries concurrently, which overwhelmed
+receivers and caused performance issues (especially in Home Assistant).
+
+Callers can control what gets queried via ``EnumFlags`` and
+``UpdateConfig``:
+
+- ``update(flags=EnumFlags.PRIORITY_ESSENTIAL)`` queries only power,
+  volume, mute, and source — ideal for frequent polling.
+- ``update(config=UpdateConfig(skip_presets=True))`` skips the expensive
+  preset enumeration (up to 50 sequential queries).
+- ``update(config=UpdateConfig(skip_now_playing=True))`` skips now-playing
+  metadata sub-queries.
+"""
 
 import asyncio
 import logging
@@ -87,6 +106,28 @@ from .client import Client
 _LOGGER = logging.getLogger(__name__)
 _T = TypeVar("_T")
 
+
+@attr.s(auto_attribs=True)
+class UpdateConfig:
+    """Configuration for ``State.update()`` behavior.
+
+    These options let callers skip expensive or irrelevant queries, reducing
+    the number of commands sent to the receiver during a state refresh.
+
+    Attributes:
+        skip_presets: Skip ``PRESET_DETAIL`` enumeration entirely. Useful
+            when the current source is not a tuner — preset queries send
+            up to ``max_presets`` sequential commands that are wasted when
+            no tuner is active.
+        skip_now_playing: Skip ``NOW_PLAYING_INFO`` sub-queries. Useful
+            when the current source is not a network/BT source.
+        max_presets: Maximum number of preset slots to probe (1–50).
+            Default is 5, which is enough for quick enumeration. Set
+            higher only if the user has many tuner presets configured.
+    """
+    skip_presets: bool = False
+    skip_now_playing: bool = False
+    max_presets: int = 5
 
 
 def _get_scaled_negative(data: bytes | None, min_value: float, max_value: float, scale: float) -> float | None:
@@ -750,7 +791,28 @@ class State:
             track = ""
         return status, track
 
-    async def update(self, flags: EnumFlags = EnumFlags.FULL_UPDATE) -> None:
+    async def update(
+        self,
+        flags: EnumFlags = EnumFlags.FULL_UPDATE,
+        config: UpdateConfig | None = None,
+    ) -> None:
+        """Query the receiver for current state.
+
+        Commands are executed **sequentially** to avoid overwhelming the
+        receiver's single-threaded IP control processor. The previous
+        implementation used ``asyncio.gather()`` to fire all queries
+        concurrently, which caused performance issues on real hardware.
+
+        Args:
+            flags: Which commands to query. Use ``EnumFlags.FULL_UPDATE``
+                for everything, or ``EnumFlags.PRIORITY_ESSENTIAL`` for a
+                lightweight poll of just power/volume/mute/source.
+            config: Optional ``UpdateConfig`` to skip expensive queries
+                like preset enumeration or now-playing metadata.
+        """
+        if config is None:
+            config = UpdateConfig()
+
         async def _update(cc: CommandCodes):
             try:
                 data = await self._request(self._zn, cc, bytes([0xF0]))
@@ -769,8 +831,15 @@ class State:
                 _LOGGER.error("Timeout requesting %s", cc)
 
         async def _update_presets() -> None:
+            """Enumerate tuner presets sequentially.
+
+            Probes up to ``config.max_presets`` slots (default 5). Each
+            slot is a separate command to the receiver, so this can be
+            expensive — callers should set ``skip_presets=True`` when the
+            current source is not a tuner.
+            """
             presets = {}
-            for preset in range(1, 51):
+            for preset in range(1, config.max_presets + 1):
                 try:
                     data = await self._request(
                         self._zn, CommandCodes.PRESET_DETAIL, bytes([preset])
@@ -791,6 +860,12 @@ class State:
             self._presets = presets
 
         async def _update_now_playing() -> None:
+            """Query now-playing metadata sub-fields sequentially.
+
+            Each field (track, artist, album, etc.) is a separate command.
+            Callers should set ``skip_now_playing=True`` when the current
+            source is not a network or Bluetooth source.
+            """
             kwargs = {}
             for field in attr.fields(NowPlayingInfo):
                 if "request" not in field.metadata:
@@ -859,17 +934,21 @@ class State:
         if self._amxduet is None:
             await _update_amxduet()
 
-        tasks: list = []
+        # Execute commands sequentially — one at a time. This is
+        # intentional: the receiver's IP control is single-threaded and
+        # cannot handle concurrent commands. Combined with the client's
+        # request lock and command_delay, this ensures the device is
+        # never overwhelmed.
         for cc in CommandCodes:
             if not (cc.flags & flags):
                 continue
             if not self._is_command_supported(cc):
                 continue
             if cc == CommandCodes.NOW_PLAYING_INFO:
-                tasks.append(_update_now_playing())
+                if not config.skip_now_playing:
+                    await _update_now_playing()
             elif cc == CommandCodes.PRESET_DETAIL:
-                tasks.append(_update_presets())
+                if not config.skip_presets:
+                    await _update_presets()
             else:
-                tasks.append(_update(cc))
-        if tasks:
-            await asyncio.gather(*tasks)
+                await _update(cc)

@@ -17,7 +17,7 @@ from arcam.fmj import (
 )
 from arcam.fmj.client import Client, ClientContext
 from arcam.fmj.server import Server, ServerContext
-from arcam.fmj.state import State
+from arcam.fmj.state import State, UpdateConfig
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -207,3 +207,113 @@ async def test_command_delay_cannot_be_negative():
     c = Client("localhost", 8888)
     c.command_delay = -1.0
     assert c.command_delay == 0.0
+
+
+# --- Sequential update tests ---
+
+
+async def test_state_update_sequential(server, client):
+    """State.update() must query commands sequentially, not concurrently."""
+    request_log = []
+    original_request = server.process_request
+
+    async def logging_process(request):
+        request_log.append(time.monotonic())
+        return await original_request(request)
+
+    server.process_request = logging_process
+
+    # Register handler for MUTE so update() gets at least some responses
+    server.register_handler(
+        0x01, CommandCodes.MUTE, bytes([0xF0]), lambda **kw: bytes([0x00])
+    )
+
+    state = State(client, 0x01)
+    async with state:
+        await state.update()
+
+    # Verify requests arrived sequentially with gaps (not burst)
+    assert len(request_log) >= 2
+    for i in range(1, len(request_log)):
+        gap = request_log[i] - request_log[i - 1]
+        # Each request should have at least command_delay gap
+        assert gap >= 0.02, f"Gap {i}: {gap:.4f}s — requests may be concurrent"
+
+
+async def test_state_update_skip_presets(server, client):
+    """UpdateConfig.skip_presets=True should skip PRESET_DETAIL queries."""
+    preset_queried = False
+    original_request = server.process_request
+
+    async def tracking_process(request):
+        nonlocal preset_queried
+        if isinstance(request, CommandPacket) and request.cc == CommandCodes.PRESET_DETAIL:
+            preset_queried = True
+        return await original_request(request)
+
+    server.process_request = tracking_process
+
+    state = State(client, 0x01)
+    config = UpdateConfig(skip_presets=True)
+    async with state:
+        await state.update(config=config)
+
+    assert not preset_queried, "PRESET_DETAIL was queried despite skip_presets=True"
+
+
+async def test_state_update_skip_now_playing(server, client):
+    """UpdateConfig.skip_now_playing=True should skip NOW_PLAYING_INFO queries."""
+    now_playing_queried = False
+    original_request = server.process_request
+
+    async def tracking_process(request):
+        nonlocal now_playing_queried
+        if isinstance(request, CommandPacket) and request.cc == CommandCodes.NOW_PLAYING_INFO:
+            now_playing_queried = True
+        return await original_request(request)
+
+    server.process_request = tracking_process
+
+    state = State(client, 0x01)
+    config = UpdateConfig(skip_now_playing=True)
+    async with state:
+        await state.update(config=config)
+
+    assert not now_playing_queried, "NOW_PLAYING_INFO was queried despite skip_now_playing=True"
+
+
+async def test_state_update_priority_essential(server, client):
+    """PRIORITY_ESSENTIAL flag should only query power, volume, mute, source."""
+    from arcam.fmj import EnumFlags
+
+    queried_commands = []
+    original_request = server.process_request
+
+    async def tracking_process(request):
+        if isinstance(request, CommandPacket):
+            queried_commands.append(request.cc)
+        return await original_request(request)
+
+    server.process_request = tracking_process
+
+    # Register handlers for essential commands
+    server.register_handler(
+        0x01, CommandCodes.MUTE, bytes([0xF0]), lambda **kw: bytes([0x00])
+    )
+    server.register_handler(
+        0x01, CommandCodes.CURRENT_SOURCE, bytes([0xF0]), lambda **kw: bytes([0x01])
+    )
+
+    state = State(client, 0x01)
+    async with state:
+        await state.update(flags=EnumFlags.PRIORITY_ESSENTIAL)
+
+    # Should have queried only the essential commands
+    assert CommandCodes.POWER in queried_commands
+    assert CommandCodes.VOLUME in queried_commands
+    assert CommandCodes.MUTE in queried_commands
+    assert CommandCodes.CURRENT_SOURCE in queried_commands
+    # Should NOT have queried non-essential commands
+    assert CommandCodes.HEADPHONES not in queried_commands
+    assert CommandCodes.TREBLE_EQUALIZATION not in queried_commands
+    assert CommandCodes.PRESET_DETAIL not in queried_commands
