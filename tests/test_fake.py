@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import time
 import unittest
 import pytest
 from datetime import timedelta
@@ -10,6 +11,7 @@ from unittest.mock import ANY
 from arcam.fmj import (
     CommandCodes,
     CommandNotRecognised,
+    CommandPacket,
     ConnectionFailed,
     UnsupportedZone,
 )
@@ -142,3 +144,66 @@ async def test_cancellation(silent_server):
 
     with pytest.raises(asyncio.CancelledError):
         await task
+
+
+# --- Rate limiting tests ---
+
+
+async def test_commands_are_serialized(server, client):
+    """Commands must execute one at a time — no pipelining to the device."""
+    timestamps = []
+    original_request = server.process_request
+
+    async def tracking_request(request):
+        timestamps.append(time.monotonic())
+        return await original_request(request)
+
+    server.process_request = tracking_request
+
+    # Fire 3 concurrent requests — they should be serialized by the lock
+    await asyncio.gather(
+        client.request(0x01, CommandCodes.POWER, bytes([0xF0])),
+        client.request(0x01, CommandCodes.VOLUME, bytes([0xF0])),
+        client.request(0x01, CommandCodes.POWER, bytes([0xF0])),
+    )
+
+    assert len(timestamps) == 3
+    for i in range(1, len(timestamps)):
+        gap = timestamps[i] - timestamps[i - 1]
+        # Default command_delay is 50ms; use a smaller threshold for CI
+        assert gap >= 0.03, f"Gap between commands {i-1} and {i} was only {gap:.3f}s"
+
+
+async def test_configurable_command_delay(server):
+    """command_delay property controls the inter-command quiet period."""
+    c = Client("localhost", 8888)
+    c.command_delay = 0.15  # 150ms
+    async with ClientContext(c):
+        timestamps = []
+        original_request = server.process_request
+
+        async def tracking_request(request):
+            timestamps.append(time.monotonic())
+            return await original_request(request)
+
+        server.process_request = tracking_request
+
+        await c.request(0x01, CommandCodes.POWER, bytes([0xF0]))
+        await c.request(0x01, CommandCodes.VOLUME, bytes([0xF0]))
+
+        assert len(timestamps) == 2
+        gap = timestamps[1] - timestamps[0]
+        assert gap >= 0.12, f"Gap was only {gap:.3f}s, expected >= 0.12s with 150ms delay"
+
+
+async def test_command_delay_default():
+    """Default command_delay should be 50ms."""
+    c = Client("localhost", 8888)
+    assert c.command_delay == 0.05
+
+
+async def test_command_delay_cannot_be_negative():
+    """Setting a negative delay should clamp to 0."""
+    c = Client("localhost", 8888)
+    c.command_delay = -1.0
+    assert c.command_delay == 0.0
