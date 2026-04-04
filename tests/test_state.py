@@ -29,6 +29,7 @@ from arcam.fmj import (
     ResponsePacket,
     RoomEqMode,
     UnsupportedCommand,
+    VideoSelection,
     POWER_WRITE_SUPPORTED,
     SAVE_RESTORE_CONFIRMATION,
     SaveRestoreSubCommand,
@@ -1093,3 +1094,37 @@ async def test_update_records_command_not_recognised():
     assert CommandCodes.MENU not in state._unsupported_commands
     await state.update()
     assert CommandCodes.MENU in state._unsupported_commands
+
+
+# --- _set_scaled return type ---
+
+
+def test_set_scaled_returns_int():
+    """_set_scaled returns an int (callers wrap in bytes([...]))."""
+    result = _set_scaled(5.0, 0.0, 10.0, 1.0)
+    assert isinstance(result, int)
+    assert result == 5
+
+
+def test_set_scaled_negative_returns_int():
+    result = _set_scaled(-3.0, -10.0, 10.0, 1.0)
+    assert isinstance(result, int)
+    assert result == 0x80 + 3  # 131
+
+
+# --- Video Selection (0x0A) ---
+
+
+@pytest.mark.parametrize("zn, api_model", [
+    (1, ApiModel.API450_SERIES),
+    (1, ApiModel.API860_SERIES),
+])
+async def test_set_video_selection(zn, api_model):
+    """set_video_selection must use CommandCodes.VIDEO_SELECTION, not VideoSelection."""
+    client = MagicMock(spec=Client)
+    state = State(client, zn, api_model)
+    client.request.return_value = bytes([0x00])
+    await state.set_video_selection(VideoSelection.BD)
+    client.request.assert_called_once_with(
+        zn, CommandCodes.VIDEO_SELECTION, bytes([VideoSelection.BD])
+    )

@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, call
 import pytest
 
 from arcam.fmj import (
+    APIVERSION_DAB_SERIES,
     AmxDuetResponse,
     AnswerCodes,
     CommandCodes,
@@ -157,3 +158,17 @@ def test_video_parameters_7_bytes():
     assert vp.interlaced is False
     assert vp.aspect_ratio == IncomingVideoAspectRatio.ASPECT_16_9
     assert vp.colorspace is None
+
+
+def test_dab_series_contains_model_strings():
+    """DAB series set must contain full model name strings, not individual characters."""
+    assert "AVR850" in APIVERSION_DAB_SERIES
+    assert "AV860" in APIVERSION_DAB_SERIES
+    assert "AVR550" in APIVERSION_DAB_SERIES
+    assert "AVR390" in APIVERSION_DAB_SERIES
+    assert "RV-6" in APIVERSION_DAB_SERIES
+    assert "RV-9" in APIVERSION_DAB_SERIES
+    assert "MC-10" in APIVERSION_DAB_SERIES
+    # Must not contain individual characters from string splitting
+    for item in APIVERSION_DAB_SERIES:
+        assert len(item) > 1, f"Found single character '{item}' — set was built incorrectly"
