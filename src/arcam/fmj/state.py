@@ -133,12 +133,18 @@ class UpdateConfig:
         skip_now_playing: Skip ``NOW_PLAYING_INFO`` sub-queries. Useful
             when the current source is not a network/BT source.
         max_presets: Maximum number of preset slots to probe (1–50).
-            Default is 5, which is enough for quick enumeration. Set
-            higher only if the user has many tuner presets configured.
+            Default is 10. Set higher if the user has many tuner presets
+            configured.
+        stop_on_empty_preset: Stop enumerating presets when the first
+            empty slot is found. Tuner presets are typically assigned
+            sequentially (1, 2, 3, ...), so an empty slot usually means
+            no more presets follow. Set to ``False`` to probe all
+            ``max_presets`` slots regardless of gaps.
     """
     skip_presets: bool = False
     skip_now_playing: bool = False
-    max_presets: int = 5
+    max_presets: int = 10
+    stop_on_empty_preset: bool = True
 
 
 def _get_scaled_negative(data: bytes | None, min_value: float, max_value: float, scale: float) -> float | None:
@@ -870,6 +876,56 @@ class State:
     def get_preset_details(self) -> dict[int, PresetDetail]:
         return self._presets
 
+    async def enumerate_presets(
+        self,
+        max_presets: int = 10,
+        stop_on_empty: bool = True,
+    ) -> dict[int, PresetDetail]:
+        """Query the receiver for tuner presets and return them.
+
+        Probes ``PRESET_DETAIL`` for slots 1 through *max_presets*
+        sequentially. Each slot is a separate command, so this can be
+        expensive on slow links.
+
+        When *stop_on_empty* is True (the default), enumeration stops at
+        the first empty slot — tuner presets are typically assigned
+        sequentially, so an empty slot usually means no more follow.
+
+        The result is stored in ``self._presets`` (accessible via
+        ``get_preset_details()``) and also returned directly.
+
+        Args:
+            max_presets: Maximum number of preset slots to probe (1–50).
+            stop_on_empty: Stop at the first empty slot.
+
+        Returns:
+            A dict mapping slot number to ``PresetDetail``.
+        """
+        presets: dict[int, PresetDetail] = {}
+        for slot in range(1, max_presets + 1):
+            try:
+                data = await self._request(
+                    self._zn, CommandCodes.PRESET_DETAIL, bytes([slot])
+                )
+                if data == b"\x00":
+                    if stop_on_empty:
+                        break
+                    continue
+                presets[slot] = PresetDetail.from_bytes(data)
+            except CommandInvalidAtThisTime:
+                break
+            except CommandNotRecognised:
+                _LOGGER.debug("Presets not supported, stopping at slot %s", slot)
+                break
+            except NotConnectedException:
+                _LOGGER.debug("Not connected, stopping preset enumeration")
+                break
+            except TimeoutError:
+                _LOGGER.error("Timeout requesting preset %s, stopping", slot)
+                break
+        self._presets = presets
+        return presets
+
     async def send_navigation(self, code: RC5CodeNavigation) -> None:
         await self._send_rc5(RC5CODE_NAVIGATION, code)
 
@@ -986,33 +1042,10 @@ class State:
                 _LOGGER.error("Timeout requesting %s", cc)
 
         async def _update_presets() -> None:
-            """Enumerate tuner presets sequentially.
-
-            Probes up to ``config.max_presets`` slots (default 5). Each
-            slot is a separate command to the receiver, so this can be
-            expensive — callers should set ``skip_presets=True`` when the
-            current source is not a tuner.
-            """
-            presets = {}
-            for preset in range(1, config.max_presets + 1):
-                try:
-                    data = await self._request(
-                        self._zn, CommandCodes.PRESET_DETAIL, bytes([preset])
-                    )
-                    if data != b"\x00":
-                        presets[preset] = PresetDetail.from_bytes(data)
-                except CommandInvalidAtThisTime:
-                    break
-                except CommandNotRecognised:
-                    _LOGGER.debug("Presets not supported skipping %s", preset)
-                    break
-                except NotConnectedException as e:
-                    _LOGGER.debug("Not connected skipping preset %s", preset)
-                    return
-                except TimeoutError:
-                    _LOGGER.error("Timeout requesting preset %s", preset)
-                    return
-            self._presets = presets
+            await self.enumerate_presets(
+                max_presets=config.max_presets,
+                stop_on_empty=config.stop_on_empty_preset,
+            )
 
         async def _update_now_playing() -> None:
             """Query now-playing metadata sub-fields sequentially.

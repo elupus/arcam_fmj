@@ -22,6 +22,7 @@ from arcam.fmj import (
     NotConnectedException,
     NowPlayingEncoder,
     NowPlayingInfo,
+    PresetDetail,
     DisplayBrightness,
     HdmiOutput,
     RC5CodeNavigation,
@@ -1437,3 +1438,258 @@ def test_get_decode_modes_2ch_independent_of_audio_state():
     modes_2ch = state.get_decode_modes_2ch()
     assert len(modes_2ch) > 0
     assert all(isinstance(m, DecodeMode2CH) for m in modes_2ch)
+
+
+# --- Preset enumeration ---
+
+
+def _preset_data(index: int, name: str) -> bytes:
+    """Build a fake PRESET_DETAIL response (index, type=DAB, name)."""
+    return bytes([index, 0x03]) + name.encode("utf8")
+
+
+def _make_preset_side_effect(preset_responses: dict[int, bytes]):
+    """Build a side_effect function that returns preset data or default bytes."""
+    async def side_effect(zn, cc, data):
+        if cc == CommandCodes.PRESET_DETAIL:
+            slot = data[0]
+            return preset_responses.get(slot, b"\x00")
+        return bytes([0x00])
+    return side_effect
+
+
+async def test_update_presets_stop_on_empty():
+    """stop_on_empty_preset=True stops at first empty slot."""
+    from arcam.fmj.state import UpdateConfig
+
+    client = MagicMock(spec=Client)
+    client.connected = True
+    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    state._detection_attempted = True
+
+    # Presets 1 and 2 populated, 3 is empty
+    client.request.side_effect = _make_preset_side_effect({
+        1: _preset_data(1, "BBC Radio 1"),
+        2: _preset_data(2, "BBC Radio 2"),
+        # 3 not present -> returns b"\x00"
+    })
+
+    config = UpdateConfig(skip_now_playing=True, max_presets=10, stop_on_empty_preset=True)
+    await state.update(config=config)
+
+    presets = state.get_preset_details()
+    assert len(presets) == 2
+    assert 1 in presets
+    assert 2 in presets
+    # Should have queried only 3 slots (1, 2, 3) not all 10
+    preset_calls = [
+        c for c in client.request.call_args_list
+        if c[0][1] == CommandCodes.PRESET_DETAIL
+    ]
+    assert len(preset_calls) == 3
+
+
+async def test_update_presets_no_stop_on_empty():
+    """stop_on_empty_preset=False continues past empty slots."""
+    from arcam.fmj.state import UpdateConfig
+
+    client = MagicMock(spec=Client)
+    client.connected = True
+    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    state._detection_attempted = True
+
+    # Preset 1 populated, 2 empty, 3 populated
+    client.request.side_effect = _make_preset_side_effect({
+        1: _preset_data(1, "BBC Radio 1"),
+        # 2 not present -> returns b"\x00"
+        3: _preset_data(3, "BBC Radio 3"),
+    })
+
+    config = UpdateConfig(
+        skip_now_playing=True, max_presets=3, stop_on_empty_preset=False,
+    )
+    await state.update(config=config)
+
+    presets = state.get_preset_details()
+    assert len(presets) == 2
+    assert 1 in presets
+    assert 3 in presets
+    # Should have queried all 3 slots
+    preset_calls = [
+        c for c in client.request.call_args_list
+        if c[0][1] == CommandCodes.PRESET_DETAIL
+    ]
+    assert len(preset_calls) == 3
+
+
+async def test_update_config_defaults():
+    """UpdateConfig defaults: max_presets=10, stop_on_empty_preset=True."""
+    from arcam.fmj.state import UpdateConfig
+
+    config = UpdateConfig()
+    assert config.max_presets == 10
+    assert config.stop_on_empty_preset is True
+
+
+# --- Disconnected client clears state ---
+
+
+async def test_update_disconnected_clears_state():
+    """update() with a disconnected client should clear state and now_playing."""
+    client = MagicMock(spec=Client)
+    client.connected = False
+    state = State(client, 1, ApiModel.API450_SERIES)
+    state._detection_attempted = True
+
+    # Seed some state to verify it gets cleared
+    state._state[CommandCodes.POWER] = bytes([0x01])
+    state._state[CommandCodes.VOLUME] = bytes([0x32])
+    from arcam.fmj.state import NowPlayingInfo
+    state._now_playing = NowPlayingInfo()
+
+    await state.update()
+
+    assert state._state == {}
+    assert state._now_playing is None
+    # Should not have sent any commands
+    client.request.assert_not_called()
+    client.request_raw.assert_not_called()
+
+
+async def test_update_disconnected_already_empty_is_noop():
+    """update() with disconnected client and empty state should be a no-op."""
+    client = MagicMock(spec=Client)
+    client.connected = False
+    state = State(client, 1, ApiModel.API450_SERIES)
+    state._detection_attempted = True
+
+    await state.update()
+
+    assert state._state == {}
+    assert state._now_playing is None
+    client.request.assert_not_called()
+
+
+# --- enumerate_presets() ---
+
+
+async def test_enumerate_presets_returns_and_stores():
+    """enumerate_presets() returns presets and stores them in _presets."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.APIHDA_SERIES)
+
+    client.request.side_effect = _make_preset_side_effect({
+        1: _preset_data(1, "BBC Radio 1"),
+        2: _preset_data(2, "Classic FM"),
+        3: _preset_data(3, "Jazz FM"),
+    })
+
+    result = await state.enumerate_presets(max_presets=3, stop_on_empty=False)
+
+    assert len(result) == 3
+    assert result[1].name == "BBC Radio 1"
+    assert result[2].name == "Classic FM"
+    assert result[3].name == "Jazz FM"
+    # Also stored internally
+    assert state.get_preset_details() is result
+
+
+async def test_enumerate_presets_stops_on_empty():
+    """enumerate_presets(stop_on_empty=True) stops at first empty slot."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.APIHDA_SERIES)
+
+    client.request.side_effect = _make_preset_side_effect({
+        1: _preset_data(1, "BBC Radio 1"),
+        # slot 2 missing -> returns b"\x00"
+    })
+
+    result = await state.enumerate_presets(max_presets=5, stop_on_empty=True)
+
+    assert len(result) == 1
+    assert 1 in result
+    # Should have queried slots 1 and 2 (stopped at empty 2)
+    preset_calls = [
+        c for c in client.request.call_args_list
+        if c[0][1] == CommandCodes.PRESET_DETAIL
+    ]
+    assert len(preset_calls) == 2
+
+
+async def test_enumerate_presets_respects_max():
+    """enumerate_presets(max_presets=2) queries at most 2 slots."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.APIHDA_SERIES)
+
+    # All slots populated
+    client.request.side_effect = _make_preset_side_effect({
+        1: _preset_data(1, "Station 1"),
+        2: _preset_data(2, "Station 2"),
+        3: _preset_data(3, "Station 3"),
+    })
+
+    result = await state.enumerate_presets(max_presets=2, stop_on_empty=False)
+
+    assert len(result) == 2
+    assert 1 in result
+    assert 2 in result
+    assert 3 not in result
+
+
+async def test_enumerate_presets_stops_on_command_not_recognised():
+    """enumerate_presets() stops early if the receiver doesn't support presets."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.APIHDA_SERIES)
+
+    client.request.side_effect = CommandNotRecognised(cc=CommandCodes.PRESET_DETAIL)
+
+    result = await state.enumerate_presets(max_presets=10)
+
+    assert result == {}
+    # Should have only tried slot 1 before stopping
+    assert client.request.call_count == 1
+
+
+async def test_enumerate_presets_stops_on_timeout():
+    """enumerate_presets() stops early on timeout."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.APIHDA_SERIES)
+
+    call_count = 0
+
+    async def timeout_on_second(zn, cc, data):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return _preset_data(1, "Station 1")
+        raise TimeoutError()
+
+    client.request.side_effect = timeout_on_second
+
+    result = await state.enumerate_presets(max_presets=5)
+
+    assert len(result) == 1
+    assert 1 in result
+    assert call_count == 2
+
+
+async def test_enumerate_presets_used_by_update():
+    """update() should use enumerate_presets() for preset queries."""
+    from arcam.fmj.state import UpdateConfig
+
+    client = MagicMock(spec=Client)
+    client.connected = True
+    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    state._detection_attempted = True
+
+    client.request.side_effect = _make_preset_side_effect({
+        1: _preset_data(1, "BBC Radio 1"),
+    })
+
+    config = UpdateConfig(skip_now_playing=True, max_presets=3, stop_on_empty_preset=True)
+    await state.update(config=config)
+
+    # Presets should have been enumerated via enumerate_presets()
+    presets = state.get_preset_details()
+    assert 1 in presets
+    assert presets[1].name == "BBC Radio 1"
