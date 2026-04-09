@@ -98,6 +98,8 @@ from . import (
     MUTE_WRITE_SUPPORTED,
     SOURCE_WRITE_SUPPORTED,
     VOLUME_STEP_SUPPORTED,
+    MODELS_WITH_TUNER,
+    MODELS_WITH_OSD,
     RC5CODE_SOURCE,
     RC5CODE_POWER,
     RC5CODE_MUTE,
@@ -281,6 +283,16 @@ class State:
     @api_model.setter
     def api_model(self, value: ApiModel) -> None:
         self._api_model = value
+
+    @property
+    def has_tuner(self) -> bool:
+        """Whether this model has an FM/DAB tuner."""
+        return self._api_model in MODELS_WITH_TUNER
+
+    @property
+    def has_osd(self) -> bool:
+        """Whether this model has on-screen display capability."""
+        return self._api_model in MODELS_WITH_OSD
 
     async def _probe_setup(self) -> ApiModel | None:
         """Probe CommandCodes.SETUP to distinguish HDA from non-HDA.
@@ -496,6 +508,24 @@ class State:
             return list(RC5CODE_DECODE_MODE_2CH.get((self._api_model, self._zn), {}))
         else:
             return list(RC5CODE_DECODE_MODE_MCH.get((self._api_model, self._zn), {}))
+
+    def get_decode_modes_2ch(self) -> list[DecodeMode2CH]:
+        """All 2-channel decode modes available for this model/zone.
+
+        Unlike ``get_decode_modes()`` which returns modes for the
+        *current* audio state, this always returns the 2CH list
+        regardless of the incoming audio format.
+        """
+        return list(RC5CODE_DECODE_MODE_2CH.get((self._api_model, self._zn), {}))
+
+    def get_decode_modes_mch(self) -> list[DecodeModeMCH]:
+        """All multi-channel decode modes available for this model/zone.
+
+        Unlike ``get_decode_modes()`` which returns modes for the
+        *current* audio state, this always returns the MCH list
+        regardless of the incoming audio format.
+        """
+        return list(RC5CODE_DECODE_MODE_MCH.get((self._api_model, self._zn), {}))
 
     async def set_decode_mode(self, mode: str | DecodeModeMCH | DecodeMode2CH) -> None:
         if self.get_2ch():

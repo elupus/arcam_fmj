@@ -11,9 +11,13 @@ from arcam.fmj import (
     CommandInvalidAtThisTime,
     CommandNotRecognised,
     CompressionMode,
+    DecodeMode2CH,
+    DecodeModeMCH,
     DolbyAudioMode,
     ImaxEnhancedMode,
     IncomingAudioFormat,
+    MODELS_WITH_OSD,
+    MODELS_WITH_TUNER,
     NetworkPlaybackStatus,
     NotConnectedException,
     NowPlayingEncoder,
@@ -23,6 +27,8 @@ from arcam.fmj import (
     RC5CodeNavigation,
     RC5CodePlayback,
     RC5CodeToggle,
+    RC5CODE_DECODE_MODE_2CH,
+    RC5CODE_DECODE_MODE_MCH,
     RC5CODE_NAVIGATION,
     RC5CODE_PLAYBACK,
     RC5CODE_TOGGLE,
@@ -1349,3 +1355,85 @@ async def test_detection_attempted_prevents_repeated_probing():
     # Second call via update() should skip detection
     await state.update()
     client.request_raw.assert_not_called()  # no AMX query
+
+
+# --- Capability properties ---
+
+
+@pytest.mark.parametrize("api_model, expected", [
+    (ApiModel.API450_SERIES, True),
+    (ApiModel.API860_SERIES, True),
+    (ApiModel.APIHDA_SERIES, True),
+    (ApiModel.APISA_SERIES, False),
+    (ApiModel.APIPA_SERIES, False),
+    (ApiModel.APIST_SERIES, False),
+])
+def test_has_tuner(api_model, expected):
+    client = MagicMock(spec=Client)
+    state = State(client, 1, api_model)
+    assert state.has_tuner == expected
+
+
+@pytest.mark.parametrize("api_model, expected", [
+    (ApiModel.API450_SERIES, True),
+    (ApiModel.API860_SERIES, True),
+    (ApiModel.APIHDA_SERIES, True),
+    (ApiModel.APISA_SERIES, True),
+    (ApiModel.APIPA_SERIES, False),
+    (ApiModel.APIST_SERIES, True),
+])
+def test_has_osd(api_model, expected):
+    client = MagicMock(spec=Client)
+    state = State(client, 1, api_model)
+    assert state.has_osd == expected
+
+
+# --- Decode mode list methods ---
+
+
+def test_get_decode_modes_2ch():
+    """get_decode_modes_2ch returns all 2CH modes for the model."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    modes = state.get_decode_modes_2ch()
+    expected = list(RC5CODE_DECODE_MODE_2CH.get((ApiModel.APIHDA_SERIES, 1), {}))
+    assert modes == expected
+    assert len(modes) > 0
+
+
+def test_get_decode_modes_mch():
+    """get_decode_modes_mch returns all MCH modes for the model."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    modes = state.get_decode_modes_mch()
+    expected = list(RC5CODE_DECODE_MODE_MCH.get((ApiModel.APIHDA_SERIES, 1), {}))
+    assert modes == expected
+    assert len(modes) > 0
+
+
+def test_get_decode_modes_2ch_empty_for_pa():
+    """PA series has no decode support."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.APIPA_SERIES)
+    assert state.get_decode_modes_2ch() == []
+
+
+def test_get_decode_modes_mch_empty_for_pa():
+    """PA series has no decode support."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.APIPA_SERIES)
+    assert state.get_decode_modes_mch() == []
+
+
+def test_get_decode_modes_2ch_independent_of_audio_state():
+    """get_decode_modes_2ch returns 2CH modes even when MCH audio is active."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    # Set MCH audio format
+    state._state[CommandCodes.INCOMING_AUDIO_FORMAT] = bytes([
+        IncomingAudioFormat.DOLBY_DIGITAL, 0x02
+    ])
+    assert state.get_2ch() is False  # confirm MCH active
+    modes_2ch = state.get_decode_modes_2ch()
+    assert len(modes_2ch) > 0
+    assert all(isinstance(m, DecodeMode2CH) for m in modes_2ch)

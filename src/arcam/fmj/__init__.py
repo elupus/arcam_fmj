@@ -656,6 +656,20 @@ VOLUME_STEP_SUPPORTED = {
     ApiModel.APIST_SERIES,
 }
 
+MODELS_WITH_TUNER: set[ApiModel] = {
+    ApiModel.API450_SERIES,
+    ApiModel.API860_SERIES,
+    ApiModel.APIHDA_SERIES,
+}
+
+MODELS_WITH_OSD: set[ApiModel] = {
+    ApiModel.API450_SERIES,
+    ApiModel.API860_SERIES,
+    ApiModel.APIHDA_SERIES,
+    ApiModel.APISA_SERIES,
+    ApiModel.APIST_SERIES,
+}
+
 DEFAULT_SOURCE_MAPPING = {
     SourceCodes.FOLLOW_ZONE_1: bytes([0x00]),
     SourceCodes.CD: bytes([0x01]),

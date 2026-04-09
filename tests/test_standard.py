@@ -9,6 +9,7 @@ from arcam.fmj import (
     APIVERSION_DAB_SERIES,
     AmxDuetResponse,
     AnswerCodes,
+    ApiModel,
     CommandCodes,
     CommandInvalidAtThisTime,
     CommandNotRecognised,
@@ -19,6 +20,8 @@ from arcam.fmj import (
     InvalidDataLength,
     InvalidPacket,
     InvalidZoneException,
+    MODELS_WITH_OSD,
+    MODELS_WITH_TUNER,
     ParameterNotRecognised,
     ResponseException,
     ResponsePacket,
@@ -172,3 +175,24 @@ def test_dab_series_contains_model_strings():
     # Must not contain individual characters from string splitting
     for item in APIVERSION_DAB_SERIES:
         assert len(item) > 1, f"Found single character '{item}' — set was built incorrectly"
+
+
+def test_models_with_tuner_membership():
+    """MODELS_WITH_TUNER contains exactly the AVR series."""
+    assert MODELS_WITH_TUNER == {
+        ApiModel.API450_SERIES,
+        ApiModel.API860_SERIES,
+        ApiModel.APIHDA_SERIES,
+    }
+
+
+def test_models_with_osd_membership():
+    """MODELS_WITH_OSD contains all models except PA (power amp)."""
+    assert MODELS_WITH_OSD == {
+        ApiModel.API450_SERIES,
+        ApiModel.API860_SERIES,
+        ApiModel.APIHDA_SERIES,
+        ApiModel.APISA_SERIES,
+        ApiModel.APIST_SERIES,
+    }
+    assert ApiModel.APIPA_SERIES not in MODELS_WITH_OSD
