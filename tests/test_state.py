@@ -8,11 +8,14 @@ from arcam.fmj import (
     ApiModel,
     BluetoothAudioStatus,
     CommandCodes,
+    CommandInvalidAtThisTime,
+    CommandNotRecognised,
     CompressionMode,
     DolbyAudioMode,
     ImaxEnhancedMode,
     IncomingAudioFormat,
     NetworkPlaybackStatus,
+    NotConnectedException,
     NowPlayingEncoder,
     NowPlayingInfo,
     DisplayBrightness,
@@ -26,6 +29,7 @@ from arcam.fmj import (
     RC5CODE_BASS,
     RC5CODE_DISPLAY_BRIGHTNESS,
     RC5CODE_HDMI_OUTPUT,
+    ResponseException,
     ResponsePacket,
     RoomEqMode,
     UnsupportedCommand,
@@ -1206,11 +1210,142 @@ async def test_detect_model_all_series(model_str, expected_api):
     assert result == expected_api
 
 
-async def test_detect_model_unknown_keeps_current():
-    """Unknown model strings should keep the current api_model."""
+async def test_detect_model_unknown_falls_back_to_setup_probe():
+    """Unknown model strings should fall back to SETUP probe."""
     client = MagicMock(spec=Client)
-    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    state = State(client, 1, ApiModel.API860_SERIES)
     state._amxduet = AmxDuetResponse({"Device-Model": "UNKNOWN-9000"})
 
+    # SETUP probe raises CommandNotRecognised -> not HDA, keep current
+    client.request.side_effect = CommandNotRecognised(cc=CommandCodes.SETUP)
+
     result = await state.detect_model()
-    assert result == ApiModel.APIHDA_SERIES  # unchanged
+    assert result == ApiModel.API860_SERIES  # unchanged
+    client.request.assert_called_once_with(1, CommandCodes.SETUP, bytes([0xF0]))
+
+
+# --- SETUP probe fallback ---
+
+
+async def test_detect_model_amx_fails_setup_probe_succeeds():
+    """AMX query fails, SETUP probe succeeds -> HDA series."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+
+    client.request_raw.side_effect = TimeoutError()
+    client.request.return_value = bytes([0x01])  # SETUP probe succeeds
+
+    result = await state.detect_model()
+    assert result == ApiModel.APIHDA_SERIES
+    assert state.api_model == ApiModel.APIHDA_SERIES
+    client.request.assert_called_once_with(1, CommandCodes.SETUP, bytes([0xF0]))
+
+
+async def test_detect_model_amx_fails_setup_probe_invalid_at_this_time():
+    """AMX fails, SETUP raises CommandInvalidAtThisTime -> HDA."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+
+    client.request_raw.side_effect = TimeoutError()
+    client.request.side_effect = CommandInvalidAtThisTime(cc=CommandCodes.SETUP)
+
+    result = await state.detect_model()
+    assert result == ApiModel.APIHDA_SERIES
+
+
+async def test_detect_model_amx_fails_setup_probe_not_recognised():
+    """AMX fails, SETUP raises CommandNotRecognised -> keep default."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1)  # default API450_SERIES
+
+    client.request_raw.side_effect = TimeoutError()
+    client.request.side_effect = CommandNotRecognised(cc=CommandCodes.SETUP)
+
+    result = await state.detect_model()
+    assert result == ApiModel.API450_SERIES  # default unchanged
+
+
+async def test_detect_model_amx_fails_setup_probe_timeout():
+    """AMX fails, SETUP probe times out -> keep default."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+
+    client.request_raw.side_effect = TimeoutError()
+    client.request.side_effect = TimeoutError()
+
+    result = await state.detect_model()
+    assert result == ApiModel.API450_SERIES
+
+
+async def test_detect_model_unknown_model_setup_probe_succeeds():
+    """AMX returns unknown model, SETUP probe succeeds -> HDA."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    state._amxduet = AmxDuetResponse({"Device-Model": "FUTURE-9000"})
+
+    client.request.return_value = bytes([0x01])
+
+    result = await state.detect_model()
+    assert result == ApiModel.APIHDA_SERIES
+    client.request.assert_called_once_with(1, CommandCodes.SETUP, bytes([0xF0]))
+
+
+async def test_detect_model_amx_no_model_name_falls_back_to_setup():
+    """AMX beacon has no device_model -> falls back to SETUP probe."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    # Beacon with no Device-Model key
+    state._amxduet = AmxDuetResponse({"Device-Make": "ARCAM"})
+    assert state._amxduet.device_model is None
+
+    client.request.return_value = bytes([0x01])  # SETUP succeeds
+
+    result = await state.detect_model()
+    assert result == ApiModel.APIHDA_SERIES
+    client.request.assert_called_once_with(1, CommandCodes.SETUP, bytes([0xF0]))
+
+
+async def test_detect_model_setup_probe_not_connected():
+    """SETUP probe raises NotConnectedException -> inconclusive, keep default."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+
+    client.request_raw.side_effect = TimeoutError()
+    client.request.side_effect = NotConnectedException()
+
+    result = await state.detect_model()
+    assert result == ApiModel.API450_SERIES
+
+
+async def test_detect_model_setup_probe_uses_zone_1():
+    """SETUP probe must use zone 1 regardless of State's zone."""
+    client = MagicMock(spec=Client)
+    state = State(client, 2)  # zone 2
+
+    client.request_raw.side_effect = TimeoutError()
+    client.request.return_value = bytes([0x01])
+
+    await state.detect_model()
+    client.request.assert_called_once_with(1, CommandCodes.SETUP, bytes([0xF0]))
+
+
+async def test_detection_attempted_prevents_repeated_probing():
+    """detect_model() should only run once via update()."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    client.connected = True
+
+    client.request_raw.side_effect = TimeoutError()
+    client.request.side_effect = CommandNotRecognised(cc=CommandCodes.SETUP)
+
+    # First detect_model sets _detection_attempted
+    await state.detect_model()
+    assert state._detection_attempted is True
+
+    # Reset mock call counts
+    client.request_raw.reset_mock()
+    client.request.reset_mock()
+
+    # Second call via update() should skip detection
+    await state.update()
+    client.request_raw.assert_not_called()  # no AMX query

@@ -176,6 +176,7 @@ class State:
         self._amxduet: AmxDuetResponse | None = None
         self._api_model = api_model
         self._unsupported_commands: set[CommandCodes] = set()
+        self._detection_attempted: bool = False
 
     async def start(self) -> None:
         # pylint: disable=protected-access
@@ -281,32 +282,68 @@ class State:
     def api_model(self, value: ApiModel) -> None:
         self._api_model = value
 
+    async def _probe_setup(self) -> ApiModel | None:
+        """Probe CommandCodes.SETUP to distinguish HDA from non-HDA.
+
+        SETUP (0x27) is only defined for HDA-series receivers. Sending
+        a request-current-value probe (0xF0) yields:
+
+        - Success / CommandInvalidAtThisTime -> receiver is HDA.
+        - CommandNotRecognised -> receiver is NOT HDA.
+        - Timeout or other error -> inconclusive.
+
+        Uses ``client.request()`` directly (bypassing ``_require_command``)
+        because the probe deliberately tests whether the command is
+        recognised. Hardcodes zone 1 since SETUP has no ZONE_SUPPORT flag.
+
+        Returns ``ApiModel.APIHDA_SERIES`` if the receiver is HDA,
+        ``None`` if it is not HDA or the result is inconclusive.
+        """
+        try:
+            await self._client.request(1, CommandCodes.SETUP, bytes([0xF0]))
+            return ApiModel.APIHDA_SERIES
+        except CommandNotRecognised:
+            return None
+        except CommandInvalidAtThisTime:
+            # Command recognised but can't run now (e.g. menu active).
+            return ApiModel.APIHDA_SERIES
+        except (ResponseException, NotConnectedException, TimeoutError) as e:
+            _LOGGER.warning("SETUP probe inconclusive: %s", e)
+            return None
+
     async def detect_model(self) -> ApiModel:
-        """Detect the device model via AMX Duet protocol.
+        """Detect the device model series.
 
-        Uses a cached AMX beacon if one has already been received (the
-        listener stores any incoming beacon in ``_amxduet``). Otherwise,
-        sends an active AMX query and waits for a response.
+        Three-step detection strategy:
 
-        Sets ``api_model`` based on the device's model string and returns
-        the detected model. Falls back to the current ``api_model`` if
-        detection fails.
+        1. **Cached AMX beacon** — uses a beacon already received by the
+           listener (stored in ``_amxduet``).
+        2. **Active AMX query** — sends an ``AmxDuetRequest`` and waits
+           for a response.
+        3. **SETUP probe** — sends ``CommandCodes.SETUP`` (HDA-only) to
+           distinguish HDA from non-HDA receivers. This fallback handles
+           devices that don't respond to AMX queries (e.g. JBL SDP-58).
+
+        Sets ``api_model`` based on the result and returns the detected
+        model. Falls back to the current ``api_model`` if all steps fail.
 
         This is called automatically by ``update()`` on first run, but
         callers can also invoke it explicitly during connection setup for
         earlier model detection.
         """
+        self._detection_attempted = True
+
         if self._amxduet is None:
             try:
                 data = await self._client.request_raw(AmxDuetRequest())
                 self._amxduet = data
             except (ResponseException, NotConnectedException, TimeoutError) as e:
                 _LOGGER.warning("AMX model detection failed: %s", e)
-                return self._api_model
+                return await self._fallback_to_setup_probe()
 
         model_name = self._amxduet.device_model
         if model_name is None:
-            return self._api_model
+            return await self._fallback_to_setup_probe()
 
         # Check model name against known series sets. Order matters:
         # HDA must be checked before 860 because some model strings
@@ -327,9 +364,17 @@ class State:
                 return self._api_model
 
         _LOGGER.warning(
-            "Unknown model '%s', keeping current api_model=%s",
-            model_name, self._api_model,
+            "Unknown model '%s', falling back to SETUP probe",
+            model_name,
         )
+        return await self._fallback_to_setup_probe()
+
+    async def _fallback_to_setup_probe(self) -> ApiModel:
+        """Try SETUP probe and return the resulting api_model."""
+        probe_result = await self._probe_setup()
+        if probe_result is not None:
+            self._api_model = probe_result
+            _LOGGER.info("SETUP probe detected %s", probe_result)
         return self._api_model
 
     def _is_command_supported(self, cc: CommandCodes) -> bool:
@@ -983,7 +1028,7 @@ class State:
 
         # Auto-detect the device model on first update so that
         # command filtering and source/RC5 tables are correct.
-        if self._amxduet is None:
+        if not self._detection_attempted:
             await self.detect_model()
 
         # Execute commands sequentially — one at a time. This is
