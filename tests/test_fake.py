@@ -170,8 +170,8 @@ async def test_commands_are_serialized(server, client):
     assert len(timestamps) == 3
     for i in range(1, len(timestamps)):
         gap = timestamps[i] - timestamps[i - 1]
-        # Default command_delay is 50ms; use a smaller threshold for CI
-        assert gap >= 0.03, f"Gap between commands {i-1} and {i} was only {gap:.3f}s"
+        # Default command_delay is 100ms; use a smaller threshold for CI
+        assert gap >= 0.07, f"Gap between commands {i-1} and {i} was only {gap:.3f}s"
 
 
 async def test_configurable_command_delay(server):
@@ -197,9 +197,9 @@ async def test_configurable_command_delay(server):
 
 
 async def test_command_delay_default():
-    """Default command_delay should be 50ms."""
+    """Default command_delay should be 100ms."""
     c = Client("localhost", 8888)
-    assert c.command_delay == 0.05
+    assert c.command_delay == 0.1
 
 
 async def test_command_delay_cannot_be_negative():
@@ -237,7 +237,7 @@ async def test_state_update_sequential(server, client):
     for i in range(1, len(request_log)):
         gap = request_log[i] - request_log[i - 1]
         # Each request should have at least command_delay gap
-        assert gap >= 0.02, f"Gap {i}: {gap:.4f}s — requests may be concurrent"
+        assert gap >= 0.07, f"Gap {i}: {gap:.4f}s — requests may be concurrent"
 
 
 async def test_state_update_skip_presets(server, client):

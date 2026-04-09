@@ -55,9 +55,12 @@ _LOGGER = logging.getLogger(__name__)
 _REQUEST_TIMEOUT = timedelta(seconds=3)
 
 # Default inter-command cooldown in seconds. This is the minimum quiet
-# period between consecutive commands on the wire. 50 ms is safe for all
-# known Arcam/JBL models; increase via ``client.command_delay`` if needed.
-_DEFAULT_COMMAND_DELAY = 0.05
+# period between consecutive commands on the wire. 100 ms balances
+# throughput with safety for all known Arcam/JBL models. Combined with
+# the lock held for the full request-response cycle, effective
+# inter-command gap is response_time + this delay (~150 ms typical).
+# Increase via ``client.command_delay`` if needed for older models.
+_DEFAULT_COMMAND_DELAY = 0.1
 
 _HEARTBEAT_INTERVAL = timedelta(seconds=5)
 _HEARTBEAT_TIMEOUT = _HEARTBEAT_INTERVAL + _HEARTBEAT_INTERVAL
@@ -82,7 +85,7 @@ class ClientBase:
         command completes (response received or timeout) to give the
         device time to settle before the next command.
 
-        Default is 0.05 s (50 ms). The Crestron SDK recommends >= 0.25 s.
+        Default is 0.1 s (100 ms). The Crestron SDK recommends >= 0.25 s.
         The Unfolded Circle integration uses 0.3–0.4 s for extra safety.
         Adjust based on your device's behavior.
         """
