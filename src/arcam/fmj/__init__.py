@@ -276,10 +276,10 @@ class EnumFlags(enum.IntFlag):
     SEND_ONLY = enum.auto()
     POLL_REQUIRED = enum.auto()
     FULL_UPDATE = enum.auto()
-    # Essential commands (power, volume, mute, source) that callers can
-    # poll more frequently via update(flags=EnumFlags.PRIORITY_ESSENTIAL).
-    # These are the minimum set needed to keep a media player entity
-    # responsive without overwhelming the receiver.
+    # Essential commands (power, volume, mute, source) for a lightweight
+    # initial sync via update(flags=EnumFlags.PRIORITY_ESSENTIAL).
+    # Also useful for fail-safe refreshes — the minimum set needed to
+    # confirm a media player entity's core state.
     PRIORITY_ESSENTIAL = enum.auto()
 
 

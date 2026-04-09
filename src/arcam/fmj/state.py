@@ -1,20 +1,28 @@
 """Zone state.
 
-Update strategy
----------------
-``State.update()`` queries the receiver for current state. Commands are
-executed **sequentially** — one at a time — to respect the device's
-single-threaded IP control processor. Previous versions used
-``asyncio.gather()`` to fire all queries concurrently, which overwhelmed
-receivers and caused performance issues (especially in Home Assistant).
+State maintenance
+-----------------
+Arcam receivers push unsolicited ``STATUS_UPDATE`` packets whenever
+state changes (volume knob turned, source switched via IR, etc.).
+``State._listen()`` captures these automatically, so once connected
+the state dict stays current without polling.
+
+``State.update()`` exists for **initial state sync** — querying the
+receiver once at connect time to establish a known baseline. After
+that, push events maintain state. Any subsequent ``update()`` call
+is a fail-safe, not the primary state-maintenance mechanism.
+
+Commands within ``update()`` are executed **sequentially** to respect
+the device's single-threaded IP control processor.
 
 Callers can control what gets queried via ``EnumFlags`` and
 ``UpdateConfig``:
 
 - ``update(flags=EnumFlags.PRIORITY_ESSENTIAL)`` queries only power,
-  volume, mute, and source — ideal for frequent polling.
+  volume, mute, and source — suitable for a lightweight initial sync
+  or fail-safe refresh.
 - ``update(config=UpdateConfig(skip_presets=True))`` skips the expensive
-  preset enumeration (up to 50 sequential queries).
+  preset enumeration.
 - ``update(config=UpdateConfig(skip_now_playing=True))`` skips now-playing
   metadata sub-queries.
 """
@@ -111,8 +119,9 @@ _T = TypeVar("_T")
 class UpdateConfig:
     """Configuration for ``State.update()`` behavior.
 
-    These options let callers skip expensive or irrelevant queries, reducing
-    the number of commands sent to the receiver during a state refresh.
+    These options let callers skip expensive or irrelevant queries during
+    the initial state sync (or a fail-safe refresh), reducing the number
+    of commands sent to the receiver.
 
     Attributes:
         skip_presets: Skip ``PRESET_DETAIL`` enumeration entirely. Useful
@@ -865,15 +874,19 @@ class State:
     ) -> None:
         """Query the receiver for current state.
 
-        Commands are executed **sequentially** to avoid overwhelming the
-        receiver's single-threaded IP control processor. The previous
-        implementation used ``asyncio.gather()`` to fire all queries
-        concurrently, which caused performance issues on real hardware.
+        Intended for **initial state sync** at connect time. After the
+        first sync, the receiver pushes unsolicited ``STATUS_UPDATE``
+        packets on every state change, so ongoing polling is not
+        required — any subsequent call is a fail-safe, not the primary
+        state-maintenance mechanism.
+
+        Commands are executed **sequentially** to respect the device's
+        single-threaded IP control processor.
 
         Args:
             flags: Which commands to query. Use ``EnumFlags.FULL_UPDATE``
                 for everything, or ``EnumFlags.PRIORITY_ESSENTIAL`` for a
-                lightweight poll of just power/volume/mute/source.
+                lightweight sync of just power/volume/mute/source.
             config: Optional ``UpdateConfig`` to skip expensive queries
                 like preset enumeration or now-playing metadata.
         """
