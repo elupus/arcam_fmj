@@ -3,9 +3,9 @@
 import asyncio
 from asyncio.streams import StreamReader, StreamWriter
 import logging
-from datetime import datetime, timedelta
-from contextlib import AsyncExitStack, contextmanager, suppress
-from typing import Union, overload
+from datetime import timedelta
+from contextlib import contextmanager
+from typing import overload
 from collections.abc import Callable
 
 from . import (
@@ -21,6 +21,8 @@ from . import (
     ResponseException,
     ResponsePacket,
     UnsupportedZone,
+    GenericRequest,
+    GenericResponse,
     read_response,
     write_packet,
 )
@@ -33,15 +35,27 @@ _REQUEST_THROTTLE = 0.2
 _HEARTBEAT_INTERVAL = timedelta(seconds=5)
 _HEARTBEAT_TIMEOUT = _HEARTBEAT_INTERVAL + _HEARTBEAT_INTERVAL
 
+def _schedule_timeout(future: asyncio.Future, message: str):
+    """Schedule a timeout on a future."""
+    def _timeout_future():
+        if future.done():
+            return
+        future.set_exception(TimeoutError(message))
+
+    loop = asyncio.get_running_loop()
+    handle = loop.call_later(
+        _REQUEST_TIMEOUT.total_seconds(),
+        _timeout_future)
+    future.add_done_callback(lambda _: handle.cancel())
 
 class ClientBase:
     def __init__(self) -> None:
         self._reader: StreamReader | None = None
         self._writer: StreamWriter | None = None
-        self._task = None
-        self._listen: set[Callable] = set()
-        self._request_lock = asyncio.Lock()
-        self._timestamp = datetime.now()
+        self._listen: set[Callable] = {self._process_request_pending}
+        self._request_queue = asyncio.PriorityQueue[tuple[int, int, asyncio.Future[GenericResponse], GenericRequest]]()
+        self._request_pending: dict[asyncio.Future[GenericResponse], GenericRequest] = {}
+        self._request_count = 0
 
     @contextmanager
     def listen(self, listener: Callable):
@@ -51,19 +65,42 @@ class ClientBase:
         finally:
             self._listen.remove(listener)
 
-    async def _process_heartbeat(self):
-        while True:
-            delay = self._timestamp + _HEARTBEAT_INTERVAL - datetime.now()
-            if delay > timedelta():
-                await asyncio.sleep(delay.total_seconds())
-            else:
-                _LOGGER.debug("Sending ping")
-                try:
-                    await self.request(1, CommandCodes.POWER, bytes([0xF0]))
-                except (ArcamException, TimeoutError):
-                    _LOGGER.debug("Heartbeat failed")
-                    return
-                self._timestamp = datetime.now()
+    def _process_request_pending(self, response: GenericResponse):
+        for future, request in self._request_pending.items():
+            if future.done():
+                continue
+            if response.respons_to(request):
+                future.set_result(response)
+
+    async def _process_request_single(self, writer: StreamWriter):
+        """Process a single request from queue queue."""
+
+        try:
+            async with asyncio.timeout(_HEARTBEAT_INTERVAL.total_seconds()):
+                while True:
+                    _, _, future, request = await self._request_queue.get()
+                    if not future.done():
+                        break
+        except TimeoutError:
+            _LOGGER.debug("Sending ping")
+            request = CommandPacket(1, CommandCodes.POWER, bytes([0xF0]))
+            await write_packet(writer, request)
+            return
+
+        self._request_pending[future] = request
+        future.add_done_callback(self._request_pending.pop)
+
+        await write_packet(writer, request)
+        _schedule_timeout(future, "Request timed out")
+
+    async def _process_request(self, writer: StreamWriter):
+        """Process the request queue."""
+        try:
+            while True:
+                await self._process_request_single(writer)
+                await asyncio.sleep(_REQUEST_THROTTLE)
+        finally:
+            self._request_queue_close(NotConnectedException("Connected was closed"))
 
     async def _process_data(self, reader: StreamReader):
         try:
@@ -73,11 +110,11 @@ class ClientBase:
                         packet = await read_response(reader)
                 except TimeoutError as exception:
                     _LOGGER.debug("Missed all pings")
-                    raise ConnectionFailed() from exception
+                    raise ConnectionFailed("Missed all pings") from exception
 
                 if packet is None:
-                    _LOGGER.info("Server disconnected")
-                    return
+                    _LOGGER.debug("Server disconnected")
+                    raise ConnectionFailed("Server disconnected")
 
                 _LOGGER.debug("Packet received: %s", packet)
                 for listener in self._listen:
@@ -89,16 +126,14 @@ class ClientBase:
         assert self._writer, "Writer missing"
         assert self._reader, "Reader missing"
 
-        _process_heartbeat = asyncio.create_task(self._process_heartbeat())
         try:
-            await self._process_data(self._reader)
+            async with asyncio.TaskGroup() as group:
+                group.create_task(self._process_data(self._reader))
+                group.create_task(self._process_request(self._writer))
         finally:
-            _process_heartbeat.cancel()
-            try:
-                await _process_heartbeat
-            except asyncio.CancelledError:
-                pass
+            _LOGGER.debug("Process task shutting down")
             self._writer.close()
+            self._request_queue_close(NotConnectedException("Connected was closed"))
 
     @property
     def connected(self) -> bool:
@@ -108,61 +143,52 @@ class ClientBase:
     def started(self) -> bool:
         return self._writer is not None
 
-    @overload
-    async def request_raw(self, request: CommandPacket) -> ResponsePacket: ...
+    def _request_queue_close(self, exception: Exception) -> None:
+        """Shut down all pending and queued requests."""
+        for future in self._request_pending:
+            future.set_exception(exception)
+
+        while not self._request_queue.empty():
+            _, _, future, _ = self._request_queue.get_nowait()
+            future.set_exception(exception)
+
+    def _request_queue_add(self, priority: int, future: asyncio.Future[GenericResponse], request: GenericRequest) -> None:
+        """Adds a request in priority order to the queue."""
+        if not self._writer:
+            raise NotConnectedException()
+
+        self._request_count = self._request_count + 1
+        self._request_queue.put_nowait((priority, self._request_count, future, request))
 
     @overload
-    async def request_raw(self, request: AmxDuetRequest) -> AmxDuetResponse: ...
+    async def request_raw(self, request: CommandPacket, *, priority: int = 0) -> ResponsePacket: ...
+
+    @overload
+    async def request_raw(self, request: AmxDuetRequest, *, priority: int = 0) -> AmxDuetResponse: ...
 
     @async_retry(2, asyncio.TimeoutError)
-    async def request_raw(
-        self, request: CommandPacket | AmxDuetRequest
-    ) -> ResponsePacket | AmxDuetResponse:
-        if not self._writer:
-            raise NotConnectedException()
-        writer = self._writer  # keep copy around if stopped by another task
-        future: asyncio.Future[ResponsePacket | AmxDuetResponse] = asyncio.Future()
-
-        def listen(response: ResponsePacket | AmxDuetResponse):
-            if response.respons_to(request):
-                if not (future.cancelled() or future.done()):
-                    future.set_result(response)
-
-        async with AsyncExitStack() as stack:
-            await stack.enter_async_context(self._request_lock)
-            async with asyncio.timeout(_REQUEST_TIMEOUT.total_seconds()):
-                with self.listen(listen):
-                    _LOGGER.debug("Requesting %s", request)
-                    await write_packet(writer, request)
-                    self._timestamp = datetime.now()
-                    with suppress(TimeoutError):
-                        async with asyncio.timeout(_REQUEST_THROTTLE):
-                            return await asyncio.shield(future)
-                    await stack.aclose()
-                    return await future
+    async def request_raw(self, request: GenericRequest, *, priority: int = 0) -> GenericResponse:
+        future = asyncio.Future[GenericResponse]()
+        try:
+            self._request_queue_add(priority, future, request)
+            return await future
+        finally:
+            future.cancel()
                     
-    async def send(self, zn: int, cc: CommandCodes, data: bytes) -> None:
-        if not self._writer:
-            raise NotConnectedException()
-
+    async def send(self, zn: int, cc: CommandCodes, data: bytes, *, priority: int = 0) -> None:
         if not (cc.flags & EnumFlags.ZONE_SUPPORT) and zn != 1:
             raise UnsupportedZone()
 
-        writer = self._writer
+        future = asyncio.Future[GenericResponse]()
         request = CommandPacket(zn, cc, data)
-        async with self._request_lock:
-            await write_packet(writer, request)
-            await asyncio.sleep(_REQUEST_THROTTLE)
+        self._request_queue_add(priority, future, request)
 
-    async def request(self, zn: int, cc: CommandCodes, data: bytes):
-        if not self._writer:
-            raise NotConnectedException()
-
+    async def request(self, zn: int, cc: CommandCodes, data: bytes, priority: int = 0):
         if not (cc.flags & EnumFlags.ZONE_SUPPORT) and zn != 1:
             raise UnsupportedZone()
 
         if cc.flags & EnumFlags.SEND_ONLY:
-            await self.send(zn, cc, data)
+            await self.send(zn, cc, data, priority=priority)
             return
 
         response = await self.request_raw(CommandPacket(zn, cc, data))
