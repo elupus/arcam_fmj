@@ -1,10 +1,35 @@
-"""Client code"""
+"""Client code for Arcam IP control.
+
+Rate limiting design
+--------------------
+Arcam receivers have a single-threaded IP control processor that can only
+handle one command at a time. Sending a second command before the first
+response arrives can cause the device to drop commands, return corrupted
+responses, or become unresponsive.
+
+This module enforces strict serial command execution:
+
+1. A single ``asyncio.Lock`` (``_request_lock``) ensures only one command
+   is in-flight at any time. The lock is held for the **entire**
+   request-response cycle — it is NOT released early.
+
+2. After each command completes (response received or timeout), a
+   configurable ``command_delay`` pause (default 50 ms) gives the device
+   breathing room before the next command. This delay runs while the lock
+   is still held, so no other command can sneak in.
+
+3. For fire-and-forget commands (``SEND_ONLY``), the same lock and delay
+   apply, but there is no response to wait for.
+
+Callers that need more aggressive pacing (e.g. 300 ms for older models)
+can set ``client.command_delay = 0.3`` after construction.
+"""
 
 import asyncio
 from asyncio.streams import StreamReader, StreamWriter
 import logging
 from datetime import datetime, timedelta
-from contextlib import AsyncExitStack, contextmanager, suppress
+from contextlib import contextmanager
 from typing import Union, overload
 from collections.abc import Callable
 
@@ -28,7 +53,14 @@ from .utils import async_retry
 
 _LOGGER = logging.getLogger(__name__)
 _REQUEST_TIMEOUT = timedelta(seconds=3)
-_REQUEST_THROTTLE = 0.2
+
+# Default inter-command cooldown in seconds. This is the minimum quiet
+# period between consecutive commands on the wire. 100 ms balances
+# throughput with safety for all known Arcam/JBL models. Combined with
+# the lock held for the full request-response cycle, effective
+# inter-command gap is response_time + this delay (~150 ms typical).
+# Increase via ``client.command_delay`` if needed for older models.
+_DEFAULT_COMMAND_DELAY = 0.1
 
 _HEARTBEAT_INTERVAL = timedelta(seconds=5)
 _HEARTBEAT_TIMEOUT = _HEARTBEAT_INTERVAL + _HEARTBEAT_INTERVAL
@@ -42,6 +74,26 @@ class ClientBase:
         self._listen: set[Callable] = set()
         self._request_lock = asyncio.Lock()
         self._timestamp = datetime.now()
+        self._command_delay: float = _DEFAULT_COMMAND_DELAY
+
+    @property
+    def command_delay(self) -> float:
+        """Minimum quiet period in seconds between consecutive commands.
+
+        The Arcam IP control interface is single-threaded — it can only
+        process one command at a time. This delay is enforced after each
+        command completes (response received or timeout) to give the
+        device time to settle before the next command.
+
+        Default is 0.1 s (100 ms). The Crestron SDK recommends >= 0.25 s.
+        The Unfolded Circle integration uses 0.3–0.4 s for extra safety.
+        Adjust based on your device's behavior.
+        """
+        return self._command_delay
+
+    @command_delay.setter
+    def command_delay(self, value: float) -> None:
+        self._command_delay = max(0.0, float(value))
 
     @contextmanager
     def listen(self, listener: Callable):
@@ -118,6 +170,13 @@ class ClientBase:
     async def request_raw(
         self, request: CommandPacket | AmxDuetRequest
     ) -> ResponsePacket | AmxDuetResponse:
+        """Send a command and wait for its response.
+
+        The request lock is held for the entire request-response cycle
+        to prevent pipelining commands to the single-threaded receiver.
+        After the response arrives (or times out), a ``command_delay``
+        pause runs before the lock is released.
+        """
         if not self._writer:
             raise NotConnectedException()
         writer = self._writer  # keep copy around if stopped by another task
@@ -128,20 +187,30 @@ class ClientBase:
                 if not (future.cancelled() or future.done()):
                     future.set_result(response)
 
-        async with AsyncExitStack() as stack:
-            await stack.enter_async_context(self._request_lock)
+        # Hold the lock for the full request-response cycle. This ensures
+        # the device never receives a second command while processing the
+        # first. The previous implementation released the lock after 200 ms
+        # even if no response had arrived, allowing command pipelining that
+        # overwhelmed single-threaded receivers.
+        async with self._request_lock:
             async with asyncio.timeout(_REQUEST_TIMEOUT.total_seconds()):
                 with self.listen(listen):
                     _LOGGER.debug("Requesting %s", request)
                     await write_packet(writer, request)
                     self._timestamp = datetime.now()
-                    with suppress(TimeoutError):
-                        async with asyncio.timeout(_REQUEST_THROTTLE):
-                            return await asyncio.shield(future)
-                    await stack.aclose()
-                    return await future
-                    
+                    result = await future
+            # Enforce a quiet period after the response before releasing
+            # the lock, so the device has time to settle.
+            if self._command_delay > 0:
+                await asyncio.sleep(self._command_delay)
+            return result
+
     async def send(self, zn: int, cc: CommandCodes, data: bytes) -> None:
+        """Send a fire-and-forget command (no response expected).
+
+        Used for RC5 IR simulation and other SEND_ONLY commands. The lock
+        is held and command_delay is enforced just like request_raw().
+        """
         if not self._writer:
             raise NotConnectedException()
 
@@ -152,7 +221,8 @@ class ClientBase:
         request = CommandPacket(zn, cc, data)
         async with self._request_lock:
             await write_packet(writer, request)
-            await asyncio.sleep(_REQUEST_THROTTLE)
+            if self._command_delay > 0:
+                await asyncio.sleep(self._command_delay)
 
     async def request(self, zn: int, cc: CommandCodes, data: bytes):
         if not self._writer:
