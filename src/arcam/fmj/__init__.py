@@ -12,6 +12,7 @@ from typing import (
     Union,
     Literal,
     SupportsIndex,
+    TypeAlias
 )
 from collections.abc import Iterable
 
@@ -1589,6 +1590,9 @@ class AmxDuetResponse:
             + "\r"
         )
         return res.encode("ASCII")
+
+GenericResponse: TypeAlias = ResponsePacket | AmxDuetResponse
+GenericRequest: TypeAlias = CommandPacket | AmxDuetRequest
 
 
 async def _read_delimited(reader: asyncio.StreamReader, header_len) -> bytes | None:
