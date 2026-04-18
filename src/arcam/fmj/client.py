@@ -48,14 +48,64 @@ def _schedule_timeout(future: asyncio.Future, message: str):
         _timeout_future)
     future.add_done_callback(lambda _: handle.cancel())
 
+class RequestQueue:
+    """Manages the prioritized request queue."""
+    def __init__(self):
+        self._queue: asyncio.PriorityQueue[tuple[int, int, asyncio.Future[GenericResponse], GenericRequest]] | None = asyncio.PriorityQueue()
+        self._count = 0
+
+    def close(self) -> None:
+        """Shut down all pending and queued requests."""
+        while not self._queue.empty():
+            _, _, future, _ = self._queue.get_nowait()
+            future.set_exception(NotConnectedException("Connected was closed"))
+        self._queue = None
+
+    def put_nowait(self, future: asyncio.Future[GenericResponse], request: GenericRequest, priority: int = 0):
+        if not self._queue:
+            raise NotConnectedException()
+
+        self._count = self._count + 1
+        self._queue.put_nowait((priority, self._count, future, request))
+
+    async def get(self) -> tuple[asyncio.Future[GenericResponse], GenericRequest]:
+        """Get a request that is not finished already."""
+        if not self._queue:
+            raise NotConnectedException()
+
+        while True:
+            _, _, future, request = await self._queue.get()
+            if not future.done():
+                break
+        return future, request
+    
+class RequestPending:
+    """Manages pending requests and clean up when done."""
+    def __init__(self):
+        self._pending: dict[asyncio.Future[GenericResponse], GenericRequest] = {}
+    
+    def close(self):
+        for future in self._pending:
+            future.set_exception(NotConnectedException("Connected was closed"))
+
+    def add(self, future: asyncio.Future[GenericResponse], request: GenericRequest):
+        self._pending[future] = request
+        future.add_done_callback(self._pending.pop)
+
+    def process(self, response: GenericResponse):
+        for future, request in self._pending.items():
+            if future.done():
+                continue
+            if response.respons_to(request):
+                future.set_result(response)
+
 class ClientBase:
     def __init__(self) -> None:
         self._reader: StreamReader | None = None
         self._writer: StreamWriter | None = None
-        self._listen: set[Callable] = {self._process_request_pending}
-        self._request_queue = asyncio.PriorityQueue[tuple[int, int, asyncio.Future[GenericResponse], GenericRequest]]()
-        self._request_pending: dict[asyncio.Future[GenericResponse], GenericRequest] = {}
-        self._request_count = 0
+        self._request_queue = RequestQueue()
+        self._request_pending = RequestPending()
+        self._listen: set[Callable] = {self._request_pending.process}
 
     @contextmanager
     def listen(self, listener: Callable):
@@ -65,30 +115,18 @@ class ClientBase:
         finally:
             self._listen.remove(listener)
 
-    def _process_request_pending(self, response: GenericResponse):
-        for future, request in self._request_pending.items():
-            if future.done():
-                continue
-            if response.respons_to(request):
-                future.set_result(response)
-
     async def _process_request_single(self, writer: StreamWriter):
         """Process a single request from queue queue."""
-
         try:
             async with asyncio.timeout(_HEARTBEAT_INTERVAL.total_seconds()):
-                while True:
-                    _, _, future, request = await self._request_queue.get()
-                    if not future.done():
-                        break
+                future, request = await self._request_queue.get()
         except TimeoutError:
             _LOGGER.debug("Sending ping")
             request = CommandPacket(1, CommandCodes.POWER, bytes([0xF0]))
             await write_packet(writer, request)
             return
 
-        self._request_pending[future] = request
-        future.add_done_callback(self._request_pending.pop)
+        self._request_pending.add(future, request)
 
         await write_packet(writer, request)
         _schedule_timeout(future, "Request timed out")
@@ -100,7 +138,8 @@ class ClientBase:
                 await self._process_request_single(writer)
                 await asyncio.sleep(_REQUEST_THROTTLE)
         finally:
-            self._request_queue_close(NotConnectedException("Connected was closed"))
+            self._request_queue.close()
+            self._request_pending.close()
 
     async def _process_data(self, reader: StreamReader):
         try:
@@ -133,7 +172,6 @@ class ClientBase:
         finally:
             _LOGGER.debug("Process task shutting down")
             self._writer.close()
-            self._request_queue_close(NotConnectedException("Connected was closed"))
 
     @property
     def connected(self) -> bool:
@@ -142,23 +180,6 @@ class ClientBase:
     @property
     def started(self) -> bool:
         return self._writer is not None
-
-    def _request_queue_close(self, exception: Exception) -> None:
-        """Shut down all pending and queued requests."""
-        for future in self._request_pending:
-            future.set_exception(exception)
-
-        while not self._request_queue.empty():
-            _, _, future, _ = self._request_queue.get_nowait()
-            future.set_exception(exception)
-
-    def _request_queue_add(self, priority: int, future: asyncio.Future[GenericResponse], request: GenericRequest) -> None:
-        """Adds a request in priority order to the queue."""
-        if not self._writer:
-            raise NotConnectedException()
-
-        self._request_count = self._request_count + 1
-        self._request_queue.put_nowait((priority, self._request_count, future, request))
 
     @overload
     async def request_raw(self, request: CommandPacket, *, priority: int = 0) -> ResponsePacket: ...
@@ -170,7 +191,7 @@ class ClientBase:
     async def request_raw(self, request: GenericRequest, *, priority: int = 0) -> GenericResponse:
         future = asyncio.Future[GenericResponse]()
         try:
-            self._request_queue_add(priority, future, request)
+            self._request_queue.put_nowait(future, request, priority=priority)
             return await future
         finally:
             future.cancel()
