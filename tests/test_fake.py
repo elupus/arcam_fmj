@@ -104,10 +104,11 @@ async def test_silent_server_disconnect(speedy_client, silent_server):
 
     c = Client("localhost", 8888)
     connected = True
-    with pytest.raises(ConnectionFailed):
+    with pytest.raises(ExceptionGroup) as exc:
         async with ClientContext(c):
             await asyncio.sleep(_HEARTBEAT_TIMEOUT.total_seconds() + 0.5)
             connected = c.connected
+    assert exc.group_contains(ConnectionFailed)
     assert not connected
 
 
