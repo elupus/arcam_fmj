@@ -82,13 +82,12 @@ async def test_power_on(zn, api_model):
     client.request.return_value = response
     await state.set_power(True)
     if api_model in POWER_WRITE_SUPPORTED:
-        client.request.assert_called_with(zn, CommandCodes.POWER, bytes([0x01]))
+        client.request.assert_called_with(zn, CommandCodes.POWER, bytes([0x01]), 0)
     else:
         # zn, api_model, power
         code = PARAMS_TO_RC5COMMAND[zn, api_model, True]
         client.request.assert_called_with(
-            zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, code
-        )
+            zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, code, 0)
 
 
 @pytest.mark.parametrize("zn, api_model", TEST_PARAMS)
@@ -99,7 +98,7 @@ async def test_power_off(zn, api_model):
     assert state.get_power() is None
     await state.set_power(False)
     if api_model in POWER_WRITE_SUPPORTED:
-        client.request.assert_called_with(zn, CommandCodes.POWER, bytes([0x00]))
+        client.request.assert_called_with(zn, CommandCodes.POWER, bytes([0x00]), 0)
     else:
         # zn, api_model, power
         code = PARAMS_TO_RC5COMMAND[zn, api_model, False]
@@ -192,7 +191,7 @@ async def test_set_mute_write_supported():
     client = MagicMock(spec=Client)
     state = State(client, 1, ApiModel.APISA_SERIES)
     await state.set_mute(True)
-    client.request.assert_called_with(1, CommandCodes.MUTE, bytes([0x00]))
+    client.request.assert_called_with(1, CommandCodes.MUTE, bytes([0x00]), 0)
 
 
 async def test_set_mute_rc5():
@@ -201,8 +200,7 @@ async def test_set_mute_rc5():
     state = State(client, 1, ApiModel.API450_SERIES)
     await state.set_mute(True)
     client.request.assert_called_with(
-        1, CommandCodes.SIMULATE_RC5_IR_COMMAND, bytes([16, 119])
-    )
+        1, CommandCodes.SIMULATE_RC5_IR_COMMAND, bytes([16, 119]), 0)
 
 
 # --- Decode mode ---
@@ -272,8 +270,7 @@ async def test_save_settings_default_pin():
     await state.save_settings()
     client.request.assert_called_with(
         1, CommandCodes.SAVE_RESTORE_COPY_OF_SETTINGS,
-        bytes([SaveRestoreSubCommand.SAVE, *SAVE_RESTORE_CONFIRMATION, 0x01, 0x02, 0x03, 0x04]),
-    )
+        bytes([SaveRestoreSubCommand.SAVE, *SAVE_RESTORE_CONFIRMATION, 0x01, 0x02, 0x03, 0x04]), 0)
 
 
 async def test_restore_settings_default_pin():
@@ -282,8 +279,7 @@ async def test_restore_settings_default_pin():
     await state.restore_settings()
     client.request.assert_called_with(
         1, CommandCodes.SAVE_RESTORE_COPY_OF_SETTINGS,
-        bytes([SaveRestoreSubCommand.RESTORE, *SAVE_RESTORE_CONFIRMATION, 0x01, 0x02, 0x03, 0x04]),
-    )
+        bytes([SaveRestoreSubCommand.RESTORE, *SAVE_RESTORE_CONFIRMATION, 0x01, 0x02, 0x03, 0x04]), 0)
 
 
 async def test_save_settings_custom_pin():
@@ -292,8 +288,7 @@ async def test_save_settings_custom_pin():
     await state.save_settings(pin=(9, 8, 7, 6))
     client.request.assert_called_with(
         1, CommandCodes.SAVE_RESTORE_COPY_OF_SETTINGS,
-        bytes([SaveRestoreSubCommand.SAVE, *SAVE_RESTORE_CONFIRMATION, 0x09, 0x08, 0x07, 0x06]),
-    )
+        bytes([SaveRestoreSubCommand.SAVE, *SAVE_RESTORE_CONFIRMATION, 0x09, 0x08, 0x07, 0x06]), 0)
 
 
 # --- Headphones (0x02) ---
@@ -337,8 +332,7 @@ async def test_set_display_info_type():
     state = State(client, 1)
     await state.set_display_info_type(0x03)
     client.request.assert_called_with(
-        1, CommandCodes.DISPLAY_INFORMATION_TYPE, bytes([0x03])
-    )
+        1, CommandCodes.DISPLAY_INFORMATION_TYPE, bytes([0x03]), 0)
 
 
 async def test_set_display_info_type_cycle():
@@ -346,8 +340,7 @@ async def test_set_display_info_type_cycle():
     state = State(client, 1)
     await state.set_display_info_type(0xE0)
     client.request.assert_called_with(
-        1, CommandCodes.DISPLAY_INFORMATION_TYPE, bytes([0xE0])
-    )
+        1, CommandCodes.DISPLAY_INFORMATION_TYPE, bytes([0xE0]), 0)
 
 
 # --- Lipsync Delay (0x40) ---
@@ -380,7 +373,7 @@ async def test_set_lipsync_delay(value, expected_byte):
     client = MagicMock(spec=Client)
     state = State(client, 1)
     await state.set_lipsync_delay(value)
-    client.request.assert_called_with(1, CommandCodes.LIPSYNC_DELAY, bytes([expected_byte]))
+    client.request.assert_called_with(1, CommandCodes.LIPSYNC_DELAY, bytes([expected_byte]), 0)
 
 
 # --- Subwoofer Trim (0x3F) ---
@@ -418,7 +411,7 @@ async def test_set_subwoofer_trim(value, expected_byte):
     client = MagicMock(spec=Client)
     state = State(client, 1)
     await state.set_subwoofer_trim(value)
-    client.request.assert_called_with(1, CommandCodes.SUBWOOFER_TRIM, bytes([expected_byte]))
+    client.request.assert_called_with(1, CommandCodes.SUBWOOFER_TRIM, bytes([expected_byte]), 0)
 
 
 # --- Sub Stereo Trim (0x45) ---
@@ -453,7 +446,7 @@ async def test_set_sub_stereo_trim(value, expected_byte):
     client = MagicMock(spec=Client)
     state = State(client, 1)
     await state.set_sub_stereo_trim(value)
-    client.request.assert_called_with(1, CommandCodes.SUB_STEREO_TRIM, bytes([expected_byte]))
+    client.request.assert_called_with(1, CommandCodes.SUB_STEREO_TRIM, bytes([expected_byte]), 0)
 
 
 # --- Treble Equalization (0x35) ---
@@ -488,7 +481,7 @@ async def test_set_treble_equalization(value, expected_byte):
     client = MagicMock(spec=Client)
     state = State(client, 1)
     await state.set_treble_equalization(value)
-    client.request.assert_called_with(1, CommandCodes.TREBLE_EQUALIZATION, bytes([expected_byte]))
+    client.request.assert_called_with(1, CommandCodes.TREBLE_EQUALIZATION, bytes([expected_byte]), 0)
 
 
 # --- Bass Equalization (0x36) ---
@@ -525,7 +518,7 @@ async def test_set_bass_equalization(value, expected_byte):
     client = MagicMock(spec=Client)
     state = State(client, 1)
     await state.set_bass_equalization(value)
-    client.request.assert_called_with(1, CommandCodes.BASS_EQUALIZATION, bytes([expected_byte]))
+    client.request.assert_called_with(1, CommandCodes.BASS_EQUALIZATION, bytes([expected_byte]), 0)
 
 
 # --- Room EQ (0x37) ---
@@ -560,7 +553,7 @@ async def test_set_room_equalization(mode, expected_byte):
     client = MagicMock(spec=Client)
     state = State(client, 1)
     await state.set_room_equalization(mode)
-    client.request.assert_called_with(1, CommandCodes.ROOM_EQUALIZATION, bytes([expected_byte]))
+    client.request.assert_called_with(1, CommandCodes.ROOM_EQUALIZATION, bytes([expected_byte]), 0)
 
 
 # --- Room EQ Names (0x34) ---
@@ -608,7 +601,7 @@ async def test_set_dolby_audio():
     client = MagicMock(spec=Client)
     state = State(client, 1)
     await state.set_dolby_audio(DolbyAudioMode.NIGHT)
-    client.request.assert_called_with(1, CommandCodes.DOLBY_AUDIO, bytes([0x03]))
+    client.request.assert_called_with(1, CommandCodes.DOLBY_AUDIO, bytes([0x03]), 0)
 
 
 # --- Balance (0x3B) ---
@@ -646,7 +639,7 @@ async def test_set_balance(value, expected_byte):
     client = MagicMock(spec=Client)
     state = State(client, 1)
     await state.set_balance(value)
-    client.request.assert_called_with(1, CommandCodes.BALANCE, bytes([expected_byte]))
+    client.request.assert_called_with(1, CommandCodes.BALANCE, bytes([expected_byte]), 0)
 
 
 # --- Compression (0x41) ---
@@ -674,7 +667,7 @@ async def test_set_compression():
     client = MagicMock(spec=Client)
     state = State(client, 1)
     await state.set_compression(CompressionMode.HIGH)
-    client.request.assert_called_with(1, CommandCodes.COMPRESSION, bytes([0x02]))
+    client.request.assert_called_with(1, CommandCodes.COMPRESSION, bytes([0x02]), 0)
 
 
 # --- IMAX Enhanced (0x0C) ---
@@ -709,8 +702,7 @@ async def test_set_imax_enhanced(mode, expected_byte):
     state = State(client, 1, ApiModel.APIHDA_SERIES)
     await state.set_imax_enhanced(mode)
     client.request.assert_called_with(
-        1, CommandCodes.IMAX_ENHANCED, bytes([expected_byte])
-    )
+        1, CommandCodes.IMAX_ENHANCED, bytes([expected_byte]), 0)
 
 
 # --- Network Playback Status (0x1C) ---
@@ -799,8 +791,7 @@ async def test_send_playback():
     state = State(client, 1, ApiModel.APIHDA_SERIES)
     await state.send_playback(RC5CodePlayback.PLAY)
     client.request.assert_called_with(
-        1, CommandCodes.SIMULATE_RC5_IR_COMMAND, bytes([0x10, 0x35])
-    )
+        1, CommandCodes.SIMULATE_RC5_IR_COMMAND, bytes([0x10, 0x35]), 0)
 
 
 async def test_send_navigation():
@@ -808,8 +799,7 @@ async def test_send_navigation():
     state = State(client, 1, ApiModel.APIHDA_SERIES)
     await state.send_navigation(RC5CodeNavigation.UP)
     client.request.assert_called_with(
-        1, CommandCodes.SIMULATE_RC5_IR_COMMAND, bytes([0x10, 0x56])
-    )
+        1, CommandCodes.SIMULATE_RC5_IR_COMMAND, bytes([0x10, 0x56]), 0)
 
 
 async def test_send_toggle():
@@ -817,8 +807,7 @@ async def test_send_toggle():
     state = State(client, 1, ApiModel.APIHDA_SERIES)
     await state.send_toggle(RC5CodeToggle.RADIO)
     client.request.assert_called_with(
-        1, CommandCodes.SIMULATE_RC5_IR_COMMAND, bytes([0x10, 0x5B])
-    )
+        1, CommandCodes.SIMULATE_RC5_IR_COMMAND, bytes([0x10, 0x5B]), 0)
 
 
 async def test_send_playback_unsupported_model():
@@ -871,8 +860,7 @@ async def test_inc_bass_equalization():
     state = State(client, 1, ApiModel.APIHDA_SERIES)
     await state.inc_bass_equalization()
     client.request.assert_called_with(
-        1, CommandCodes.SIMULATE_RC5_IR_COMMAND, bytes([0x10, 0x2C])
-    )
+        1, CommandCodes.SIMULATE_RC5_IR_COMMAND, bytes([0x10, 0x2C]), 0)
 
 
 async def test_dec_bass_equalization():
@@ -880,8 +868,7 @@ async def test_dec_bass_equalization():
     state = State(client, 1, ApiModel.APIHDA_SERIES)
     await state.dec_bass_equalization()
     client.request.assert_called_with(
-        1, CommandCodes.SIMULATE_RC5_IR_COMMAND, bytes([0x10, 0x38])
-    )
+        1, CommandCodes.SIMULATE_RC5_IR_COMMAND, bytes([0x10, 0x38]), 0)
 
 
 async def test_inc_bass_equalization_unsupported():
@@ -907,8 +894,7 @@ async def test_set_display_brightness():
     state = State(client, 1, ApiModel.APIHDA_SERIES)
     await state.set_display_brightness(DisplayBrightness.L2)
     client.request.assert_called_with(
-        1, CommandCodes.SIMULATE_RC5_IR_COMMAND, bytes([0x10, 0x23])
-    )
+        1, CommandCodes.SIMULATE_RC5_IR_COMMAND, bytes([0x10, 0x23]), 0)
 
 
 async def test_set_hdmi_output():
@@ -916,8 +902,7 @@ async def test_set_hdmi_output():
     state = State(client, 1, ApiModel.APIHDA_SERIES)
     await state.set_hdmi_output(HdmiOutput.OUT_1_2)
     client.request.assert_called_with(
-        1, CommandCodes.SIMULATE_RC5_IR_COMMAND, bytes([0x10, 0x4B])
-    )
+        1, CommandCodes.SIMULATE_RC5_IR_COMMAND, bytes([0x10, 0x4B]), 0)
 
 
 async def test_set_hdmi_output_unsupported():
@@ -947,12 +932,10 @@ async def test_set_direct_mode():
     state = State(client, 1, ApiModel.APIHDA_SERIES)
     await state.set_direct_mode(True)
     client.request.assert_called_with(
-        1, CommandCodes.SIMULATE_RC5_IR_COMMAND, bytes([0x10, 0x4E])
-    )
+        1, CommandCodes.SIMULATE_RC5_IR_COMMAND, bytes([0x10, 0x4E]), 0)
     await state.set_direct_mode(False)
     client.request.assert_called_with(
-        1, CommandCodes.SIMULATE_RC5_IR_COMMAND, bytes([0x10, 0x4F])
-    )
+        1, CommandCodes.SIMULATE_RC5_IR_COMMAND, bytes([0x10, 0x4F]), 0)
 
 
 # --- Command support checking ---

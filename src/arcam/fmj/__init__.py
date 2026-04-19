@@ -272,10 +272,16 @@ _T = TypeVar("_T", bound="IntOrTypeEnum")
 
 
 class EnumFlags(enum.IntFlag):
+    def __new__(cls, value, priority=0):
+        obj = int.__new__(cls, value)
+        obj._value_ = value
+        obj.priority = priority
+        return obj
+
     ZONE_SUPPORT = enum.auto()
     SEND_ONLY = enum.auto()
-    POLL_REQUIRED = enum.auto()
-    FULL_UPDATE = enum.auto()
+    POLL_REQUIRED = (enum.auto(), 20)
+    FULL_UPDATE = (enum.auto(), 10)
 
 
 class IntOrTypeEnum(enum.IntEnum):
