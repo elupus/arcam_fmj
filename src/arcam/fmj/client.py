@@ -58,17 +58,24 @@ class RequestQueue:
 
     def close(self) -> None:
         """Shut down all pending and queued requests."""
+        if not self._count:
+            return
+
         while not self._queue.empty():
             _, _, future, _ = self._queue.get_nowait()
             future.set_exception(NotConnectedException("Connected was closed"))
         self._queue = None
 
-    def put_nowait(self, future: asyncio.Future[GenericResponse], request: GenericRequest, priority: int = 0):
+
+    def put_nowait(self, request: GenericRequest, priority: int = 0) -> asyncio.Future[GenericResponse]:
         if not self._queue:
             raise NotConnectedException()
 
+        future = asyncio.Future[GenericResponse]()
         self._count = self._count + 1
         self._queue.put_nowait((priority, self._count, future, request))
+        return future
+
 
     async def get(self) -> tuple[asyncio.Future[GenericResponse], GenericRequest]:
         """Get a request that is not finished already."""
@@ -95,9 +102,7 @@ class RequestPending:
         future.add_done_callback(self._pending.pop)
 
     def process(self, response: GenericResponse):
-        for future, request in self._pending.items():
-            if future.done():
-                continue
+        for future, request in self._pending.copy().items():
             if response.respons_to(request):
                 future.set_result(response)
 
@@ -194,9 +199,8 @@ class ClientBase:
 
     @async_retry(2, asyncio.TimeoutError)
     async def request_raw(self, request: GenericRequest, *, priority: int = 0) -> GenericResponse:
-        future = asyncio.Future[GenericResponse]()
+        future = self._request_queue.put_nowait(request, priority=priority)
         try:
-            self._request_queue.put_nowait(future, request, priority=priority)
             return await future
         finally:
             future.cancel()
@@ -205,9 +209,8 @@ class ClientBase:
         if not (cc.flags & EnumFlags.ZONE_SUPPORT) and zn != 1:
             raise UnsupportedZone()
 
-        future = asyncio.Future[GenericResponse]()
         request = CommandPacket(zn, cc, data)
-        self._request_queue_add(priority, future, request)
+        self._request_queue.put_nowait(request, priority=priority)
 
     async def request(self, zn: int, cc: CommandCodes, data: bytes, priority: int = 0):
         if not (cc.flags & EnumFlags.ZONE_SUPPORT) and zn != 1:
