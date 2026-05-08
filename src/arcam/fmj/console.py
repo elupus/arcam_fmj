@@ -477,7 +477,7 @@ async def run_server(args):
             await asyncio.sleep(delay=1)
 
 
-def main():
+def main_real():
     args = parser.parse_args()
 
     if args.verbose:
@@ -499,6 +499,11 @@ def main():
     elif args.subcommand == "server":
         asyncio.run(run_server(args))
 
+def main():
+    try:
+        main_real()
+    except KeyboardInterrupt as exc:
+        raise SystemExit(1) from exc
 
 if __name__ == "__main__":
     main()
