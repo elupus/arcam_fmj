@@ -2,6 +2,7 @@
 
 import asyncio
 from asyncio.streams import StreamReader, StreamWriter
+from copy import copy
 import logging
 from datetime import timedelta
 from contextlib import contextmanager
@@ -170,6 +171,9 @@ class ClientBase:
             async with asyncio.TaskGroup() as group:
                 group.create_task(self._process_data(self._reader))
                 group.create_task(self._process_request(self._writer))
+        except BaseExceptionGroup as exc:
+            # convert to a non group exception to keep compatibility
+            raise copy(exc.exceptions[0]).with_traceback(exc.exceptions[0].__traceback__)
         finally:
             _LOGGER.debug("Process task shutting down")
             self._writer.close()
