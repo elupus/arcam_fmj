@@ -31,7 +31,7 @@ from . import (
     RC5CODE_DECODE_MODE_2CH,
     RC5CODE_DECODE_MODE_MCH,
 )
-from .client import Client, ClientContext
+from .client import Client, ClientSerial, ClientContext
 from .server import Server, ServerContext
 from .state import State
 
@@ -57,7 +57,9 @@ parser.add_argument("--verbose", action="store_true")
 subparsers = parser.add_subparsers(dest="subcommand")
 
 parser_state = subparsers.add_parser("state")
-parser_state.add_argument("--host", required=True)
+target = parser_state.add_mutually_exclusive_group(required=True)
+target.add_argument("--host")
+target.add_argument("--serial")
 parser_state.add_argument("--port", default=50000)
 parser_state.add_argument("--zone", default=1, type=int)
 parser_state.add_argument("--volume", type=int)
@@ -146,7 +148,9 @@ parser_state.add_argument(
 )
 
 parser_client = subparsers.add_parser("client")
-parser_client.add_argument("--host", required=True)
+target = parser_client.add_mutually_exclusive_group(required=True)
+target.add_argument("--host", default=None)
+target.add_argument("--serial", default=None)
 parser_client.add_argument("--port", default=50000)
 parser_client.add_argument("--zone", default=1, type=int)
 parser_client.add_argument("--command", type=auto_int, required=True)
@@ -159,7 +163,11 @@ parser_server.add_argument("--model", default="AVR450")
 
 
 async def run_client(args):
-    client = Client(args.host, args.port)
+    if args.host:
+        client = Client(args.host, args.port)
+    else:
+        client = ClientSerial(args.serial)
+
     async with ClientContext(client):
         result = await client.request(
             args.zone, CommandCodes(args.command), bytes(args.data)
@@ -168,7 +176,10 @@ async def run_client(args):
 
 
 async def run_state(args):
-    client = Client(args.host, args.port)
+    if args.host:
+        client = Client(args.host, args.port)
+    else:
+        client = ClientSerial(args.serial)
     async with ClientContext(client):
         state = State(client, args.zone)
         await state.update()

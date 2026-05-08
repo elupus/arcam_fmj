@@ -43,12 +43,20 @@ Console
 The module contains a commandline utility to test and request data from
 called ``arcam-fmj``.
 
-Code to set volume and source using console.
+Code to set volume and source using console over network.
 
 .. code-block:: bash
 
 
     arcam-fmj state --host 192.168.0.2 --port 50000 --source 5 --volume 50
+
+
+Code to set volume and source using console over serial.
+
+.. code-block:: bash
+
+
+    arcam-fmj state --serial /dev/ttyUSB0 --port 50000 --source 5 --volume 50
 
 
 Protocol Specifications

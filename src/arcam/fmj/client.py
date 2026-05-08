@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from contextlib import AsyncExitStack, contextmanager, suppress
 from typing import Union, overload
 from collections.abc import Callable
+from serialx import open_serial_connection
 
 from . import (
     AmxDuetRequest,
@@ -172,6 +173,32 @@ class ClientBase:
 
         raise ResponseException.from_response(response)
 
+    @property
+    def peer(self) -> str:
+        raise NotImplementedError()  
+
+    async def _open(self) -> tuple[StreamReader, StreamWriter]:
+        raise NotImplementedError()    
+
+    async def start(self) -> None:
+        if self._writer:
+            raise ArcamException("Already started")
+
+        _LOGGER.debug("Connecting to %s", self.peer)
+        self._reader, self._writer = await self._open()
+        _LOGGER.info("Connected to %s", self.peer)
+
+    async def stop(self) -> None:
+        if self._writer:
+            try:
+                _LOGGER.info("Disconnecting from %s", self.peer)
+                self._writer.close()
+                await self._writer.wait_closed()
+            except (ConnectionError, OSError):
+                pass
+            finally:
+                self._writer = None
+                self._reader = None
 
 class Client(ClientBase):
     def __init__(self, host: str, port: int) -> None:
@@ -187,33 +214,29 @@ class Client(ClientBase):
     def port(self) -> int:
         return self._port
 
-    async def start(self) -> None:
-        if self._writer:
-            raise ArcamException("Already started")
+    @property
+    def peer(self) -> str:
+        return f"{self.host}:{self.port}"
 
-        _LOGGER.debug("Connecting to %s:%d", self._host, self._port)
-        try:
-            self._reader, self._writer = await asyncio.open_connection(
-                self._host, self._port
-            )
-        except ConnectionError as exception:
-            raise ConnectionFailed() from exception
-        except OSError as exception:
-            raise ConnectionFailed() from exception
-        _LOGGER.info("Connected to %s:%d", self._host, self._port)
+    async def _open(self) -> tuple[StreamReader, StreamWriter]:
+        return await asyncio.open_connection(
+            self._host, self._port
+        )
 
-    async def stop(self) -> None:
-        if self._writer:
-            try:
-                _LOGGER.info("Disconnecting from %s:%d", self._host, self._port)
-                self._writer.close()
-                await self._writer.wait_closed()
-            except (ConnectionError, OSError):
-                pass
-            finally:
-                self._writer = None
-                self._reader = None
+class ClientSerial(ClientBase):
+    def __init__(self, url: str, baudrate=38400) -> None:
+        super().__init__()
+        self._url = url
+        self._baudrate = baudrate
 
+    @property
+    def peer(self) -> str:
+        return self._url
+
+    async def _open(self) -> tuple[StreamReader, StreamWriter]:
+        return await open_serial_connection(
+            self._url, self._baudrate
+        )
 
 class ClientContext:
     def __init__(self, client: Client):
