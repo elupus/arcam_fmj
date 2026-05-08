@@ -54,6 +54,7 @@ class RequestQueue:
     """Manages the prioritized request queue."""
     def __init__(self):
         self._queue: asyncio.PriorityQueue[tuple[int, int, asyncio.Future[GenericResponse], GenericRequest]] | None = asyncio.PriorityQueue()
+        self._pending: dict[asyncio.Future[GenericResponse], GenericRequest] = {}
         self._count = 0
 
     def close(self) -> None:
@@ -63,11 +64,18 @@ class RequestQueue:
 
         while not self._queue.empty():
             _, _, future, _ = self._queue.get_nowait()
+            if future.done():
+                continue
             future.set_exception(NotConnectedException("Connected was closed"))
         self._queue = None
 
+        for future in self._pending.copy():
+            if future.done():
+                continue
+            future.set_exception(NotConnectedException("Connected was closed"))
 
     def put_nowait(self, request: GenericRequest, priority: int = 0) -> asyncio.Future[GenericResponse]:
+        """Put a request into the request queue."""
         if not self._queue:
             raise NotConnectedException()
 
@@ -77,8 +85,8 @@ class RequestQueue:
         return future
 
 
-    async def get(self) -> tuple[asyncio.Future[GenericResponse], GenericRequest]:
-        """Get a request that is not finished already."""
+    async def pop(self) -> tuple[asyncio.Future[GenericResponse], GenericRequest]:
+        """Get a request that is not finished already, and move it to pending."""
         if not self._queue:
             raise NotConnectedException()
 
@@ -86,22 +94,14 @@ class RequestQueue:
             _, _, future, request = await self._queue.get()
             if not future.done():
                 break
-        return future, request
-    
-class RequestPending:
-    """Manages pending requests and clean up when done."""
-    def __init__(self):
-        self._pending: dict[asyncio.Future[GenericResponse], GenericRequest] = {}
-    
-    def close(self):
-        for future in self._pending:
-            future.set_exception(NotConnectedException("Connected was closed"))
 
-    def add(self, future: asyncio.Future[GenericResponse], request: GenericRequest):
         self._pending[future] = request
         future.add_done_callback(self._pending.pop)
 
+        return future, request
+
     def process(self, response: GenericResponse):
+        """Check if any response completes a pending request."""
         for future, request in self._pending.copy().items():
             if response.respons_to(request):
                 future.set_result(response)
@@ -110,9 +110,8 @@ class ClientBase:
     def __init__(self) -> None:
         self._reader: StreamReader | None = None
         self._writer: StreamWriter | None = None
-        self._request_queue = RequestQueue()
-        self._request_pending = RequestPending()
-        self._listen: set[Callable] = {self._request_pending.process}
+        self._queue = RequestQueue()
+        self._listen: set[Callable] = {self._queue.process}
 
     @contextmanager
     def listen(self, listener: Callable):
@@ -126,14 +125,12 @@ class ClientBase:
         """Process a single request from queue queue."""
         try:
             async with asyncio.timeout(_HEARTBEAT_INTERVAL.total_seconds()):
-                future, request = await self._request_queue.get()
+                future, request = await self._queue.pop()
         except TimeoutError:
             _LOGGER.debug("Sending ping")
             request = CommandPacket(1, CommandCodes.POWER, bytes([0xF0]))
             await write_packet(writer, request)
             return
-
-        self._request_pending.add(future, request)
 
         await write_packet(writer, request)
         _schedule_timeout(future, "Request timed out")
@@ -145,8 +142,7 @@ class ClientBase:
                 await self._process_request_single(writer)
                 await asyncio.sleep(_REQUEST_THROTTLE)
         finally:
-            self._request_queue.close()
-            self._request_pending.close()
+            self._queue.close()
 
     async def _process_data(self, reader: StreamReader):
         while True:
@@ -199,7 +195,7 @@ class ClientBase:
 
     @async_retry(2, asyncio.TimeoutError)
     async def request_raw(self, request: GenericRequest, *, priority: int = 0) -> GenericResponse:
-        future = self._request_queue.put_nowait(request, priority=priority)
+        future = self._queue.put_nowait(request, priority=priority)
         try:
             return await future
         finally:
@@ -210,7 +206,7 @@ class ClientBase:
             raise UnsupportedZone()
 
         request = CommandPacket(zn, cc, data)
-        self._request_queue.put_nowait(request, priority=priority)
+        self._queue.put_nowait(request, priority=priority)
 
     async def request(self, zn: int, cc: CommandCodes, data: bytes, priority: int = 0):
         if not (cc.flags & EnumFlags.ZONE_SUPPORT) and zn != 1:
