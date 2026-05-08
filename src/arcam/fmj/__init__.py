@@ -163,7 +163,7 @@ APIVERSION_ST_SERIES = {"ST60"}
 
 APIVERSION_DAB_SERIES = {"AVR450", "AVR750"}
 APIVERSION_DAB_SERIES.update(
-    "AV860", "AVR850", "AVR550", "AVR390", "RV-6", "RV-9", "MC-10"
+    {"AV860", "AVR850", "AVR550", "AVR390", "RV-6", "RV-9", "MC-10"}
 )
 APIVERSION_DAB_SERIES.update(APIVERSION_HDA_SERIES)
 
@@ -276,6 +276,11 @@ class EnumFlags(enum.IntFlag):
     SEND_ONLY = enum.auto()
     POLL_REQUIRED = enum.auto()
     FULL_UPDATE = enum.auto()
+    # Essential commands (power, volume, mute, source) for a lightweight
+    # initial sync via update(flags=EnumFlags.PRIORITY_ESSENTIAL).
+    # Also useful for fail-safe refreshes — the minimum set needed to
+    # confirm a media player entity's core state.
+    PRIORITY_ESSENTIAL = enum.auto()
 
 
 class IntOrTypeEnum(enum.IntEnum):
@@ -333,7 +338,7 @@ class AnswerCodes(IntOrTypeEnum):
 
 class CommandCodes(IntOrTypeEnum):
     # System Commands
-    POWER = 0x00, None, EnumFlags.ZONE_SUPPORT | EnumFlags.FULL_UPDATE
+    POWER = 0x00, None, EnumFlags.ZONE_SUPPORT | EnumFlags.FULL_UPDATE | EnumFlags.PRIORITY_ESSENTIAL
     DISPLAY_BRIGHTNESS = 0x01, APIVERSION_AVR_SA_AND_ST_SERIES
     HEADPHONES = 0x02, APIVERSION_AVR_AND_SA_SERIES, EnumFlags.FULL_UPDATE
     FMGENRE = 0x03, APIVERSION_AVR_SERIES, EnumFlags.ZONE_SUPPORT
@@ -342,7 +347,7 @@ class CommandCodes(IntOrTypeEnum):
     SAVE_RESTORE_COPY_OF_SETTINGS = 0x06, APIVERSION_AVR_SERIES
     SIMULATE_RC5_IR_COMMAND = 0x08, APIVERSION_AVR_SA_AND_ST_SERIES, EnumFlags.ZONE_SUPPORT | EnumFlags.SEND_ONLY
     DISPLAY_INFORMATION_TYPE = 0x09, APIVERSION_AVR_SERIES, EnumFlags.ZONE_SUPPORT | EnumFlags.FULL_UPDATE
-    CURRENT_SOURCE = 0x1D, APIVERSION_AVR_SA_AND_ST_SERIES, EnumFlags.ZONE_SUPPORT | EnumFlags.FULL_UPDATE  # Request
+    CURRENT_SOURCE = 0x1D, APIVERSION_AVR_SA_AND_ST_SERIES, EnumFlags.ZONE_SUPPORT | EnumFlags.FULL_UPDATE | EnumFlags.PRIORITY_ESSENTIAL  # Request
     HEADPHONES_OVERRIDE = 0x1F, APIVERSION_AVR_AND_SA_SERIES, EnumFlags.ZONE_SUPPORT
 
     # Input Commands
@@ -351,8 +356,8 @@ class CommandCodes(IntOrTypeEnum):
     IMAX_ENHANCED = 0x0C, APIVERSION_IMAX_SERIES, EnumFlags.FULL_UPDATE  # Was "Video input type" in 450 (SH256E); not AVR5 (SH289E)
 
     # Output Commands
-    VOLUME = 0x0D, APIVERSION_AVR_SA_AND_ST_SERIES, EnumFlags.ZONE_SUPPORT | EnumFlags.FULL_UPDATE  # Set/Request
-    MUTE = 0x0E, None, EnumFlags.ZONE_SUPPORT | EnumFlags.FULL_UPDATE  # Request
+    VOLUME = 0x0D, APIVERSION_AVR_SA_AND_ST_SERIES, EnumFlags.ZONE_SUPPORT | EnumFlags.FULL_UPDATE | EnumFlags.PRIORITY_ESSENTIAL  # Set/Request
+    MUTE = 0x0E, None, EnumFlags.ZONE_SUPPORT | EnumFlags.FULL_UPDATE | EnumFlags.PRIORITY_ESSENTIAL  # Request
     DIRECT_MODE_STATUS = 0x0F, APIVERSION_DIRECT_MODE_SERIES  # Request
     DECODE_MODE_STATUS_2CH = 0x10, APIVERSION_AVR_SERIES, EnumFlags.FULL_UPDATE  # Request
     DECODE_MODE_STATUS_MCH = 0x11, APIVERSION_AVR_SERIES, EnumFlags.FULL_UPDATE  # Request
@@ -648,6 +653,20 @@ SOURCE_WRITE_SUPPORTED = {
 }
 
 VOLUME_STEP_SUPPORTED = {
+    ApiModel.APIST_SERIES,
+}
+
+MODELS_WITH_TUNER: set[ApiModel] = {
+    ApiModel.API450_SERIES,
+    ApiModel.API860_SERIES,
+    ApiModel.APIHDA_SERIES,
+}
+
+MODELS_WITH_OSD: set[ApiModel] = {
+    ApiModel.API450_SERIES,
+    ApiModel.API860_SERIES,
+    ApiModel.APIHDA_SERIES,
+    ApiModel.APISA_SERIES,
     ApiModel.APIST_SERIES,
 }
 
