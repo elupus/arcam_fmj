@@ -144,39 +144,39 @@ class ClientBase:
             self._request_pending.close()
 
     async def _process_data(self, reader: StreamReader):
-        try:
-            while True:
-                try:
-                    async with asyncio.timeout(_HEARTBEAT_TIMEOUT.total_seconds()):
-                        packet = await read_response(reader)
-                except TimeoutError as exception:
-                    _LOGGER.debug("Missed all pings")
-                    raise ConnectionFailed("Missed all pings") from exception
+        while True:
+            try:
+                async with asyncio.timeout(_HEARTBEAT_TIMEOUT.total_seconds()):
+                    packet = await read_response(reader)
+            except TimeoutError as exception:
+                _LOGGER.debug("Missed all pings")
+                raise ConnectionFailed("Missed all pings") from exception
 
-                if packet is None:
-                    _LOGGER.debug("Server disconnected")
-                    raise ConnectionFailed("Server disconnected")
+            if packet is None:
+                _LOGGER.debug("Server disconnected")
+                raise ConnectionFailed("Server disconnected")
 
-                _LOGGER.debug("Packet received: %s", packet)
-                for listener in self._listen:
-                    listener(packet)
-        finally:
-            self._reader = None
+            _LOGGER.debug("Packet received: %s", packet)
+            for listener in self._listen:
+                listener(packet)
 
     async def process(self) -> None:
         assert self._writer, "Writer missing"
         assert self._reader, "Reader missing"
 
+        reader = self._reader
+        writer = self._writer
+
         try:
             async with asyncio.TaskGroup() as group:
-                group.create_task(self._process_data(self._reader))
-                group.create_task(self._process_request(self._writer))
+                group.create_task(self._process_data(reader))
+                group.create_task(self._process_request(writer))
         except BaseExceptionGroup as exc:
             # convert to a non group exception to keep compatibility
             raise copy(exc.exceptions[0]).with_traceback(exc.exceptions[0].__traceback__)
         finally:
             _LOGGER.debug("Process task shutting down")
-            self._writer.close()
+            writer.close()
 
     @property
     def connected(self) -> bool:
@@ -240,11 +240,11 @@ class ClientBase:
         _LOGGER.info("Connected to %s", self.peer)
 
     async def stop(self) -> None:
-        if self._writer:
+        if writer := self._writer:
             try:
                 _LOGGER.info("Disconnecting from %s", self.peer)
-                self._writer.close()
-                await self._writer.wait_closed()
+                writer.close()
+                await writer.wait_closed()
             except (ConnectionError, OSError):
                 pass
             finally:
