@@ -6,8 +6,9 @@ import logging
 from datetime import datetime, timedelta
 from arcam.fmj.priority_lock import PriorityLock
 from contextlib import AsyncExitStack, contextmanager, suppress
-from typing import Union, overload
+from typing import overload
 from collections.abc import Callable
+from copy import copy
 from serialx import open_serial_connection
 
 from . import (
@@ -68,39 +69,39 @@ class ClientBase:
                 self._timestamp = datetime.now()
 
     async def _process_data(self, reader: StreamReader):
-        try:
-            while True:
-                try:
-                    async with asyncio.timeout(_HEARTBEAT_TIMEOUT.total_seconds()):
-                        packet = await read_response(reader)
-                except TimeoutError as exception:
-                    _LOGGER.debug("Missed all pings")
-                    raise ConnectionFailed() from exception
+        while True:
+            try:
+                async with asyncio.timeout(_HEARTBEAT_TIMEOUT.total_seconds()):
+                    packet = await read_response(reader)
+            except TimeoutError as exception:
+                _LOGGER.debug("Missed all pings")
+                raise ConnectionFailed("Missed all pings") from exception
 
-                if packet is None:
-                    _LOGGER.info("Server disconnected")
-                    return
+            if packet is None:
+                _LOGGER.debug("Server disconnected")
+                raise ConnectionFailed("Server disconnected")
 
-                _LOGGER.debug("Packet received: %s", packet)
-                for listener in self._listen:
-                    listener(packet)
-        finally:
-            self._reader = None
+            _LOGGER.debug("Packet received: %s", packet)
+            for listener in self._listen:
+                listener(packet)
 
     async def process(self) -> None:
         assert self._writer, "Writer missing"
         assert self._reader, "Reader missing"
 
-        _process_heartbeat = asyncio.create_task(self._process_heartbeat())
+        reader = self._reader
+        writer = self._writer
+
         try:
-            await self._process_data(self._reader)
+            async with asyncio.TaskGroup() as group:
+                group.create_task(self._process_heartbeat())
+                group.create_task(self._process_data(reader))
+        except BaseExceptionGroup as exc:
+            # convert to a non group exception to keep compatibility
+            raise copy(exc.exceptions[0]).with_traceback(exc.exceptions[0].__traceback__)
         finally:
-            _process_heartbeat.cancel()
-            try:
-                await _process_heartbeat
-            except asyncio.CancelledError:
-                pass
-            self._writer.close()
+            _LOGGER.debug("Process task shutting down")
+            writer.close()
 
     @property
     def connected(self) -> bool:
@@ -190,11 +191,11 @@ class ClientBase:
         _LOGGER.info("Connected to %s", self.peer)
 
     async def stop(self) -> None:
-        if self._writer:
+        if writer := self._writer:
             try:
                 _LOGGER.info("Disconnecting from %s", self.peer)
-                self._writer.close()
-                await self._writer.wait_closed()
+                writer.close()
+                await writer.wait_closed()
             except (ConnectionError, OSError):
                 pass
             finally:
