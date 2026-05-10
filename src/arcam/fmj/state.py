@@ -875,3 +875,11 @@ class State:
                 tasks.append(_update(cc))
         if tasks:
             await asyncio.gather(*tasks)
+
+    async def poll_step(self) -> None:
+        await self.update(EnumFlags.POLL_REQUIRED)
+
+    async def poll_loop(self, rest_delay_s: float = 0) -> None:
+        while True:
+            await self.poll_step()
+            await asyncio.sleep(rest_delay_s)
