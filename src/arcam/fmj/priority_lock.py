@@ -13,22 +13,24 @@ class PriorityLock:
 
     @asynccontextmanager
     async def __call__(self, priority: int = 0):
-        await self._acquire(priority)
+        future = self._acquire(priority)
         try:
+            if future:
+                await future
             yield
         finally:
             self._release()
 
-    async def _acquire(self, priority: int) -> None:
+    def _acquire(self, priority: int) -> asyncio.Future | None:
         if not self._locked and not self._heap:
             self._locked = True
-            return
+            return None
 
         future: asyncio.Future[None] = asyncio.get_running_loop().create_future()
         entry = (priority, self._counter, future)
         self._counter += 1
         heapq.heappush(self._heap, entry)
-        await future
+        return future
 
     def _release(self) -> None:
         while self._heap:
