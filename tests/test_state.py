@@ -28,6 +28,7 @@ from arcam.fmj import (
     RC5CODE_HDMI_OUTPUT,
     ResponsePacket,
     RoomEqMode,
+    SourceCodes,
     UnsupportedCommand,
     POWER_WRITE_SUPPORTED,
     SAVE_RESTORE_CONFIRMATION,
@@ -1076,3 +1077,174 @@ async def test_update_records_command_not_recognised():
     assert CommandCodes.MENU not in state._unsupported_commands
     await state.update()
     assert CommandCodes.MENU in state._unsupported_commands
+
+
+# --- Input names (0x20) ---
+
+
+def test_get_input_name_empty():
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.API450_SERIES)
+    assert state.get_input_name(SourceCodes.CD) is None
+    assert state.get_input_name() is None
+    assert state.get_input_names() == {}
+
+
+def test_get_input_name_defaults_to_current_source():
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.API450_SERIES)
+    state._state[CommandCodes.CURRENT_SOURCE] = bytes([0x01])  # CD
+    state._input_names[SourceCodes.CD] = "Turntable"
+    assert state.get_input_name() == "Turntable"
+
+
+def test_get_input_names_returns_copy():
+    """Mutating the returned dict must not affect cached state."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.API450_SERIES)
+    state._input_names[SourceCodes.CD] = "My CD"
+    names = state.get_input_names()
+    names[SourceCodes.BD] = "Should not leak"
+    assert SourceCodes.BD not in state._input_names
+
+
+def test_listen_input_name_caches_status_update():
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.API450_SERIES)
+    state._listen(
+        ResponsePacket(
+            1,
+            CommandCodes.INPUT_NAME,
+            AnswerCodes.STATUS_UPDATE,
+            bytes([0x01]) + b"My CD Player",
+        )
+    )
+    assert state.get_input_name(SourceCodes.CD) == "My CD Player"
+
+
+def test_listen_input_name_strips_null_padding():
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.API450_SERIES)
+    state._listen(
+        ResponsePacket(
+            1,
+            CommandCodes.INPUT_NAME,
+            AnswerCodes.STATUS_UPDATE,
+            bytes([0x02]) + b"Blu-ray\x00\x00",
+        )
+    )
+    assert state.get_input_name(SourceCodes.BD) == "Blu-ray"
+
+
+def test_listen_input_name_ignores_unknown_source_byte():
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.API450_SERIES)
+    state._listen(
+        ResponsePacket(
+            1,
+            CommandCodes.INPUT_NAME,
+            AnswerCodes.STATUS_UPDATE,
+            bytes([0xFE]) + b"Mystery",
+        )
+    )
+    assert state.get_input_names() == {}
+
+
+async def test_fetch_input_name_caches_response():
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.API450_SERIES)
+    client.request.return_value = bytes([0x01]) + b"My CD Player"
+    result = await state._fetch_input_name(SourceCodes.CD)
+    client.request.assert_called_with(
+        1, CommandCodes.INPUT_NAME, bytes([0x01]), 0
+    )
+    assert result == "My CD Player"
+    assert state.get_input_name(SourceCodes.CD) == "My CD Player"
+
+
+async def test_fetch_input_name_swallows_response_errors():
+    """A bad response shouldn't propagate — _fetch is part of the update sweep."""
+    from arcam.fmj import CommandNotRecognised
+
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.API450_SERIES)
+    client.request.side_effect = CommandNotRecognised(cc=CommandCodes.INPUT_NAME)
+    assert await state._fetch_input_name(SourceCodes.CD) is None
+    assert state.get_input_names() == {}
+
+
+async def test_set_input_name_sends_source_and_name():
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.API450_SERIES)
+    await state.set_input_name(SourceCodes.CD, "Turntable")
+    client.request.assert_called_with(
+        1, CommandCodes.INPUT_NAME, bytes([0x01]) + b"Turntable", 0
+    )
+    assert state.get_input_name(SourceCodes.CD) == "Turntable"
+
+
+async def test_set_input_name_rejects_non_ascii():
+    """Device UI clamps to ASCII; non-ASCII chars should raise."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.API450_SERIES)
+    with pytest.raises(ValueError):
+        await state.set_input_name(SourceCodes.CD, "café")
+    client.request.assert_not_called()
+
+
+async def test_set_input_name_rejects_overlong():
+    """Device UI caps names at 10 characters."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.API450_SERIES)
+    with pytest.raises(ValueError):
+        await state.set_input_name(SourceCodes.CD, "12345678901")
+    client.request.assert_not_called()
+
+
+async def test_set_input_name_accepts_max_length():
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.API450_SERIES)
+    await state.set_input_name(SourceCodes.CD, "1234567890")
+    client.request.assert_called_with(
+        1, CommandCodes.INPUT_NAME, bytes([0x01]) + b"1234567890", 0
+    )
+
+
+def test_input_names_in_to_dict():
+    client = MagicMock(spec=Client)
+    state = State(client, 1, ApiModel.API450_SERIES)
+    state._input_names[SourceCodes.CD] = "My CD"
+    assert state.to_dict()["INPUT_NAMES"] == {SourceCodes.CD: "My CD"}
+
+
+async def test_update_fetches_input_names_once():
+    """First update() pulls every source's name; subsequent ones do not re-query."""
+    client = MagicMock(spec=Client)
+    client.connected = True
+
+    def request(zn, cc, data, priority=0):
+        if cc == CommandCodes.INPUT_NAME:
+            return data + b"Name"
+        # Simulate every other command being unsupported so we focus on INPUT_NAME.
+        from arcam.fmj import CommandNotRecognised
+        raise CommandNotRecognised(cc=cc)
+
+    client.request.side_effect = request
+    state = State(client, 1, ApiModel.API450_SERIES)
+    state._amxduet = AmxDuetResponse({"Device-Model": "AVR450"})
+
+    await state.update()
+    first_call_count = sum(
+        1 for c in client.request.call_args_list
+        if c.args[1] == CommandCodes.INPUT_NAME
+    )
+    assert first_call_count == len(state.get_source_list())
+    assert state.get_input_names()  # populated
+
+    client.request.reset_mock()
+    await state.update()
+    second_calls = [
+        c for c in client.request.call_args_list
+        if c.args[1] == CommandCodes.INPUT_NAME
+    ]
+    assert second_calls == []

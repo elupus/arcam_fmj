@@ -144,7 +144,13 @@ parser_state.add_argument(
 parser_state.add_argument(
     "--input-name",
     action="store_true",
-    help="Query the user-configured input name",
+    help="Show user-configured input names for all sources",
+)
+parser_state.add_argument(
+    "--set-input-name",
+    nargs=2,
+    metavar=("SOURCE", "NAME"),
+    help="Set the user-configured name for a source (e.g., --set-input-name CD 'My CD')",
 )
 
 parser_client = subparsers.add_parser("client")
@@ -244,6 +250,21 @@ async def run_state(args):
 
         if args.display_info is not None:
             await state.set_display_info_type(args.display_info)
+
+        if args.set_input_name is not None:
+            source = SourceCodes[args.set_input_name[0]]
+            name = args.set_input_name[1]
+            await state.set_input_name(source, name)
+            print(f"Set input name for {source.name} to {name!r}")
+
+        if args.input_name:
+            names = state.get_input_names()
+            if names:
+                print("Input names:")
+                for source, name in names.items():
+                    print(f"  {source.name}: {name}")
+            else:
+                print("No input names configured")
 
         if args.monitor:
             updated = asyncio.Event()
@@ -366,6 +387,11 @@ async def run_server(args):
             self.register_handler(
                 0x01, CommandCodes.TUNER_PRESET, None, self.set_tuner_preset
             )
+            self.register_handler(
+                0x01, CommandCodes.INPUT_NAME, None, self.handle_input_name
+            )
+
+            self._input_names: dict[bytes, bytes] = {}
 
         def get_power(self, **kwargs):
             return bytes([1])
@@ -470,6 +496,18 @@ async def run_server(args):
                 return data + preset
             else:
                 raise CommandInvalidAtThisTime()
+
+        def handle_input_name(self, data, **kwargs):
+            source_byte = data[0:1]
+            if len(data) > 1:
+                # Set: store the source byte + name and echo it back.
+                self._input_names[source_byte] = data
+                return data
+            stored = self._input_names.get(source_byte)
+            if stored is not None:
+                return stored
+            # Default placeholder so clients always get something usable.
+            return source_byte + f"Input {source_byte[0]:#x}".encode("ascii")
 
     server = DummyServer(args.host, args.port, args.model)
     async with ServerContext(server):

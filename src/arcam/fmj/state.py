@@ -87,6 +87,8 @@ from .client import Client
 _LOGGER = logging.getLogger(__name__)
 _T = TypeVar("_T")
 
+INPUT_NAME_MAX_LENGTH = 10
+
 
 
 def _get_scaled_negative(data: bytes | None, min_value: float, max_value: float, scale: float) -> float | None:
@@ -114,6 +116,7 @@ def _set_scaled(value: float, min_value: float, max_value: float, scale: float) 
 class State:
     _state: dict[int, bytes | None]
     _presets: dict[int, PresetDetail]
+    _input_names: dict[SourceCodes, str]
 
     def __init__(
         self, client: Client, zn: int, api_model: ApiModel = ApiModel.API450_SERIES
@@ -122,6 +125,7 @@ class State:
         self._client = client
         self._state = dict()
         self._presets = dict()
+        self._input_names = dict()
         self._now_playing: NowPlayingInfo | None = None
         self._amxduet: AmxDuetResponse | None = None
         self._api_model = api_model
@@ -172,6 +176,7 @@ class State:
             "RDS_INFORMATION": self.get_rds_information(),
             "TUNER_PRESET": self.get_tuner_preset(),
             "PRESET_DETAIL": self.get_preset_details(),
+            "INPUT_NAMES": self.get_input_names(),
             "NETWORK_PLAYBACK_STATUS": self.get_network_playback_status(),
             "NOW_PLAYING": self.get_now_playing(),
             "BLUETOOTH_STATUS": self.get_bluetooth_status(),
@@ -192,6 +197,22 @@ class State:
 
         if packet.ac == AnswerCodes.STATUS_UPDATE:
             self._state[packet.cc] = packet.data
+            if packet.cc == CommandCodes.INPUT_NAME and len(packet.data) > 1:
+                try:
+                    source = SourceCodes.from_bytes(
+                        packet.data[0:1], self._api_model, self._zn
+                    )
+                except ValueError:
+                    pass
+                else:
+                    name = (
+                        packet.data[1:]
+                        .decode("ascii", errors="replace")
+                        .rstrip("\x00")
+                        .strip()
+                    )
+                    if name:
+                        self._input_names[source] = name
         else:
             self._state[packet.cc] = None
 
@@ -609,16 +630,75 @@ class State:
     def get_source_list(self) -> list[SourceCodes]:
         return list(RC5CODE_SOURCE.get((self._api_model, self._zn), {}).keys())
 
-    async def get_input_name(self) -> str | None:
-        """Query the user-configured input name for the current source."""
-        try:
-            data = await self._request(self._zn, CommandCodes.INPUT_NAME, bytes([0xF0]))
-            return data.decode('utf-8', errors='replace').rstrip('\x00').strip()
-        except UnsupportedCommand:
-            raise
-        except Exception as e:
-            _LOGGER.warning("Failed to get input name: %s", e)
+    def get_input_name(self, source: SourceCodes | None = None) -> str | None:
+        """Return the cached user-configured input name for a source.
+
+        With no argument, returns the name for the currently-selected source.
+        Returns None if the name has not been fetched yet or no source is set.
+        """
+        if source is None:
+            source = self.get_source()
+        if source is None:
             return None
+        return self._input_names.get(source)
+
+    def get_input_names(self) -> dict[SourceCodes, str]:
+        """Return all cached user-configured input names."""
+        return dict(self._input_names)
+
+    async def _fetch_input_name(self, source: SourceCodes, priority: int = 0) -> str | None:
+        """Query the device for one source's input name and cache it."""
+        try:
+            source_byte = source.to_bytes(self._api_model, self._zn)
+        except ValueError:
+            return None
+        try:
+            data = await self._request(
+                self._zn, CommandCodes.INPUT_NAME, source_byte, priority
+            )
+        except UnsupportedCommand:
+            return None
+        except ResponseException as e:
+            _LOGGER.debug("Input name response error for %s: %s", source, e.ac)
+            return None
+        except NotConnectedException:
+            _LOGGER.debug("Not connected fetching input name for %s", source)
+            return None
+        except TimeoutError:
+            _LOGGER.error("Timeout fetching input name for %s", source)
+            return None
+        if len(data) <= 1:
+            return None
+        name = data[1:].decode("ascii", errors="replace").rstrip("\x00").strip()
+        if not name:
+            return None
+        self._input_names[source] = name
+        return name
+
+    async def set_input_name(self, source: SourceCodes, name: str) -> None:
+        """Set the user-configured input name for a source.
+
+        The device accepts ASCII text up to 10 characters; longer or non-ASCII
+        names raise ValueError to match the device's own UI constraints.
+        """
+        try:
+            name_bytes = name.encode("ascii")
+        except UnicodeEncodeError as e:
+            raise ValueError(
+                f"Input name must be ASCII (got {name!r})"
+            ) from e
+        if len(name_bytes) > INPUT_NAME_MAX_LENGTH:
+            raise ValueError(
+                f"Input name must be at most {INPUT_NAME_MAX_LENGTH} characters "
+                f"(got {len(name_bytes)})"
+            )
+        source_byte = source.to_bytes(self._api_model, self._zn)
+        await self._request(
+            self._zn,
+            CommandCodes.INPUT_NAME,
+            source_byte + name_bytes,
+        )
+        self._input_names[source] = name
 
     async def set_source(self, src: SourceCodes) -> None:
         if self._api_model in SOURCE_WRITE_SUPPORTED:
@@ -770,6 +850,12 @@ class State:
             except TimeoutError:
                 _LOGGER.error("Timeout requesting %s", cc)
 
+        async def _update_input_names() -> None:
+            for source in self.get_source_list():
+                if source in self._input_names:
+                    continue
+                await self._fetch_input_name(source, priority)
+
         async def _update_presets() -> None:
             presets = {}
             for preset in range(1, 51):
@@ -856,6 +942,7 @@ class State:
             if self._state:
                 self._state = dict()
                 self._now_playing = None
+                self._input_names = dict()
             return
 
         if self._amxduet is None:
@@ -871,6 +958,8 @@ class State:
                 tasks.append(_update_now_playing())
             elif cc == CommandCodes.PRESET_DETAIL:
                 tasks.append(_update_presets())
+            elif cc == CommandCodes.INPUT_NAME:
+                tasks.append(_update_input_names())
             else:
                 tasks.append(_update(cc))
         if tasks:
