@@ -1082,20 +1082,21 @@ async def test_update_records_command_not_recognised():
 # --- Input names (0x20) ---
 
 
-def test_get_input_name_empty():
+async def test_get_input_name_empty():
     client = MagicMock(spec=Client)
     state = State(client, 1, ApiModel.API450_SERIES)
-    assert state.get_input_name(SourceCodes.CD) is None
-    assert state.get_input_name() is None
+    client.request.return_value = b""
+    assert await state.get_input_name(SourceCodes.CD) is None
+    assert await state.get_input_name() is None
     assert state.get_input_names() == {}
 
 
-def test_get_input_name_defaults_to_current_source():
+async def test_get_input_name_defaults_to_current_source():
     client = MagicMock(spec=Client)
     state = State(client, 1, ApiModel.API450_SERIES)
     state._state[CommandCodes.CURRENT_SOURCE] = bytes([0x01])  # CD
     state._input_names[SourceCodes.CD] = "Turntable"
-    assert state.get_input_name() == "Turntable"
+    assert await state.get_input_name() == "Turntable"
 
 
 def test_get_input_names_returns_copy():
@@ -1108,7 +1109,7 @@ def test_get_input_names_returns_copy():
     assert SourceCodes.BD not in state._input_names
 
 
-def test_listen_input_name_caches_status_update():
+async def test_listen_input_name_caches_status_update():
     client = MagicMock(spec=Client)
     state = State(client, 1, ApiModel.API450_SERIES)
     state._listen(
@@ -1119,10 +1120,10 @@ def test_listen_input_name_caches_status_update():
             bytes([0x01]) + b"My CD Player",
         )
     )
-    assert state.get_input_name(SourceCodes.CD) == "My CD Player"
+    assert await state.get_input_name(SourceCodes.CD) == "My CD Player"
 
 
-def test_listen_input_name_strips_null_padding():
+async def test_listen_input_name_strips_null_padding():
     client = MagicMock(spec=Client)
     state = State(client, 1, ApiModel.API450_SERIES)
     state._listen(
@@ -1133,7 +1134,7 @@ def test_listen_input_name_strips_null_padding():
             bytes([0x02]) + b"Blu-ray\x00\x00",
         )
     )
-    assert state.get_input_name(SourceCodes.BD) == "Blu-ray"
+    assert await state.get_input_name(SourceCodes.BD) == "Blu-ray"
 
 
 def test_listen_input_name_ignores_unknown_source_byte():
@@ -1159,7 +1160,7 @@ async def test_fetch_input_name_caches_response():
         1, CommandCodes.INPUT_NAME, bytes([0x01]), 0
     )
     assert result == "My CD Player"
-    assert state.get_input_name(SourceCodes.CD) == "My CD Player"
+    assert await state.get_input_name(SourceCodes.CD) == "My CD Player"
 
 
 async def test_fetch_input_name_swallows_response_errors():
@@ -1180,7 +1181,7 @@ async def test_set_input_name_sends_source_and_name():
     client.request.assert_called_with(
         1, CommandCodes.INPUT_NAME, bytes([0x01]) + b"Turntable", 0
     )
-    assert state.get_input_name(SourceCodes.CD) == "Turntable"
+    assert await state.get_input_name(SourceCodes.CD) == "Turntable"
 
 
 async def test_set_input_name_rejects_non_ascii():

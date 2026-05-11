@@ -203,7 +203,10 @@ class State:
                         packet.data[0:1], self._api_model, self._zn
                     )
                 except ValueError:
-                    pass
+                    _LOGGER.debug(
+                        "Unknown source byte 0x%02X in INPUT_NAME update",
+                        packet.data[0],
+                    )
                 else:
                     name = (
                         packet.data[1:]
@@ -630,17 +633,20 @@ class State:
     def get_source_list(self) -> list[SourceCodes]:
         return list(RC5CODE_SOURCE.get((self._api_model, self._zn), {}).keys())
 
-    def get_input_name(self, source: SourceCodes | None = None) -> str | None:
-        """Return the cached user-configured input name for a source.
+    async def get_input_name(self, source: SourceCodes | None = None) -> str | None:
+        """Return the user-configured input name for a source.
 
         With no argument, returns the name for the currently-selected source.
-        Returns None if the name has not been fetched yet or no source is set.
+        Returns the cached value if available, otherwise fetches from device.
         """
         if source is None:
             source = self.get_source()
         if source is None:
             return None
-        return self._input_names.get(source)
+        name = self._input_names.get(source)
+        if name is None:
+            name = await self._fetch_input_name(source)
+        return name
 
     def get_input_names(self) -> dict[SourceCodes, str]:
         """Return all cached user-configured input names."""
