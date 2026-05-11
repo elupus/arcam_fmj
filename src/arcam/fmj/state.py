@@ -198,24 +198,17 @@ class State:
         if packet.ac == AnswerCodes.STATUS_UPDATE:
             self._state[packet.cc] = packet.data
             if packet.cc == CommandCodes.INPUT_NAME and len(packet.data) > 1:
-                try:
-                    source = SourceCodes.from_bytes(
-                        packet.data[0:1], self._api_model, self._zn
-                    )
-                except ValueError:
-                    _LOGGER.debug(
-                        "Unknown source byte 0x%02X in INPUT_NAME update",
-                        packet.data[0],
-                    )
-                else:
-                    name = (
-                        packet.data[1:]
-                        .decode("ascii", errors="replace")
-                        .rstrip("\x00")
-                        .strip()
-                    )
-                    if name:
-                        self._input_names[source] = name
+                source = SourceCodes.from_bytes(
+                    packet.data[0:1], self._api_model, self._zn
+                )
+                name = (
+                    packet.data[1:]
+                    .decode("ascii", errors="replace")
+                    .rstrip("\x00")
+                    .strip()
+                )
+                if name:
+                    self._input_names[source] = name
         else:
             self._state[packet.cc] = None
 

@@ -1137,18 +1137,18 @@ async def test_listen_input_name_strips_null_padding():
     assert await state.get_input_name(SourceCodes.BD) == "Blu-ray"
 
 
-def test_listen_input_name_ignores_unknown_source_byte():
+def test_listen_input_name_raises_on_unknown_source_byte():
     client = MagicMock(spec=Client)
     state = State(client, 1, ApiModel.API450_SERIES)
-    state._listen(
-        ResponsePacket(
-            1,
-            CommandCodes.INPUT_NAME,
-            AnswerCodes.STATUS_UPDATE,
-            bytes([0xFE]) + b"Mystery",
+    with pytest.raises(ValueError):
+        state._listen(
+            ResponsePacket(
+                1,
+                CommandCodes.INPUT_NAME,
+                AnswerCodes.STATUS_UPDATE,
+                bytes([0xFE]) + b"Mystery",
+            )
         )
-    )
-    assert state.get_input_names() == {}
 
 
 async def test_fetch_input_name_caches_response():
