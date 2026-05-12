@@ -29,6 +29,7 @@ from arcam.fmj import (
     ResponsePacket,
     RoomEqMode,
     UnsupportedCommand,
+    VideoSelection,
     POWER_WRITE_SUPPORTED,
     SAVE_RESTORE_CONFIRMATION,
     SaveRestoreSubCommand,
@@ -1076,3 +1077,13 @@ async def test_update_records_command_not_recognised():
     assert CommandCodes.MENU not in state._unsupported_commands
     await state.update()
     assert CommandCodes.MENU in state._unsupported_commands
+
+
+# --- Video Selection (0x0A) ---
+
+
+async def test_set_video_selection():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    await state.set_video_selection(VideoSelection.SAT)
+    client.request.assert_called_with(1, CommandCodes.VIDEO_SELECTION, bytes([0x01]), 0)
