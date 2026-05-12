@@ -591,7 +591,7 @@ class State:
     async def set_video_selection(self, mode: VideoSelection) -> None:
         """Set the video input selection (pre-HDA AVR series)."""
         await self._request(
-            self._zn, VideoSelection.VIDEO_SELECTION, bytes([mode])
+            self._zn, CommandCodes.VIDEO_SELECTION, bytes([mode])
         )
 
     async def set_hdmi_output(self, output: HdmiOutput) -> None:
