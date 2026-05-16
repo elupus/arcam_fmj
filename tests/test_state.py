@@ -29,6 +29,7 @@ from arcam.fmj import (
     RC5CODE_HDMI_OUTPUT,
     ResponsePacket,
     RoomEqMode,
+    SourceCodes,
     UnsupportedCommand,
     VideoSelection,
     POWER_WRITE_SUPPORTED,
@@ -1088,3 +1089,102 @@ async def test_set_video_selection():
     state = State(client, 1)
     await state.set_video_selection(VideoSelection.SAT)
     client.request.assert_called_with(1, CommandCodes.VIDEO_SELECTION, bytes([0x01]), 0)
+
+
+# --- Update conditions / _should_update -----------------------------------
+
+def _state_at_source(source: SourceCodes) -> State:
+    """Helper: a fresh State with CURRENT_SOURCE seeded to `source`."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    state._state[CommandCodes.CURRENT_SOURCE] = source.to_bytes(
+        state._api_model, state._zn,
+    )
+    return state
+
+
+def test_should_update_no_conditions():
+    """Commands without UpdateConditions are never polled."""
+    state = State(MagicMock(spec=Client), 1)
+    # RESTORE_FACTORY_DEFAULT has no update_conditions
+    assert CommandCodes.RESTORE_FACTORY_DEFAULT.update_conditions is None
+    assert state._should_update(CommandCodes.RESTORE_FACTORY_DEFAULT) is False
+
+
+def test_should_update_polling_false_first_pass_polls_even_if_known():
+    """polling=False CCs are polled during the initial pass regardless of cache."""
+    state = State(MagicMock(spec=Client), 1)
+    state._state[CommandCodes.POWER] = bytes([1])
+    assert state._updated.is_set() is False
+    assert state._should_update(CommandCodes.POWER) is True
+
+
+def test_should_update_polling_false_skipped_after_first_pass():
+    state = State(MagicMock(spec=Client), 1)
+    state._updated.set()
+    assert CommandCodes.POWER not in state._state
+    assert state._should_update(CommandCodes.POWER) is False
+
+
+def test_should_update_polling_true_always_polls():
+    state = _state_at_source(SourceCodes.NET)
+    state._updated.set()
+    # NETWORK_PLAYBACK_STATUS is polling=True, sources={NET, USB, NET_USB}
+    assert state._should_update(CommandCodes.NETWORK_PLAYBACK_STATUS) is True
+
+
+def test_should_update_sources_no_match():
+    state = _state_at_source(SourceCodes.CD)
+    assert state._should_update(CommandCodes.NETWORK_PLAYBACK_STATUS) is False
+
+
+def test_should_update_sources_match():
+    state = _state_at_source(SourceCodes.NET)
+    assert state._should_update(CommandCodes.NETWORK_PLAYBACK_STATUS) is True
+
+
+def test_should_update_sources_unknown_is_permissive():
+    """When source isn't yet known, fetch source-gated CCs anyway."""
+    state = State(MagicMock(spec=Client), 1)
+    assert state.get_source() is None
+    assert state._should_update(CommandCodes.NETWORK_PLAYBACK_STATUS) is True
+
+
+def test_should_update_zone_2_requires_zone_support():
+    """Commands without ZONE_SUPPORT are skipped on zone 2 even if eligible."""
+    client = MagicMock(spec=Client)
+    state = State(client, 2)
+    # MUTE has ZONE_SUPPORT — ok
+    assert state._should_update(CommandCodes.MUTE) is True
+    # INCOMING_AUDIO_FORMAT has no ZONE_SUPPORT
+    assert state._should_update(CommandCodes.INCOMING_AUDIO_FORMAT) is False
+
+
+async def test_update_skips_commands_for_wrong_source():
+    """get_update_tasks() must not produce a request for NETWORK_PLAYBACK_STATUS
+    when source is not in its sources set."""
+    state = _state_at_source(SourceCodes.CD)
+    state._amxduet = AmxDuetResponse({"Device-Model": "AVR450"})
+    tasks = await state.get_update_tasks()
+    # Run the tasks so we can inspect what got requested
+    await asyncio.gather(*tasks)
+    requested = [call.args[1] for call in state._client.request.call_args_list]
+    assert CommandCodes.NETWORK_PLAYBACK_STATUS not in requested
+    assert CommandCodes.NOW_PLAYING_INFO not in requested
+    # But POWER (no source gate) should be fetched
+    assert CommandCodes.POWER in requested
+
+
+async def test_update_polling_false_skipped_after_first_pass():
+    """After the initial pass, polling=False CCs are no longer requested;
+    polling=True ones still are (when source matches)."""
+    state = _state_at_source(SourceCodes.NET)
+    state._amxduet = AmxDuetResponse({"Device-Model": "AVR450"})
+    state._updated.set()
+    tasks = await state.get_update_tasks()
+    await asyncio.gather(*tasks)
+    requested = [call.args[1] for call in state._client.request.call_args_list]
+    # POWER is polling=False — should NOT appear in a post-first-pass batch
+    assert CommandCodes.POWER not in requested
+    # NETWORK_PLAYBACK_STATUS is polling=True + source matches — should appear
+    assert CommandCodes.NETWORK_PLAYBACK_STATUS in requested

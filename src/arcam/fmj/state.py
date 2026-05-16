@@ -226,6 +226,24 @@ class State:
             return self.model in cc.version
         return True
 
+    def _should_update(self, cc: CommandCodes) -> bool:
+        """Whether the update loop should fetch this command right now."""
+        if not self._is_command_supported(cc):
+            return False
+        if not (cc.flags & EnumFlags.ZONE_SUPPORT) and self._zn != 1:
+            return False
+        cond = cc.update_conditions
+        if cond is None:
+            return False
+        # polling=False commands are fetched only during the initial pass.
+        if not cond.polling and self._updated.is_set():
+            return False
+        if cond.sources is not None:
+            src = self.get_source()
+            if src is not None and src not in cond.sources:
+                return False
+        return True
+
     def _require_command(self, cc: CommandCodes) -> None:
         """Raise UnsupportedCommand if the command is not supported."""
         if not self._is_command_supported(cc):
@@ -874,9 +892,7 @@ class State:
 
         tasks: list = []
         for cc in CommandCodes:
-            if not (cc.flags & EnumFlags.FULL_UPDATE):
-                continue
-            if not self._is_command_supported(cc):
+            if not self._should_update(cc):
                 continue
             if cc == CommandCodes.NOW_PLAYING_INFO:
                 tasks.append(_update_now_playing())

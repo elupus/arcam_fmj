@@ -5,6 +5,7 @@ import enum
 import logging
 import re
 from asyncio.exceptions import IncompleteReadError
+from dataclasses import dataclass
 from typing import (
     Any,
     SupportsBytes,
@@ -272,21 +273,30 @@ _T = TypeVar("_T", bound="IntOrTypeEnum")
 
 
 class EnumFlags(enum.IntFlag):
-    def __new__(cls, value, priority=0):
-        obj = int.__new__(cls, value)
-        obj._value_ = value
-        obj.priority = priority
-        return obj
-
+    """Behavioral protocol traits of a command."""
     ZONE_SUPPORT = enum.auto()
     SEND_ONLY = enum.auto()
-    POLL_REQUIRED = (enum.auto(), 20)
-    FULL_UPDATE = (enum.auto(), 10)
+
+
+@dataclass(frozen=True)
+class UpdateConditions:
+    """Per-command rules controlling whether the update loop fetches a command.
+
+    Does NOT gate user-initiated ``request()``/``send()`` calls.
+
+    polling=True commands are re-fetched on every update cycle (subject to the
+    sources gate).  polling=False commands are fetched only during the initial
+    update pass — once the first pass completes, the command is not re-fetched
+    until state is cleared (e.g. on reconnect).
+    """
+    polling: bool = False
+    sources: "frozenset[SourceCodes] | None" = None
 
 
 class IntOrTypeEnum(enum.IntEnum):
     version: set[str] | None
     flags: EnumFlags
+    update_conditions: UpdateConditions | None
 
     @classmethod
     def _missing_(cls, value):
@@ -303,14 +313,22 @@ class IntOrTypeEnum(enum.IntEnum):
             obj._value_ = value
             obj.version = None
             obj.flags = EnumFlags(0)
+            obj.update_conditions = None
             pseudo_member = cls._value2member_map_.setdefault(value, obj)
         return pseudo_member
 
-    def __new__(cls, value: int, version: set[str] | None = None, flags=EnumFlags(0)):
+    def __new__(
+        cls,
+        value: int,
+        version: set[str] | None = None,
+        flags: EnumFlags = EnumFlags(0),
+        update_conditions: UpdateConditions | None = None,
+    ):
         obj = int.__new__(cls, value)
         obj._value_ = value
         obj.version = version
         obj.flags = flags
+        obj.update_conditions = update_conditions
         return obj
 
     @classmethod
@@ -335,136 +353,6 @@ class AnswerCodes(IntOrTypeEnum):
     PARAMETER_NOT_RECOGNISED = 0x84
     COMMAND_INVALID_AT_THIS_TIME = 0x85
     INVALID_DATA_LENGTH = 0x86
-
-
-class CommandCodes(IntOrTypeEnum):
-    # System Commands
-    POWER = 0x00, None, EnumFlags.ZONE_SUPPORT | EnumFlags.FULL_UPDATE
-    DISPLAY_BRIGHTNESS = 0x01, APIVERSION_AVR_SA_AND_ST_SERIES
-    HEADPHONES = 0x02, APIVERSION_AVR_AND_SA_SERIES, EnumFlags.FULL_UPDATE
-    FMGENRE = 0x03, APIVERSION_AVR_SERIES, EnumFlags.ZONE_SUPPORT
-    SOFTWARE_VERSION = 0x04
-    RESTORE_FACTORY_DEFAULT = 0x05
-    SAVE_RESTORE_COPY_OF_SETTINGS = 0x06, APIVERSION_AVR_SERIES
-    SIMULATE_RC5_IR_COMMAND = 0x08, APIVERSION_AVR_SA_AND_ST_SERIES, EnumFlags.ZONE_SUPPORT | EnumFlags.SEND_ONLY
-    DISPLAY_INFORMATION_TYPE = 0x09, APIVERSION_AVR_SERIES, EnumFlags.ZONE_SUPPORT | EnumFlags.FULL_UPDATE
-    CURRENT_SOURCE = 0x1D, APIVERSION_AVR_SA_AND_ST_SERIES, EnumFlags.ZONE_SUPPORT | EnumFlags.FULL_UPDATE  # Request
-    HEADPHONES_OVERRIDE = 0x1F, APIVERSION_AVR_AND_SA_SERIES, EnumFlags.ZONE_SUPPORT
-
-    # Input Commands
-    VIDEO_SELECTION = 0x0A, APIVERSION_AVR_PRE_HDA_SERIES, EnumFlags.FULL_UPDATE
-    SELECT_ANALOG_DIGITAL = 0x0B, APIVERSION_AVR_SERIES, EnumFlags.ZONE_SUPPORT
-    IMAX_ENHANCED = 0x0C, APIVERSION_IMAX_SERIES, EnumFlags.FULL_UPDATE  # Was "Video input type" in 450 (SH256E); not AVR5 (SH289E)
-
-    # Output Commands
-    VOLUME = 0x0D, APIVERSION_AVR_SA_AND_ST_SERIES, EnumFlags.ZONE_SUPPORT | EnumFlags.FULL_UPDATE  # Set/Request
-    MUTE = 0x0E, None, EnumFlags.ZONE_SUPPORT | EnumFlags.FULL_UPDATE  # Request
-    DIRECT_MODE_STATUS = 0x0F, APIVERSION_DIRECT_MODE_SERIES  # Request
-    DECODE_MODE_STATUS_2CH = 0x10, APIVERSION_AVR_SERIES, EnumFlags.FULL_UPDATE  # Request
-    DECODE_MODE_STATUS_MCH = 0x11, APIVERSION_AVR_SERIES, EnumFlags.FULL_UPDATE  # Request
-    RDS_INFORMATION = 0x12, APIVERSION_AVR_SERIES, EnumFlags.ZONE_SUPPORT | EnumFlags.FULL_UPDATE  # Request
-    VIDEO_OUTPUT_RESOLUTION = 0x13, APIVERSION_AVR_SERIES  # Set/Request
-
-    # Menu Command
-    MENU = 0x14, APIVERSION_AVR_SERIES, EnumFlags.FULL_UPDATE  # Request
-    TUNER_PRESET = 0x15, APIVERSION_AVR_SERIES, EnumFlags.ZONE_SUPPORT | EnumFlags.FULL_UPDATE  # Set/Request
-    TUNE = 0x16, APIVERSION_AVR_SERIES, EnumFlags.ZONE_SUPPORT  # Set/Request
-    DAB_STATION = 0x18, APIVERSION_AVR_SERIES, EnumFlags.ZONE_SUPPORT | EnumFlags.FULL_UPDATE  # Set/Request
-    DAB_PROGRAM_TYPE_CATEGORY = 0x19, APIVERSION_AVR_SERIES, EnumFlags.ZONE_SUPPORT  # Set/Request
-    DLS_PDT_INFO = 0x1A, APIVERSION_AVR_SERIES, EnumFlags.ZONE_SUPPORT | EnumFlags.FULL_UPDATE  # Request
-    PRESET_DETAIL = 0x1B, APIVERSION_AVR_SERIES, EnumFlags.ZONE_SUPPORT | EnumFlags.FULL_UPDATE  # Request
-    NETWORK_PLAYBACK_STATUS = 0x1C, APIVERSION_NETWORK_PLAYBACK_SERIES, EnumFlags.POLL_REQUIRED | EnumFlags.FULL_UPDATE
-
-    # Network Command
-
-    # Setup
-    TREBLE_EQUALIZATION = 0x35, APIVERSION_AVR_SERIES, EnumFlags.ZONE_SUPPORT | EnumFlags.FULL_UPDATE
-    BASS_EQUALIZATION = 0x36, APIVERSION_AVR_SERIES, EnumFlags.ZONE_SUPPORT | EnumFlags.FULL_UPDATE
-    ROOM_EQUALIZATION = 0x37, APIVERSION_ROOM_EQ_SERIES, EnumFlags.ZONE_SUPPORT | EnumFlags.FULL_UPDATE
-    DOLBY_AUDIO = 0x38, APIVERSION_AVR_SERIES, EnumFlags.ZONE_SUPPORT | EnumFlags.FULL_UPDATE  # Was "Dolby Volume" in 450/860 (SH256E/SH274E)
-    DOLBY_LEVELER = 0x39, APIVERSION_AVR_PRE_HDA_SERIES, EnumFlags.ZONE_SUPPORT  # Removed from HDA (SH289E issue C.0)
-    DOLBY_VOLUME_CALIBRATION_OFFSET = 0x3A, APIVERSION_AVR_PRE_HDA_SERIES, EnumFlags.ZONE_SUPPORT  # Removed from HDA (SH289E issue C.0)
-    BALANCE = 0x3B, APIVERSION_AVR_AND_SA_SERIES, EnumFlags.ZONE_SUPPORT | EnumFlags.FULL_UPDATE
-
-    DOLBY_PLII_X_MUSIC_DIMENSION = 0x3C, APIVERSION_450_SERIES
-    DOLBY_PLII_X_MUSIC_CENTRE_WIDTH = 0x3D, APIVERSION_450_SERIES
-    DOLBY_PLII_X_MUSIC_PANORAMA = 0x3E, APIVERSION_450_SERIES
-    SUBWOOFER_TRIM = 0x3F, APIVERSION_AVR_SERIES, EnumFlags.ZONE_SUPPORT | EnumFlags.FULL_UPDATE
-    LIPSYNC_DELAY = 0x40, APIVERSION_AVR_SERIES, EnumFlags.ZONE_SUPPORT | EnumFlags.FULL_UPDATE
-    COMPRESSION = 0x41, APIVERSION_AVR_SERIES, EnumFlags.ZONE_SUPPORT | EnumFlags.FULL_UPDATE
-
-    INCOMING_VIDEO_PARAMETERS = 0x42, APIVERSION_AVR_SERIES, EnumFlags.FULL_UPDATE
-    INCOMING_AUDIO_FORMAT = 0x43, APIVERSION_AVR_SERIES, EnumFlags.FULL_UPDATE
-    INCOMING_AUDIO_SAMPLE_RATE = 0x44, APIVERSION_AVR_SA_AND_ST_SERIES, EnumFlags.FULL_UPDATE
-
-    SUB_STEREO_TRIM = 0x45, APIVERSION_AVR_SERIES, EnumFlags.FULL_UPDATE  # Set/Request
-    VIDEO_BRIGHTNESS = 0x46, APIVERSION_450_SERIES
-    VIDEO_CONTRAST = 0x47, APIVERSION_450_SERIES
-    VIDEO_COLOUR = 0x48, APIVERSION_450_SERIES
-    VIDEO_FILM_MODE = 0x49, APIVERSION_450_SERIES
-    VIDEO_EDGE_ENHANCEMENT = 0x4A, APIVERSION_450_SERIES
-    VIDEO_NOISE_REDUCTION = 0x4C, APIVERSION_450_SERIES
-    VIDEO_MPEG_NOISE_REDUCTION = 0x4D, APIVERSION_450_SERIES
-    ZONE_1_OSD_ON_OFF = 0x4E, APIVERSION_AVR_SERIES  # Set/Request
-    VIDEO_OUTPUT_SWITCHING = 0x4F, APIVERSION_AVR_SERIES  # Set/Request
-    BLUETOOTH_STATUS = 0x50, APIVERSION_HDA_SERIES, EnumFlags.POLL_REQUIRED | EnumFlags.FULL_UPDATE  # Was "Output Frame Rate" in 450 (SH256E)
-
-    # 2.0 Commands
-    INPUT_NAME = 0x20, APIVERSION_AVR_SERIES  # Set/Request
-    FM_SCAN = 0x23, APIVERSION_AVR_SERIES
-    DAB_SCAN = 0x24, APIVERSION_AVR_SERIES
-    HEARTBEAT = 0x25
-    REBOOT = 0x26
-    SETUP = 0x27, APIVERSION_HDA_SERIES
-    ROOM_EQ_NAMES = 0x34, APIVERSION_ROOM_EQ_NAMES_SERIES, EnumFlags.FULL_UPDATE
-    NOW_PLAYING_INFO = 0x64, APIVERSION_NOW_PLAYING_SERIES, EnumFlags.ZONE_SUPPORT | EnumFlags.POLL_REQUIRED | EnumFlags.FULL_UPDATE
-    INPUT_CONFIG = 0x28, APIVERSION_HDA_SERIES
-    GENERAL_SETUP = 0x29, APIVERSION_HDA_SERIES
-    SPEAKER_TYPES = 0x2A, APIVERSION_HDA_SERIES
-    SPEAKER_DISTANCES = 0x2B, APIVERSION_HDA_SERIES
-    SPEAKER_LEVELS = 0x2C, APIVERSION_HDA_SERIES
-    VIDEO_INPUTS = 0x2D, APIVERSION_HDA_SERIES
-    HDMI_SETTINGS = 0x2E, APIVERSION_HDA_SERIES
-    ZONE_SETTINGS = 0x2F, APIVERSION_HDA_MULTI_ZONE_SERIES
-    NETWORK_MENU_INFO = 0x30, APIVERSION_NETWORK_MENU_SERIES
-    BLUETOOTH_MENU_INFO = 0x32, APIVERSION_HDA_SERIES
-    ENGINEERING_MENU_INFO = 0x33, APIVERSION_HDA_SERIES
-
-    # Amp/Streamer Diagnostics
-    DC_OFFSET = 0x51, APIVERSION_THERMAL_DIAGNOSTICS_SERIES
-    SHORT_CIRCUIT_STATUS = 0x52, APIVERSION_CLASS_G_SERIES
-    TIMEOUT_COUNTER = 0x55, APIVERSION_AMP_DIAGNOSTICS_SERIES
-    LIFTER_TEMPERATURE = (
-        0x56,
-        APIVERSION_CLASS_G_SERIES,
-    )  # Bug in PA720 1.8 firmware - does not return sensor id
-    OUTPUT_TEMPERATURE = (
-        0x57,
-        APIVERSION_THERMAL_DIAGNOSTICS_SERIES,
-    )  # Bug in PA720 1.8 firmware - does not return sensor id
-    AUTO_SHUTDOWN_CONTROL = 0x58, APIVERSION_AMP_DIAGNOSTICS_SERIES
-
-    # Status/Diagnostics
-    FRIENDLY_NAME = 0x53, APIVERSION_SIMPLE_IP_SERIES
-    IP_ADDRESS = 0x54, APIVERSION_SIMPLE_IP_SERIES
-    PHONO_INPUT_TYPE = 0x59, APIVERSION_PHONO_SERIES
-    INPUT_DETECT = 0x5A, APIVERSION_AMP_DIAGNOSTICS_SERIES
-    PROCESSOR_MODE_INPUT = 0x5B, APIVERSION_SA_SERIES
-    PROCESSOR_MODE_VOLUME = 0x5C, APIVERSION_SA_SERIES  # ST60 reuses 0x5C for Fixed Volume
-    SYSTEM_STATUS = 0x5D, APIVERSION_AMP_DIAGNOSTICS_SERIES
-    SYSTEM_MODEL = 0x5E, APIVERSION_AMP_DIAGNOSTICS_SERIES
-    DAC_FILTER = 0x61, APIVERSION_DAC_FILTER_SERIES  # Clashes with AMPLIFIER_MODE on PA240
-    MAXIMUM_TURN_ON_VOLUME = 0x65, APIVERSION_APP_SAFETY_SERIES
-    MAXIMUM_VOLUME = 0x66, APIVERSION_APP_SAFETY_SERIES
-    MAXIMUM_STREAMING_VOLUME = 0x67, APIVERSION_APP_SAFETY_SERIES
-
-
-class SaveRestoreSubCommand(enum.IntEnum):
-    SAVE = 0x00
-    RESTORE = 0x01
-
-
-SAVE_RESTORE_CONFIRMATION = bytes([0x55, 0x55])
 
 
 class SourceCodes(enum.Enum):
@@ -520,6 +408,155 @@ class SourceCodes(enum.Enum):
                 model, zn, self
             )
         )
+
+
+class CommandCodes(IntOrTypeEnum):
+    # System Commands
+    POWER = 0x00, None, EnumFlags.ZONE_SUPPORT, UpdateConditions()
+    DISPLAY_BRIGHTNESS = 0x01, APIVERSION_AVR_SA_AND_ST_SERIES
+    HEADPHONES = 0x02, APIVERSION_AVR_AND_SA_SERIES, EnumFlags(0), UpdateConditions()
+    FMGENRE = 0x03, APIVERSION_AVR_SERIES, EnumFlags.ZONE_SUPPORT, UpdateConditions(sources=frozenset({SourceCodes.FM}))
+    SOFTWARE_VERSION = 0x04, None, EnumFlags(0), UpdateConditions()
+    RESTORE_FACTORY_DEFAULT = 0x05
+    SAVE_RESTORE_COPY_OF_SETTINGS = 0x06, APIVERSION_AVR_SERIES
+    SIMULATE_RC5_IR_COMMAND = 0x08, APIVERSION_AVR_SA_AND_ST_SERIES, EnumFlags.ZONE_SUPPORT | EnumFlags.SEND_ONLY
+    DISPLAY_INFORMATION_TYPE = 0x09, APIVERSION_AVR_SERIES, EnumFlags.ZONE_SUPPORT, UpdateConditions()
+    CURRENT_SOURCE = 0x1D, APIVERSION_AVR_SA_AND_ST_SERIES, EnumFlags.ZONE_SUPPORT, UpdateConditions()  # Request
+    HEADPHONES_OVERRIDE = 0x1F, APIVERSION_AVR_AND_SA_SERIES, EnumFlags.ZONE_SUPPORT
+
+    # Input Commands
+    VIDEO_SELECTION = 0x0A, APIVERSION_AVR_PRE_HDA_SERIES, EnumFlags(0), UpdateConditions()
+    SELECT_ANALOG_DIGITAL = 0x0B, APIVERSION_AVR_SERIES, EnumFlags.ZONE_SUPPORT
+    IMAX_ENHANCED = 0x0C, APIVERSION_IMAX_SERIES, EnumFlags(0), UpdateConditions()  # Was "Video input type" in 450 (SH256E); not AVR5 (SH289E)
+
+    # Output Commands
+    VOLUME = 0x0D, APIVERSION_AVR_SA_AND_ST_SERIES, EnumFlags.ZONE_SUPPORT, UpdateConditions()  # Set/Request
+    MUTE = 0x0E, None, EnumFlags.ZONE_SUPPORT, UpdateConditions()  # Request
+    DIRECT_MODE_STATUS = 0x0F, APIVERSION_DIRECT_MODE_SERIES  # Request
+    DECODE_MODE_STATUS_2CH = 0x10, APIVERSION_AVR_SERIES, EnumFlags(0), UpdateConditions()  # Request
+    DECODE_MODE_STATUS_MCH = 0x11, APIVERSION_AVR_SERIES, EnumFlags(0), UpdateConditions()  # Request
+    RDS_INFORMATION = 0x12, APIVERSION_AVR_SERIES, EnumFlags.ZONE_SUPPORT, UpdateConditions(sources=frozenset({SourceCodes.FM}))  # Request
+    VIDEO_OUTPUT_RESOLUTION = 0x13, APIVERSION_AVR_SERIES  # Set/Request
+
+    # Menu Command
+    MENU = 0x14, APIVERSION_AVR_SERIES, EnumFlags(0), UpdateConditions()  # Request
+    TUNER_PRESET = 0x15, APIVERSION_AVR_SERIES, EnumFlags.ZONE_SUPPORT, UpdateConditions(sources=frozenset({SourceCodes.FM, SourceCodes.DAB}))  # Set/Request
+    TUNE = 0x16, APIVERSION_AVR_SERIES, EnumFlags.ZONE_SUPPORT  # Set/Request
+    DAB_STATION = 0x18, APIVERSION_AVR_SERIES, EnumFlags.ZONE_SUPPORT, UpdateConditions(sources=frozenset({SourceCodes.DAB}))  # Set/Request
+    DAB_PROGRAM_TYPE_CATEGORY = 0x19, APIVERSION_AVR_SERIES, EnumFlags.ZONE_SUPPORT  # Set/Request
+    DLS_PDT_INFO = 0x1A, APIVERSION_AVR_SERIES, EnumFlags.ZONE_SUPPORT, UpdateConditions(sources=frozenset({SourceCodes.DAB}))  # Request
+    PRESET_DETAIL = 0x1B, APIVERSION_AVR_SERIES, EnumFlags.ZONE_SUPPORT, UpdateConditions(sources=frozenset({SourceCodes.FM, SourceCodes.DAB}))  # Request
+    NETWORK_PLAYBACK_STATUS = (
+        0x1C,
+        APIVERSION_NETWORK_PLAYBACK_SERIES,
+        EnumFlags(0),
+        UpdateConditions(polling=True, sources=frozenset({SourceCodes.NET, SourceCodes.USB, SourceCodes.NET_USB})),
+    )
+
+    # Network Command
+
+    # Setup
+    TREBLE_EQUALIZATION = 0x35, APIVERSION_AVR_SERIES, EnumFlags.ZONE_SUPPORT, UpdateConditions()
+    BASS_EQUALIZATION = 0x36, APIVERSION_AVR_SERIES, EnumFlags.ZONE_SUPPORT, UpdateConditions()
+    ROOM_EQUALIZATION = 0x37, APIVERSION_ROOM_EQ_SERIES, EnumFlags.ZONE_SUPPORT, UpdateConditions()
+    DOLBY_AUDIO = 0x38, APIVERSION_AVR_SERIES, EnumFlags.ZONE_SUPPORT, UpdateConditions()  # Was "Dolby Volume" in 450/860 (SH256E/SH274E)
+    DOLBY_LEVELER = 0x39, APIVERSION_AVR_PRE_HDA_SERIES, EnumFlags.ZONE_SUPPORT  # Removed from HDA (SH289E issue C.0)
+    DOLBY_VOLUME_CALIBRATION_OFFSET = 0x3A, APIVERSION_AVR_PRE_HDA_SERIES, EnumFlags.ZONE_SUPPORT  # Removed from HDA (SH289E issue C.0)
+    BALANCE = 0x3B, APIVERSION_AVR_AND_SA_SERIES, EnumFlags.ZONE_SUPPORT, UpdateConditions()
+
+    DOLBY_PLII_X_MUSIC_DIMENSION = 0x3C, APIVERSION_450_SERIES
+    DOLBY_PLII_X_MUSIC_CENTRE_WIDTH = 0x3D, APIVERSION_450_SERIES
+    DOLBY_PLII_X_MUSIC_PANORAMA = 0x3E, APIVERSION_450_SERIES
+    SUBWOOFER_TRIM = 0x3F, APIVERSION_AVR_SERIES, EnumFlags.ZONE_SUPPORT, UpdateConditions()
+    LIPSYNC_DELAY = 0x40, APIVERSION_AVR_SERIES, EnumFlags.ZONE_SUPPORT, UpdateConditions()
+    COMPRESSION = 0x41, APIVERSION_AVR_SERIES, EnumFlags.ZONE_SUPPORT, UpdateConditions()
+
+    INCOMING_VIDEO_PARAMETERS = 0x42, APIVERSION_AVR_SERIES, EnumFlags(0), UpdateConditions()
+    INCOMING_AUDIO_FORMAT = 0x43, APIVERSION_AVR_SERIES, EnumFlags(0), UpdateConditions()
+    INCOMING_AUDIO_SAMPLE_RATE = 0x44, APIVERSION_AVR_SA_AND_ST_SERIES, EnumFlags(0), UpdateConditions()
+
+    SUB_STEREO_TRIM = 0x45, APIVERSION_AVR_SERIES, EnumFlags(0), UpdateConditions()  # Set/Request
+    VIDEO_BRIGHTNESS = 0x46, APIVERSION_450_SERIES
+    VIDEO_CONTRAST = 0x47, APIVERSION_450_SERIES
+    VIDEO_COLOUR = 0x48, APIVERSION_450_SERIES
+    VIDEO_FILM_MODE = 0x49, APIVERSION_450_SERIES
+    VIDEO_EDGE_ENHANCEMENT = 0x4A, APIVERSION_450_SERIES
+    VIDEO_NOISE_REDUCTION = 0x4C, APIVERSION_450_SERIES
+    VIDEO_MPEG_NOISE_REDUCTION = 0x4D, APIVERSION_450_SERIES
+    ZONE_1_OSD_ON_OFF = 0x4E, APIVERSION_AVR_SERIES  # Set/Request
+    VIDEO_OUTPUT_SWITCHING = 0x4F, APIVERSION_AVR_SERIES  # Set/Request
+    BLUETOOTH_STATUS = (
+        0x50,
+        APIVERSION_HDA_SERIES,
+        EnumFlags(0),
+        UpdateConditions(polling=True, sources=frozenset({SourceCodes.BT})),
+    )  # Was "Output Frame Rate" in 450 (SH256E)
+
+    # 2.0 Commands
+    INPUT_NAME = 0x20, APIVERSION_AVR_SERIES  # Set/Request
+    FM_SCAN = 0x23, APIVERSION_AVR_SERIES
+    DAB_SCAN = 0x24, APIVERSION_AVR_SERIES
+    HEARTBEAT = 0x25
+    REBOOT = 0x26
+    SETUP = 0x27, APIVERSION_HDA_SERIES
+    ROOM_EQ_NAMES = 0x34, APIVERSION_ROOM_EQ_NAMES_SERIES, EnumFlags(0), UpdateConditions()
+    NOW_PLAYING_INFO = (
+        0x64,
+        APIVERSION_NOW_PLAYING_SERIES,
+        EnumFlags.ZONE_SUPPORT,
+        UpdateConditions(polling=True, sources=frozenset({SourceCodes.NET, SourceCodes.USB, SourceCodes.NET_USB})),
+    )
+    INPUT_CONFIG = 0x28, APIVERSION_HDA_SERIES
+    GENERAL_SETUP = 0x29, APIVERSION_HDA_SERIES
+    SPEAKER_TYPES = 0x2A, APIVERSION_HDA_SERIES
+    SPEAKER_DISTANCES = 0x2B, APIVERSION_HDA_SERIES
+    SPEAKER_LEVELS = 0x2C, APIVERSION_HDA_SERIES
+    VIDEO_INPUTS = 0x2D, APIVERSION_HDA_SERIES
+    HDMI_SETTINGS = 0x2E, APIVERSION_HDA_SERIES
+    ZONE_SETTINGS = 0x2F, APIVERSION_HDA_MULTI_ZONE_SERIES
+    NETWORK_MENU_INFO = 0x30, APIVERSION_NETWORK_MENU_SERIES
+    BLUETOOTH_MENU_INFO = 0x32, APIVERSION_HDA_SERIES
+    ENGINEERING_MENU_INFO = 0x33, APIVERSION_HDA_SERIES
+
+    # Amp/Streamer Diagnostics
+    DC_OFFSET = 0x51, APIVERSION_THERMAL_DIAGNOSTICS_SERIES, EnumFlags(0), UpdateConditions(polling=True)
+    SHORT_CIRCUIT_STATUS = 0x52, APIVERSION_CLASS_G_SERIES, EnumFlags(0), UpdateConditions(polling=True)
+    TIMEOUT_COUNTER = 0x55, APIVERSION_AMP_DIAGNOSTICS_SERIES
+    LIFTER_TEMPERATURE = (
+        0x56,
+        APIVERSION_CLASS_G_SERIES,
+        EnumFlags(0),
+        UpdateConditions(polling=True),
+    )  # Bug in PA720 1.8 firmware - does not return sensor id
+    OUTPUT_TEMPERATURE = (
+        0x57,
+        APIVERSION_THERMAL_DIAGNOSTICS_SERIES,
+        EnumFlags(0),
+        UpdateConditions(polling=True),
+    )  # Bug in PA720 1.8 firmware - does not return sensor id
+    AUTO_SHUTDOWN_CONTROL = 0x58, APIVERSION_AMP_DIAGNOSTICS_SERIES
+
+    # Status/Diagnostics
+    FRIENDLY_NAME = 0x53, APIVERSION_SIMPLE_IP_SERIES
+    IP_ADDRESS = 0x54, APIVERSION_SIMPLE_IP_SERIES
+    PHONO_INPUT_TYPE = 0x59, APIVERSION_PHONO_SERIES
+    INPUT_DETECT = 0x5A, APIVERSION_AMP_DIAGNOSTICS_SERIES
+    PROCESSOR_MODE_INPUT = 0x5B, APIVERSION_SA_SERIES
+    PROCESSOR_MODE_VOLUME = 0x5C, APIVERSION_SA_SERIES  # ST60 reuses 0x5C for Fixed Volume
+    SYSTEM_STATUS = 0x5D, APIVERSION_AMP_DIAGNOSTICS_SERIES
+    SYSTEM_MODEL = 0x5E, APIVERSION_AMP_DIAGNOSTICS_SERIES
+    DAC_FILTER = 0x61, APIVERSION_DAC_FILTER_SERIES  # Clashes with AMPLIFIER_MODE on PA240
+    MAXIMUM_TURN_ON_VOLUME = 0x65, APIVERSION_APP_SAFETY_SERIES
+    MAXIMUM_VOLUME = 0x66, APIVERSION_APP_SAFETY_SERIES
+    MAXIMUM_STREAMING_VOLUME = 0x67, APIVERSION_APP_SAFETY_SERIES
+
+
+class SaveRestoreSubCommand(enum.IntEnum):
+    SAVE = 0x00
+    RESTORE = 0x01
+
+
+SAVE_RESTORE_CONFIRMATION = bytes([0x55, 0x55])
 
 
 class MenuCodes(IntOrTypeEnum):
