@@ -1463,6 +1463,20 @@ class VideoParameters:
             colorspace=IncomingVideoColorspace.from_int(data[7]) if len(data) >= 8 else None,
         )
 
+    def to_bytes(self) -> bytes:
+        data = (
+            self.horizontal_resolution.to_bytes(2, "big")
+            + self.vertical_resolution.to_bytes(2, "big")
+            + bytes([
+                self.refresh_rate,
+                0x01 if self.interlaced else 0x00,
+                int(self.aspect_ratio),
+            ])
+        )
+        if self.colorspace is not None:
+            data += bytes([int(self.colorspace)])
+        return data
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "horizontal_resolution": self.horizontal_resolution,
