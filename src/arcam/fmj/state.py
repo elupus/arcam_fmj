@@ -349,6 +349,13 @@ class State:
                 raise ValueError("Decode mode not supported at this time")
             await self.set_decode_mode_mch(mode)
 
+    def get_direct_mode(self) -> bool | None:
+        """Return whether direct mode is active."""
+        value = self._state.get(CommandCodes.DIRECT_MODE_STATUS)
+        if value is None:
+            return None
+        return int.from_bytes(value, "big") == 0x01
+
     async def set_direct_mode(self, on: bool) -> None:
         await self._send_rc5(RC5CODE_DIRECT_MODE, on)
 
@@ -414,6 +421,13 @@ class State:
     async def set_display_info_type(self, info_type: int) -> None:
         """Set the display information type. Use 0xE0 to cycle."""
         await self._request(self._zn, CommandCodes.DISPLAY_INFORMATION_TYPE, bytes([info_type]))
+
+    def get_display_brightness(self) -> DisplayBrightness | None:
+        """Return the front panel display brightness level."""
+        value = self._state.get(CommandCodes.DISPLAY_BRIGHTNESS)
+        if value is None:
+            return None
+        return DisplayBrightness.from_bytes(value)
 
     async def set_display_brightness(self, level: DisplayBrightness) -> None:
         await self._send_rc5(RC5CODE_DISPLAY_BRIGHTNESS, level)
@@ -536,6 +550,13 @@ class State:
 
     async def dec_dolby_pliix_dimension(self) -> None:
         await self._send_rc5(RC5CODE_DOLBY_PLIIX_DIMENSION, False)
+
+    def get_dolby_pliix_panorama(self) -> bool | None:
+        """Return Dolby PLII/IIx Music panorama mode (450 series)."""
+        value = self._state.get(CommandCodes.DOLBY_PLII_X_MUSIC_PANORAMA)
+        if value is None:
+            return None
+        return int.from_bytes(value, "big") == 0x01
 
     async def set_dolby_pliix_panorama(self, on: bool) -> None:
         await self._send_rc5(RC5CODE_DOLBY_PLIIX_PANORAMA, on)

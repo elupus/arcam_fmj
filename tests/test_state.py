@@ -939,6 +939,67 @@ async def test_set_direct_mode():
         1, CommandCodes.SIMULATE_RC5_IR_COMMAND, bytes([0x10, 0x4F]), 0)
 
 
+# --- Display Brightness (0x01) ---
+
+
+def test_get_display_brightness_none():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    assert state.get_display_brightness() is None
+
+
+@pytest.mark.parametrize("byte_val, expected", [
+    (0x00, DisplayBrightness.OFF),
+    (0x01, DisplayBrightness.L1),
+    (0x02, DisplayBrightness.L2),
+])
+def test_get_display_brightness(byte_val, expected):
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    state._state[CommandCodes.DISPLAY_BRIGHTNESS] = bytes([byte_val])
+    assert state.get_display_brightness() == expected
+
+
+# --- Direct Mode Status (0x0F) ---
+
+
+def test_get_direct_mode_none():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    assert state.get_direct_mode() is None
+
+
+@pytest.mark.parametrize("byte_val, expected", [
+    (0x00, False),
+    (0x01, True),
+])
+def test_get_direct_mode(byte_val, expected):
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    state._state[CommandCodes.DIRECT_MODE_STATUS] = bytes([byte_val])
+    assert state.get_direct_mode() == expected
+
+
+# --- Dolby PLII/IIx Music Panorama (0x3E) ---
+
+
+def test_get_dolby_pliix_panorama_none():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    assert state.get_dolby_pliix_panorama() is None
+
+
+@pytest.mark.parametrize("byte_val, expected", [
+    (0x00, False),
+    (0x01, True),
+])
+def test_get_dolby_pliix_panorama(byte_val, expected):
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    state._state[CommandCodes.DOLBY_PLII_X_MUSIC_PANORAMA] = bytes([byte_val])
+    assert state.get_dolby_pliix_panorama() == expected
+
+
 # --- Command support checking ---
 
 
