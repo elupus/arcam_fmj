@@ -278,7 +278,7 @@ async def run_server(args):
             rc5_key = (self._api_version, 1)
 
             self._volume = bytes([10])
-            self._source = bytes([SourceCodes.PVR])
+            self._source = SourceCodes.PVR.to_bytes(self._api_version, 1)
             self._video_parameters = VideoParameters(
                 horizontal_resolution=1920,
                 vertical_resolution=1080,
@@ -290,14 +290,14 @@ async def run_server(args):
             self._audio_format = bytes(
                 [IncomingAudioFormat.PCM, IncomingAudioConfig.STEREO_ONLY]
             )
-            self._audio_sample_rate = 48000
+            self._audio_sample_rate = bytes([0x02])  # 48000 Hz per SAMPLE_RATE_MAP
             self._decode_mode_2ch = bytes(
                 [next(iter(RC5CODE_DECODE_MODE_2CH[rc5_key]))]
             )
             self._decode_mode_mch = bytes(
                 [next(iter(RC5CODE_DECODE_MODE_MCH[rc5_key]))]
             )
-            self._tuner_preset = b"\0xff"
+            self._tuner_preset = b"\xff"
             self._presets = {
                 b"\x01": b"\x03SR P1   ",
                 b"\x02": b"\x03SR Klass",
@@ -449,7 +449,7 @@ async def run_server(args):
             return self._decode_mode_mch
 
         def get_incoming_video_parameters(self, **kwargs):
-            return self._video_parameters
+            return self._video_parameters.to_bytes()
 
         def get_incoming_audio_format(self, **kwargs):
             return self._audio_format
