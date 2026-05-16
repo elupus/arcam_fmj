@@ -58,9 +58,9 @@ async def client(request):
 
 @pytest.fixture
 async def speedy_client(mocker):
-    mocker.patch("arcam.fmj.client._HEARTBEAT_INTERVAL", new=timedelta(seconds=1))
-    mocker.patch("arcam.fmj.client._HEARTBEAT_TIMEOUT", new=timedelta(seconds=2))
-    mocker.patch("arcam.fmj.client._REQUEST_TIMEOUT", new=timedelta(seconds=0.5))
+    mocker.patch("arcam.fmj.client._HEARTBEAT_IDLE", new=timedelta(seconds=1))
+    mocker.patch("arcam.fmj.client._RECEIVE_TIMEOUT", new=timedelta(seconds=2))
+    mocker.patch("arcam.fmj.client._RETRY_INTERVAL", new=timedelta(milliseconds=250))
 
 
 async def test_power(server, client):
@@ -100,30 +100,28 @@ async def test_unsupported_zone(speedy_client, silent_server, client):
 
 
 async def test_silent_server_disconnect(speedy_client, silent_server):
-    from arcam.fmj.client import _HEARTBEAT_TIMEOUT
+    from arcam.fmj.client import _RECEIVE_TIMEOUT
 
     c = Client("localhost", 8888)
     connected = True
     with pytest.raises(ConnectionFailed):
         async with ClientContext(c):
-            await asyncio.sleep(_HEARTBEAT_TIMEOUT.total_seconds() + 0.5)
+            await asyncio.sleep(_RECEIVE_TIMEOUT.total_seconds() + 0.5)
             connected = c.connected
     assert not connected
 
 
 async def test_heartbeat(speedy_client, server, client):
-    from arcam.fmj.client import _HEARTBEAT_INTERVAL
+    from arcam.fmj.client import _HEARTBEAT_IDLE
 
     with unittest.mock.patch.object(
         server, "process_request", wraps=server.process_request
     ) as req:
-        await asyncio.sleep(_HEARTBEAT_INTERVAL.total_seconds() + 0.5)
+        await asyncio.sleep(_HEARTBEAT_IDLE.total_seconds() + 0.5)
         req.assert_called_once_with(ANY)
 
 
 async def test_cancellation(silent_server):
-    from arcam.fmj.client import _HEARTBEAT_TIMEOUT
-
     e = asyncio.Event()
     c = Client("localhost", 8888)
 

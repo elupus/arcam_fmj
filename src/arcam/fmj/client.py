@@ -3,12 +3,13 @@
 import asyncio
 from asyncio.streams import StreamReader, StreamWriter
 import logging
-from datetime import datetime, timedelta
-from arcam.fmj.priority_lock import PriorityLock
-from contextlib import AsyncExitStack, contextmanager, suppress
-from typing import overload
 from collections.abc import Callable
+from contextlib import contextmanager
 from copy import copy
+from dataclasses import dataclass, field
+from datetime import timedelta
+from typing import overload
+
 from serialx import open_serial_connection
 
 from . import (
@@ -30,21 +31,31 @@ from . import (
 from .utils import async_retry
 
 _LOGGER = logging.getLogger(__name__)
-_REQUEST_TIMEOUT = timedelta(seconds=3)
-_REQUEST_THROTTLE = 0.2
 
-_HEARTBEAT_INTERVAL = timedelta(seconds=5)
-_HEARTBEAT_TIMEOUT = _HEARTBEAT_INTERVAL + _HEARTBEAT_INTERVAL
+_RETRY_INTERVAL = timedelta(milliseconds=500)   # per-attempt fast-retry timeout
+_MAX_ATTEMPTS = 2                               # total sends per request
+_HEARTBEAT_IDLE = timedelta(seconds=5)          # send POWER ping after this long with empty queue
+_RECEIVE_TIMEOUT = _HEARTBEAT_IDLE * 2           # declare connection dead after this long of silence
+_SEND_ONLY_DELAY = timedelta(milliseconds=200)  # post-write delay for SEND_ONLY commands
+_REMOTE_SETTLE_DELAY = timedelta(milliseconds=5)  # post-receive pause before sending the next queue item (reduce the chance the device is in a state where it drops input)
+
+
+@dataclass(order=True)
+class _QueueItem:
+    priority: int                                       # lower = first out
+    seq: int                                            # FIFO tiebreaker
+    packet: CommandPacket | AmxDuetRequest = field(compare=False)
+    future: asyncio.Future[ResponsePacket | AmxDuetResponse | None] = field(compare=False)
+    expect_response: bool = field(compare=False, default=True)
 
 
 class ClientBase:
     def __init__(self) -> None:
         self._reader: StreamReader | None = None
         self._writer: StreamWriter | None = None
-        self._task = None
         self._listen: set[Callable] = set()
-        self._request_lock = PriorityLock()
-        self._timestamp = datetime.now()
+        self._queue: asyncio.PriorityQueue[_QueueItem] = asyncio.PriorityQueue()
+        self._seq: int = 0
 
     @contextmanager
     def listen(self, listener: Callable):
@@ -54,36 +65,91 @@ class ClientBase:
         finally:
             self._listen.remove(listener)
 
-    async def _process_heartbeat(self):
-        while True:
-            delay = self._timestamp + _HEARTBEAT_INTERVAL - datetime.now()
-            if delay > timedelta():
-                await asyncio.sleep(delay.total_seconds())
-            else:
-                _LOGGER.debug("Sending ping")
-                try:
-                    await self.request(1, CommandCodes.POWER, bytes([0xF0]))
-                except (ArcamException, TimeoutError):
-                    _LOGGER.debug("Heartbeat failed")
-                    return
-                self._timestamp = datetime.now()
-
-    async def _process_data(self, reader: StreamReader):
+    async def _process_receive(self, reader: StreamReader) -> None:
         while True:
             try:
-                async with asyncio.timeout(_HEARTBEAT_TIMEOUT.total_seconds()):
+                async with asyncio.timeout(_RECEIVE_TIMEOUT.total_seconds()):
                     packet = await read_response(reader)
             except TimeoutError as exception:
-                _LOGGER.debug("Missed all pings")
-                raise ConnectionFailed("Missed all pings") from exception
-
+                _LOGGER.debug("No data received within timeout")
+                raise ConnectionFailed(
+                    "No data received within timeout"
+                ) from exception
             if packet is None:
                 _LOGGER.debug("Server disconnected")
                 raise ConnectionFailed("Server disconnected")
-
             _LOGGER.debug("Packet received: %s", packet)
             for listener in self._listen:
                 listener(packet)
+
+    async def _process_send(self, writer: StreamWriter) -> None:
+        while True:
+            try:
+                async with asyncio.timeout(_HEARTBEAT_IDLE.total_seconds()):
+                    item = await self._queue.get()
+            except TimeoutError:
+                _LOGGER.debug("Sending heartbeat ping")
+                await self._send_heartbeat(writer)
+                continue
+            await self._send_command(writer, item)
+
+    async def _send_heartbeat(self, writer: StreamWriter) -> None:
+        packet = CommandPacket(1, CommandCodes.POWER, bytes([0xF0]))
+        try:
+            await self._send_request(writer, packet)
+        except TimeoutError:
+            # Receive-side liveness check is the real disconnect detector. We don't want to tear things down for this if other traffic is making it through.
+            _LOGGER.debug("Heartbeat timed out")
+
+    async def _send_command(
+        self, writer: StreamWriter, item: _QueueItem,
+    ) -> None:
+        if not item.expect_response:
+            try:
+                await write_packet(writer, item.packet)
+                await asyncio.sleep(_SEND_ONLY_DELAY.total_seconds())
+            except BaseException as e:
+                if not item.future.done():
+                    item.future.set_exception(e)
+                raise
+            if not item.future.done():
+                item.future.set_result(None)
+            return
+
+        try:
+            response = await self._send_request(writer, item.packet)
+        except TimeoutError as e:
+            if not item.future.done():
+                item.future.set_exception(e)
+            return
+        except BaseException as e:
+            if not item.future.done():
+                item.future.set_exception(e)
+            raise
+        if not item.future.done():
+            item.future.set_result(response)
+
+    @async_retry(_MAX_ATTEMPTS, TimeoutError)
+    async def _send_request(
+        self,
+        writer: StreamWriter,
+        packet: CommandPacket | AmxDuetRequest,
+    ) -> ResponsePacket | AmxDuetResponse:
+        future_response: asyncio.Future = asyncio.get_running_loop().create_future()
+
+        def listen(response):
+            if response.response_to(packet) and not future_response.done():
+                future_response.set_result(response)
+
+        with self.listen(listen):
+            _LOGGER.debug("Sending %s", packet)
+            await write_packet(writer, packet)
+            response = await asyncio.wait_for(
+                future_response,
+                timeout=_RETRY_INTERVAL.total_seconds(),
+            )
+        await asyncio.sleep(_REMOTE_SETTLE_DELAY.total_seconds())
+        return response
 
     async def process(self) -> None:
         assert self._writer, "Writer missing"
@@ -94,12 +160,23 @@ class ClientBase:
 
         try:
             async with asyncio.TaskGroup() as group:
-                group.create_task(self._process_heartbeat())
-                group.create_task(self._process_data(reader))
+                group.create_task(self._process_send(writer))
+                group.create_task(self._process_receive(reader))
         except BaseExceptionGroup as exc:
             # convert to a non group exception to keep compatibility
-            raise copy(exc.exceptions[0]).with_traceback(exc.exceptions[0].__traceback__)
+            raise copy(exc.exceptions[0]).with_traceback(
+                exc.exceptions[0].__traceback__
+            )
         finally:
+            while True:
+                try:
+                    item = self._queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    break
+                if not item.future.done():
+                    item.future.set_exception(
+                        NotConnectedException("Connection closed")
+                    )
             _LOGGER.debug("Process task shutting down")
             writer.close()
 
@@ -111,59 +188,50 @@ class ClientBase:
     def started(self) -> bool:
         return self._writer is not None
 
+    def _enqueue(
+        self,
+        packet: CommandPacket | AmxDuetRequest,
+        priority: int,
+        expect_response: bool,
+    ) -> asyncio.Future:
+        future = asyncio.get_running_loop().create_future()
+        self._seq += 1
+        self._queue.put_nowait(_QueueItem(
+            priority, self._seq, packet, future, expect_response,
+        ))
+        return future
+
     @overload
     async def request_raw(self, request: CommandPacket, priority: int = 0) -> ResponsePacket: ...
 
     @overload
     async def request_raw(self, request: AmxDuetRequest, priority: int = 0) -> AmxDuetResponse: ...
 
-    @async_retry(2, asyncio.TimeoutError)
     async def request_raw(
         self, request: CommandPacket | AmxDuetRequest, priority: int = 0
     ) -> ResponsePacket | AmxDuetResponse:
         if not self._writer:
             raise NotConnectedException()
-        writer = self._writer  # keep copy around if stopped by another task
-        future: asyncio.Future[ResponsePacket | AmxDuetResponse] = asyncio.Future()
+        return await self._enqueue(request, priority, expect_response=True)
 
-        def listen(response: ResponsePacket | AmxDuetResponse):
-            if response.respons_to(request):
-                if not (future.cancelled() or future.done()):
-                    future.set_result(response)
-
-        async with AsyncExitStack() as stack:
-            await stack.enter_async_context(self._request_lock(priority))
-            async with asyncio.timeout(_REQUEST_TIMEOUT.total_seconds()):
-                with self.listen(listen):
-                    _LOGGER.debug("Requesting %s", request)
-                    await write_packet(writer, request)
-                    self._timestamp = datetime.now()
-                    with suppress(TimeoutError):
-                        async with asyncio.timeout(_REQUEST_THROTTLE):
-                            return await asyncio.shield(future)
-                    await stack.aclose()
-                    return await future
-                    
-    async def send(self, zn: int, cc: CommandCodes, data: bytes, priority: int = 0) -> None:
+    async def send(
+        self, zn: int, cc: CommandCodes, data: bytes, priority: int = 0,
+    ) -> None:
         if not self._writer:
             raise NotConnectedException()
-
         if not (cc.flags & EnumFlags.ZONE_SUPPORT) and zn != 1:
             raise UnsupportedZone()
+        await self._enqueue(
+            CommandPacket(zn, cc, data), priority, expect_response=False,
+        )
 
-        writer = self._writer
-        request = CommandPacket(zn, cc, data)
-        async with self._request_lock(priority):
-            await write_packet(writer, request)
-            await asyncio.sleep(_REQUEST_THROTTLE)
-
-    async def request(self, zn: int, cc: CommandCodes, data: bytes, priority: int = 0):
+    async def request(
+        self, zn: int, cc: CommandCodes, data: bytes, priority: int = 0,
+    ):
         if not self._writer:
             raise NotConnectedException()
-
         if not (cc.flags & EnumFlags.ZONE_SUPPORT) and zn != 1:
             raise UnsupportedZone()
-
         if cc.flags & EnumFlags.SEND_ONLY:
             await self.send(zn, cc, data, priority)
             return
@@ -177,10 +245,10 @@ class ClientBase:
 
     @property
     def peer(self) -> str:
-        raise NotImplementedError()  
+        raise NotImplementedError()
 
     async def _open(self) -> tuple[StreamReader, StreamWriter]:
-        raise NotImplementedError()    
+        raise NotImplementedError()
 
     async def start(self) -> None:
         if self._writer:
