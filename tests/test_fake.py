@@ -1,11 +1,10 @@
 """Test with a fake server"""
 
 import asyncio
+import contextlib
 import logging
-import unittest
 import pytest
 from datetime import timedelta
-from unittest.mock import ANY
 
 from arcam.fmj import (
     CommandCodes,
@@ -84,7 +83,7 @@ async def test_invalid_command(server, client):
 
 async def test_state(server, client):
     state = State(client, 0x01)
-    await state.update()
+    await asyncio.gather(*await state.get_update_tasks())
     assert state.get(CommandCodes.POWER) == bytes([0x00])
     assert state.get(CommandCodes.VOLUME) == bytes([0x01])
 
@@ -111,14 +110,50 @@ async def test_silent_server_disconnect(speedy_client, silent_server):
     assert not connected
 
 
-async def test_heartbeat(speedy_client, server, client):
-    from arcam.fmj.client import _HEARTBEAT_IDLE
+async def test_process_runs_update_providers(server):
+    """When a State is started before process(), the client's update loop
+    drives it via get_update_tasks() until state is populated."""
+    c = Client("localhost", 8888)
+    state = State(c, 0x01)
 
-    with unittest.mock.patch.object(
-        server, "process_request", wraps=server.process_request
-    ) as req:
-        await asyncio.sleep(_HEARTBEAT_IDLE.total_seconds() + 0.5)
-        req.assert_called_once_with(ANY)
+    await c.start()
+    await state.start()
+    try:
+        process_task = asyncio.create_task(c.process())
+        try:
+            async with asyncio.timeout(5):
+                while state.get_power() is None or state.get_volume() is None:
+                    await asyncio.sleep(0.05)
+            assert state.get_power() is False  # bytes([0x00]) → False
+            assert state.get_volume() == 0x01
+        finally:
+            process_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await process_task
+    finally:
+        await state.stop()
+        await c.stop()
+
+
+async def test_heartbeat_keeps_connection_alive(speedy_client, server):
+    """With no providers registered, _process_updates falls back to
+    issuing a heartbeat once per _HEARTBEAT_IDLE — the connection
+    survives past _RECEIVE_TIMEOUT."""
+    from arcam.fmj.client import _RECEIVE_TIMEOUT
+
+    c = Client("localhost", 8888)
+    await c.start()
+    try:
+        process_task = asyncio.create_task(c.process())
+        try:
+            await asyncio.sleep(_RECEIVE_TIMEOUT.total_seconds() + 0.5)
+            assert c.connected
+        finally:
+            process_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await process_task
+    finally:
+        await c.stop()
 
 
 async def test_cancellation(silent_server):

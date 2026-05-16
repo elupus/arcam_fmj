@@ -34,10 +34,11 @@ _LOGGER = logging.getLogger(__name__)
 
 _RETRY_INTERVAL = timedelta(milliseconds=500)   # per-attempt fast-retry timeout
 _MAX_ATTEMPTS = 2                               # total sends per request
-_HEARTBEAT_IDLE = timedelta(seconds=5)          # send POWER ping after this long with empty queue
-_RECEIVE_TIMEOUT = _HEARTBEAT_IDLE * 2           # declare connection dead after this long of silence
+_HEARTBEAT_IDLE = timedelta(milliseconds=500)   # Longest we idle before sending a command; also how long we wait to check for more updates, after the last query reported we don't need any
+_RECEIVE_TIMEOUT = _HEARTBEAT_IDLE * 2          # declare connection dead after this long of silence
 _SEND_ONLY_DELAY = timedelta(milliseconds=200)  # post-write delay for SEND_ONLY commands
 _REMOTE_SETTLE_DELAY = timedelta(milliseconds=5)  # post-receive pause before sending the next queue item (reduce the chance the device is in a state where it drops input)
+_UPDATE_PRIORITY = 10                           # priority for update-provider and heartbeat requests
 
 
 @dataclass(order=True)
@@ -54,6 +55,7 @@ class ClientBase:
         self._reader: StreamReader | None = None
         self._writer: StreamWriter | None = None
         self._listen: set[Callable] = set()
+        self._update_providers: set[Callable] = set()
         self._queue: asyncio.PriorityQueue[_QueueItem] = asyncio.PriorityQueue()
         self._seq: int = 0
 
@@ -64,6 +66,12 @@ class ClientBase:
             yield self
         finally:
             self._listen.remove(listener)
+
+    def register_update_provider(self, provider: Callable) -> None:
+        self._update_providers.add(provider)
+
+    def unregister_update_provider(self, provider: Callable) -> None:
+        self._update_providers.discard(provider)
 
     async def _process_receive(self, reader: StreamReader) -> None:
         while True:
@@ -84,22 +92,33 @@ class ClientBase:
 
     async def _process_send(self, writer: StreamWriter) -> None:
         while True:
-            try:
-                async with asyncio.timeout(_HEARTBEAT_IDLE.total_seconds()):
-                    item = await self._queue.get()
-            except TimeoutError:
-                _LOGGER.debug("Sending heartbeat ping")
-                await self._send_heartbeat(writer)
-                continue
+            item = await self._queue.get()
             await self._send_command(writer, item)
 
-    async def _send_heartbeat(self, writer: StreamWriter) -> None:
-        packet = CommandPacket(1, CommandCodes.POWER, bytes([0xF0]))
+    async def _process_updates(self) -> None:
+        while True:
+            tasks: list = []
+            for provider in self._update_providers:
+                tasks.extend(await provider())
+            if not tasks:
+                # No provider has work — fall back to a slow-cadence
+                # heartbeat to keep the receive side busy enough not
+                # to fire _RECEIVE_TIMEOUT.
+                tasks.append(self._heartbeat())
+            await asyncio.gather(*tasks)
+
+    async def _heartbeat(self) -> None:
+        """Ping POWER through the queue, then sleep _HEARTBEAT_IDLE."""
+        _LOGGER.debug("Sending heartbeat ping")
         try:
-            await self._send_request(writer, packet)
-        except TimeoutError:
-            # Receive-side liveness check is the real disconnect detector. We don't want to tear things down for this if other traffic is making it through.
-            _LOGGER.debug("Heartbeat timed out")
+            await self.request_raw(
+                CommandPacket(1, CommandCodes.POWER, bytes([0xF0])),
+                priority=_UPDATE_PRIORITY,
+            )
+        except (TimeoutError, NotConnectedException, ResponseException):
+            # Receive-side liveness check is the real disconnect detector.
+            _LOGGER.debug("Heartbeat did not complete cleanly")
+        await asyncio.sleep(_HEARTBEAT_IDLE.total_seconds())
 
     async def _send_command(
         self, writer: StreamWriter, item: _QueueItem,
@@ -162,6 +181,7 @@ class ClientBase:
             async with asyncio.TaskGroup() as group:
                 group.create_task(self._process_send(writer))
                 group.create_task(self._process_receive(reader))
+                group.create_task(self._process_updates())
         except BaseExceptionGroup as exc:
             # convert to a non group exception to keep compatibility
             raise copy(exc.exceptions[0]).with_traceback(
