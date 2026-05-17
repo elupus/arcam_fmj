@@ -342,8 +342,8 @@ class CommandCodes(IntOrTypeEnum):
     POWER = 0x00, None, EnumFlags.ZONE_SUPPORT | EnumFlags.FULL_UPDATE
     DISPLAY_BRIGHTNESS = 0x01, APIVERSION_AVR_SA_AND_ST_SERIES
     HEADPHONES = 0x02, APIVERSION_AVR_AND_SA_SERIES, EnumFlags.FULL_UPDATE
-    FMGENRE = 0x03, APIVERSION_AVR_SERIES, EnumFlags.ZONE_SUPPORT
-    SOFTWARE_VERSION = 0x04
+    FMGENRE = 0x03, APIVERSION_AVR_SERIES, EnumFlags.ZONE_SUPPORT | EnumFlags.FULL_UPDATE
+    SOFTWARE_VERSION = 0x04, None, EnumFlags.FULL_UPDATE
     RESTORE_FACTORY_DEFAULT = 0x05
     SAVE_RESTORE_COPY_OF_SETTINGS = 0x06, APIVERSION_AVR_SERIES
     SIMULATE_RC5_IR_COMMAND = 0x08, APIVERSION_AVR_SA_AND_ST_SERIES, EnumFlags.ZONE_SUPPORT | EnumFlags.SEND_ONLY
@@ -431,16 +431,21 @@ class CommandCodes(IntOrTypeEnum):
     ENGINEERING_MENU_INFO = 0x33, APIVERSION_HDA_SERIES
 
     # Amp/Streamer Diagnostics
-    DC_OFFSET = 0x51, APIVERSION_THERMAL_DIAGNOSTICS_SERIES
-    SHORT_CIRCUIT_STATUS = 0x52, APIVERSION_CLASS_G_SERIES
+    # POLL_REQUIRED on the sensor-like CCs below assumes the device does not
+    # push these values proactively, so we must poll to track them. That's a
+    # best guess; needs verification against PA hardware before relying on it.
+    DC_OFFSET = 0x51, APIVERSION_THERMAL_DIAGNOSTICS_SERIES, EnumFlags.POLL_REQUIRED | EnumFlags.FULL_UPDATE
+    SHORT_CIRCUIT_STATUS = 0x52, APIVERSION_CLASS_G_SERIES, EnumFlags.POLL_REQUIRED | EnumFlags.FULL_UPDATE
     TIMEOUT_COUNTER = 0x55, APIVERSION_AMP_DIAGNOSTICS_SERIES
     LIFTER_TEMPERATURE = (
         0x56,
         APIVERSION_CLASS_G_SERIES,
+        EnumFlags.POLL_REQUIRED | EnumFlags.FULL_UPDATE,
     )  # Bug in PA720 1.8 firmware - does not return sensor id
     OUTPUT_TEMPERATURE = (
         0x57,
         APIVERSION_THERMAL_DIAGNOSTICS_SERIES,
+        EnumFlags.POLL_REQUIRED | EnumFlags.FULL_UPDATE,
     )  # Bug in PA720 1.8 firmware - does not return sensor id
     AUTO_SHUTDOWN_CONTROL = 0x58, APIVERSION_AMP_DIAGNOSTICS_SERIES
 

@@ -404,6 +404,17 @@ class State:
             return None
         return int.from_bytes(value, "big") == 0x01
 
+    def get_software_version(self) -> str | None:
+        """Return the device's RS232 protocol version as "major.minor".
+
+        Per spec, the response is 3 bytes: echo of the request sub-code
+        (0xF0 by default = RS232 version), major version, minor version.
+        """
+        value = self._state.get(CommandCodes.SOFTWARE_VERSION)
+        if value is None or len(value) < 3:
+            return None
+        return f"{value[1]}.{value[2]}"
+
     def get_display_info_type(self) -> int | None:
         """Return the current display information type."""
         value = self._state.get(CommandCodes.DISPLAY_INFORMATION_TYPE)
@@ -648,6 +659,13 @@ class State:
         else:
             await self._send_rc5(RC5CODE_VOLUME, False)
 
+    def get_fm_genre(self) -> str | None:
+        """Return the FM genre string."""
+        value = self._state.get(CommandCodes.FMGENRE)
+        if value is None:
+            return None
+        return value.decode("utf8", errors="replace").rstrip()
+
     def get_dab_station(self) -> str | None:
         value = self._state.get(CommandCodes.DAB_STATION)
         if value is None:
@@ -749,6 +767,34 @@ class State:
         else:
             track = ""
         return status, track
+
+    def get_dc_offset(self) -> int | None:
+        """Return DC offset reading (PA/SA series diagnostics)."""
+        value = self._state.get(CommandCodes.DC_OFFSET)
+        if value is None:
+            return None
+        return int.from_bytes(value, "big")
+
+    def get_short_circuit_status(self) -> int | None:
+        """Return short-circuit status (0=normal, Class-G amps)."""
+        value = self._state.get(CommandCodes.SHORT_CIRCUIT_STATUS)
+        if value is None:
+            return None
+        return int.from_bytes(value, "big")
+
+    def get_lifter_temperature(self) -> int | None:
+        """Return lifter temperature reading (Class-G amps)."""
+        value = self._state.get(CommandCodes.LIFTER_TEMPERATURE)
+        if value is None:
+            return None
+        return int.from_bytes(value, "big")
+
+    def get_output_temperature(self) -> int | None:
+        """Return output stage temperature reading."""
+        value = self._state.get(CommandCodes.OUTPUT_TEMPERATURE)
+        if value is None:
+            return None
+        return int.from_bytes(value, "big")
 
     async def update(self, flags: EnumFlags = EnumFlags.FULL_UPDATE) -> None:
         priority = flags.priority

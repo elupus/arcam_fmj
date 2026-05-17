@@ -1023,6 +1023,146 @@ def test_require_command_raises_for_runtime_blocked():
         state._require_command(CommandCodes.VOLUME)
 
 
+# --- FM Genre (0x03) ---
+
+
+def test_get_fm_genre_none():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    assert state.get_fm_genre() is None
+
+
+def test_get_fm_genre():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    state._state[CommandCodes.FMGENRE] = b"Rock    "
+    assert state.get_fm_genre() == "Rock"
+
+
+def test_get_fm_genre_utf8():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    state._state[CommandCodes.FMGENRE] = "Información".encode("utf8")
+    assert state.get_fm_genre() == "Información"
+
+
+# --- Software Version (0x04) ---
+
+
+def test_get_software_version_none():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    assert state.get_software_version() is None
+
+
+def test_get_software_version():
+    """Spec response is [echo, major, minor] — e.g. 0xF0 0x01 0x04 = v1.4."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    state._state[CommandCodes.SOFTWARE_VERSION] = b"\xf0\x01\x04"
+    assert state.get_software_version() == "1.4"
+
+
+def test_get_software_version_short_payload():
+    """A truncated/unexpected payload returns None rather than crashing."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    state._state[CommandCodes.SOFTWARE_VERSION] = b"\xf0"
+    assert state.get_software_version() is None
+
+
+# --- Lifter Temperature (0x56) ---
+
+
+def test_get_lifter_temperature_none():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    assert state.get_lifter_temperature() is None
+
+
+def test_get_lifter_temperature():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    state._state[CommandCodes.LIFTER_TEMPERATURE] = bytes([0x01, 0x2A])
+    assert state.get_lifter_temperature() == 0x012A
+
+
+def test_get_lifter_temperature_single_byte():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    state._state[CommandCodes.LIFTER_TEMPERATURE] = bytes([42])
+    assert state.get_lifter_temperature() == 42
+
+
+# --- Output Temperature (0x57) ---
+
+
+def test_get_output_temperature_none():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    assert state.get_output_temperature() is None
+
+
+def test_get_output_temperature():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    state._state[CommandCodes.OUTPUT_TEMPERATURE] = bytes([0x01, 0x37])
+    assert state.get_output_temperature() == 0x0137
+
+
+def test_get_output_temperature_single_byte():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    state._state[CommandCodes.OUTPUT_TEMPERATURE] = bytes([55])
+    assert state.get_output_temperature() == 55
+
+
+# --- DC Offset (0x51) ---
+
+
+def test_get_dc_offset_none():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    assert state.get_dc_offset() is None
+
+
+def test_get_dc_offset():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    state._state[CommandCodes.DC_OFFSET] = bytes([0x00, 0x05])
+    assert state.get_dc_offset() == 5
+
+
+def test_get_dc_offset_single_byte():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    state._state[CommandCodes.DC_OFFSET] = bytes([0])
+    assert state.get_dc_offset() == 0
+
+
+# --- Short Circuit Status (0x52) ---
+
+
+def test_get_short_circuit_status_none():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    assert state.get_short_circuit_status() is None
+
+
+def test_get_short_circuit_status_normal():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    state._state[CommandCodes.SHORT_CIRCUIT_STATUS] = bytes([0x00])
+    assert state.get_short_circuit_status() == 0
+
+
+def test_get_short_circuit_status_fault():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    state._state[CommandCodes.SHORT_CIRCUIT_STATUS] = bytes([0x01])
+    assert state.get_short_circuit_status() == 1
+
+
 async def test_setter_raises_for_unsupported_command():
     """Setter methods raise UnsupportedCommand when the command is not supported."""
     client = MagicMock(spec=Client)
