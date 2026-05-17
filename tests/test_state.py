@@ -1087,3 +1087,30 @@ async def test_set_video_selection():
     state = State(client, 1)
     await state.set_video_selection(VideoSelection.SAT)
     client.request.assert_called_with(1, CommandCodes.VIDEO_SELECTION, bytes([0x01]), 0)
+
+
+# --- FM Scan / DAB Scan (fire-and-forget) ---
+
+
+async def test_fm_scan_up():
+    """fm_scan() defaults to scan-up (0x01)."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    await state.fm_scan()
+    client.send.assert_called_once_with(1, CommandCodes.FM_SCAN, bytes([0x01]))
+
+
+async def test_fm_scan_down():
+    """fm_scan(up=False) sends scan-down (0x02)."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    await state.fm_scan(up=False)
+    client.send.assert_called_once_with(1, CommandCodes.FM_SCAN, bytes([0x02]))
+
+
+async def test_dab_scan():
+    """dab_scan should fire-and-forget with the start-scan byte (0xF0)."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    await state.dab_scan()
+    client.send.assert_called_once_with(1, CommandCodes.DAB_SCAN, bytes([0xF0]))

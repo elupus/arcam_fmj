@@ -666,6 +666,16 @@ class State:
             return None
         return value.decode("utf8", errors="replace").rstrip()
 
+    async def fm_scan(self, up: bool = True) -> None:
+        """Trigger an FM frequency scan (up by default, down if up=False)."""
+        await self._client.send(
+            self._zn, CommandCodes.FM_SCAN, bytes([0x01 if up else 0x02])
+        )
+
+    async def dab_scan(self) -> None:
+        """Trigger a DAB station scan."""
+        await self._client.send(self._zn, CommandCodes.DAB_SCAN, bytes([0xF0]))
+
     async def set_tuner_preset(self, preset: int) -> None:
         await self._request(self._zn, CommandCodes.TUNER_PRESET, bytes([preset]))
 
