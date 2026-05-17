@@ -525,11 +525,33 @@ class State:
         """Set the Dolby Audio mode."""
         await self._request(self._zn, CommandCodes.DOLBY_AUDIO, bytes([mode]))
 
+    def get_dolby_pliix_centre_width(self) -> int | None:
+        """Return the Dolby PLII/IIx Music centre width setting (450 series)."""
+        value = self._state.get(CommandCodes.DOLBY_PLII_X_MUSIC_CENTRE_WIDTH)
+        if value is None:
+            return None
+        return int.from_bytes(value, "big")
+
+    async def set_dolby_pliix_centre_width(self, value: int) -> None:
+        """Set the Dolby PLII/IIx Music centre width setting (450 series)."""
+        await self._request(self._zn, CommandCodes.DOLBY_PLII_X_MUSIC_CENTRE_WIDTH, bytes([value]))
+
     async def inc_dolby_pliix_centre_width(self) -> None:
         await self._send_rc5(RC5CODE_DOLBY_PLIIX_CENTRE_WIDTH, True)
 
     async def dec_dolby_pliix_centre_width(self) -> None:
         await self._send_rc5(RC5CODE_DOLBY_PLIIX_CENTRE_WIDTH, False)
+
+    def get_dolby_pliix_dimension(self) -> int | None:
+        """Return the Dolby PLII/IIx Music dimension setting (450 series)."""
+        value = self._state.get(CommandCodes.DOLBY_PLII_X_MUSIC_DIMENSION)
+        if value is None:
+            return None
+        return int.from_bytes(value, "big")
+
+    async def set_dolby_pliix_dimension(self, value: int) -> None:
+        """Set the Dolby PLII/IIx Music dimension setting (450 series)."""
+        await self._request(self._zn, CommandCodes.DOLBY_PLII_X_MUSIC_DIMENSION, bytes([value]))
 
     async def inc_dolby_pliix_dimension(self) -> None:
         await self._send_rc5(RC5CODE_DOLBY_PLIIX_DIMENSION, True)
@@ -647,6 +669,39 @@ class State:
             await self._request(self._zn, CommandCodes.VOLUME, bytes([0xF2]))
         else:
             await self._send_rc5(RC5CODE_VOLUME, False)
+
+    def get_max_turn_on_volume(self) -> int | None:
+        """Return the maximum turn-on volume (SA30/SA750/ST60)."""
+        value = self._state.get(CommandCodes.MAXIMUM_TURN_ON_VOLUME)
+        if value is None:
+            return None
+        return int.from_bytes(value, "big")
+
+    async def set_max_turn_on_volume(self, volume: int) -> None:
+        """Set the maximum turn-on volume (SA30/SA750/ST60)."""
+        await self._request(self._zn, CommandCodes.MAXIMUM_TURN_ON_VOLUME, bytes([volume]))
+
+    def get_max_volume(self) -> int | None:
+        """Return the configurable volume ceiling."""
+        value = self._state.get(CommandCodes.MAXIMUM_VOLUME)
+        if value is None:
+            return None
+        return int.from_bytes(value, "big")
+
+    async def set_max_volume(self, volume: int) -> None:
+        """Set the configurable volume ceiling."""
+        await self._request(self._zn, CommandCodes.MAXIMUM_VOLUME, bytes([volume]))
+
+    def get_max_streaming_volume(self) -> int | None:
+        """Return the network/Bluetooth safety volume limit."""
+        value = self._state.get(CommandCodes.MAXIMUM_STREAMING_VOLUME)
+        if value is None:
+            return None
+        return int.from_bytes(value, "big")
+
+    async def set_max_streaming_volume(self, volume: int) -> None:
+        """Set the network/Bluetooth safety volume limit."""
+        await self._request(self._zn, CommandCodes.MAXIMUM_STREAMING_VOLUME, bytes([volume]))
 
     def get_dab_station(self) -> str | None:
         value = self._state.get(CommandCodes.DAB_STATION)

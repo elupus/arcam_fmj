@@ -1043,6 +1043,126 @@ async def test_setter_raises_for_runtime_blocked_command():
     client.request.assert_not_called()
 
 
+# --- Maximum Turn-On Volume (0x65) ---
+
+
+def test_get_max_turn_on_volume_none():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    assert state.get_max_turn_on_volume() is None
+
+
+def test_get_max_turn_on_volume():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    state._state[CommandCodes.MAXIMUM_TURN_ON_VOLUME] = bytes([75])
+    assert state.get_max_turn_on_volume() == 75
+
+
+async def test_set_max_turn_on_volume():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    await state.set_max_turn_on_volume(80)
+    client.request.assert_called_with(
+        1, CommandCodes.MAXIMUM_TURN_ON_VOLUME, bytes([80]), 0)
+
+
+# --- Maximum Volume (0x66) ---
+
+
+def test_get_max_volume_none():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    assert state.get_max_volume() is None
+
+
+def test_get_max_volume():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    state._state[CommandCodes.MAXIMUM_VOLUME] = bytes([99])
+    assert state.get_max_volume() == 99
+
+
+async def test_set_max_volume():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    await state.set_max_volume(85)
+    client.request.assert_called_with(
+        1, CommandCodes.MAXIMUM_VOLUME, bytes([85]), 0)
+
+
+# --- Maximum Streaming Volume (0x67) ---
+
+
+def test_get_max_streaming_volume_none():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    assert state.get_max_streaming_volume() is None
+
+
+def test_get_max_streaming_volume():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    state._state[CommandCodes.MAXIMUM_STREAMING_VOLUME] = bytes([60])
+    assert state.get_max_streaming_volume() == 60
+
+
+async def test_set_max_streaming_volume():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    await state.set_max_streaming_volume(45)
+    client.request.assert_called_with(
+        1, CommandCodes.MAXIMUM_STREAMING_VOLUME, bytes([45]), 0)
+
+
+# --- Dolby PLII/IIx Dimension (0x3C) ---
+
+
+def test_get_dolby_pliix_dimension_none():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    assert state.get_dolby_pliix_dimension() is None
+
+
+def test_get_dolby_pliix_dimension():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    state._state[CommandCodes.DOLBY_PLII_X_MUSIC_DIMENSION] = bytes([3])
+    assert state.get_dolby_pliix_dimension() == 3
+
+
+async def test_set_dolby_pliix_dimension():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    await state.set_dolby_pliix_dimension(5)
+    client.request.assert_called_with(
+        1, CommandCodes.DOLBY_PLII_X_MUSIC_DIMENSION, bytes([5]), 0)
+
+
+# --- Dolby PLII/IIx Centre Width (0x3D) ---
+
+
+def test_get_dolby_pliix_centre_width_none():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    assert state.get_dolby_pliix_centre_width() is None
+
+
+def test_get_dolby_pliix_centre_width():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    state._state[CommandCodes.DOLBY_PLII_X_MUSIC_CENTRE_WIDTH] = bytes([4])
+    assert state.get_dolby_pliix_centre_width() == 4
+
+
+async def test_set_dolby_pliix_centre_width():
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    await state.set_dolby_pliix_centre_width(6)
+    client.request.assert_called_with(
+        1, CommandCodes.DOLBY_PLII_X_MUSIC_CENTRE_WIDTH, bytes([6]), 0)
+
+
 async def test_update_skips_unsupported_commands():
     """update() should not request commands that are not supported by the device."""
     from arcam.fmj import CommandInvalidAtThisTime
