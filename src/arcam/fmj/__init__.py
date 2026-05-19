@@ -1497,7 +1497,7 @@ class ResponsePacket:
     ac = attr.ib(type=int)
     data = attr.ib(type=bytes)
 
-    def respons_to(self, request: Union["AmxDuetRequest", "CommandPacket"]):
+    def response_to(self, request: Union["AmxDuetRequest", "CommandPacket"]):
         if not isinstance(request, CommandPacket):
             return False
         return self.zn == request.zn and self.cc == request.cc
@@ -1589,7 +1589,7 @@ class AmxDuetResponse:
     def device_revision(self) -> str | None:
         return self.values.get("Device-Revision")
 
-    def respons_to(self, packet: AmxDuetRequest | CommandPacket):
+    def response_to(self, packet: AmxDuetRequest | CommandPacket):
         if not isinstance(packet, AmxDuetRequest):
             return False
         return True

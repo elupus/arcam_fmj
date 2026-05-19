@@ -127,7 +127,7 @@ class ClientBase:
         future: asyncio.Future[ResponsePacket | AmxDuetResponse] = asyncio.Future()
 
         def listen(response: ResponsePacket | AmxDuetResponse):
-            if response.respons_to(request):
+            if response.response_to(request):
                 if not (future.cancelled() or future.done()):
                     future.set_result(response)
 
