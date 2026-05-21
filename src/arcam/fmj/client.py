@@ -19,7 +19,7 @@ from . import (
     CommandCodes,
     CommandPacket,
     ConnectionFailed,
-    EnumFlags,
+    CommandFlags,
     NotConnectedException,
     ResponseException,
     ResponsePacket,
@@ -148,7 +148,7 @@ class ClientBase:
         if not self._writer:
             raise NotConnectedException()
 
-        if not (cc.flags & EnumFlags.ZONE_SUPPORT) and zn != 1:
+        if not (cc.flags & CommandFlags.ZONE_SUPPORT) and zn != 1:
             raise UnsupportedZone()
 
         writer = self._writer
@@ -161,10 +161,10 @@ class ClientBase:
         if not self._writer:
             raise NotConnectedException()
 
-        if not (cc.flags & EnumFlags.ZONE_SUPPORT) and zn != 1:
+        if not (cc.flags & CommandFlags.ZONE_SUPPORT) and zn != 1:
             raise UnsupportedZone()
 
-        if cc.flags & EnumFlags.SEND_ONLY:
+        if cc.flags & CommandFlags.SEND_ONLY:
             await self.send(zn, cc, data, priority)
             return
 

@@ -20,7 +20,7 @@ from . import (
     BluetoothAudioStatus,
     CommandCodes,
     CommandInvalidAtThisTime,
-    EnumFlags,
+    CommandFlags,
     CommandNotRecognised,
     CompressionMode,
     ParameterNotRecognised,
@@ -750,7 +750,7 @@ class State:
             track = ""
         return status, track
 
-    async def update(self, flags: EnumFlags = EnumFlags.FULL_UPDATE) -> None:
+    async def update(self, flags: CommandFlags = CommandFlags.FULL_UPDATE) -> None:
         priority = flags.priority
 
         async def _update(cc: CommandCodes):
