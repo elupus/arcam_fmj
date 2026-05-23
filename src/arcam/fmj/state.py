@@ -384,7 +384,7 @@ class State:
                 # assume we succeded until response come
                 # back.
                 self._state[CommandCodes.POWER] = bytes([0])
-                await self._client.send(
+                await self._client.request(
                     self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command
                 )
 
