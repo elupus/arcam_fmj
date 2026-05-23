@@ -4,32 +4,34 @@ import logging
 import sys
 from pprint import pprint
 
-from . import (
+from .codecs import (
+    AnswerCodes,
+    CompressionMode,
+    DecodeMode2CH,
+    DecodeModeMCH,
+    DolbyAudioMode,
+    ImaxEnhancedMode,
+    IncomingAudioConfig,
+    IncomingAudioFormat,
+    IncomingVideoAspectRatio,
+    IncomingVideoColorspace,
+    RoomEqMode,
+    SourceCodes,
+    VideoParameters,
+)
+from .commands import CommandCodes
+from .errors import CommandInvalidAtThisTime, CommandNotRecognised
+from .models import (
     APIVERSION_450_SERIES,
     APIVERSION_860_SERIES,
     APIVERSION_HDA_SERIES,
     ApiModel,
-    CommandCodes,
-    CommandInvalidAtThisTime,
-    CompressionMode,
-    DolbyAudioMode,
-    ImaxEnhancedMode,
-    RoomEqMode,
-    SourceCodes,
-    IncomingVideoAspectRatio,
-    IncomingVideoColorspace,
-    IncomingAudioFormat,
-    IncomingAudioConfig,
-    DecodeMode2CH,
-    DecodeModeMCH,
-    CommandNotRecognised,
-    _LOGGER,
-    VideoParameters,
-    ResponsePacket,
-    AnswerCodes,
-    RC5CODE_SOURCE,
+)
+from .packets import ResponsePacket
+from .rc5 import (
     RC5CODE_DECODE_MODE_2CH,
     RC5CODE_DECODE_MODE_MCH,
+    RC5CODE_SOURCE,
 )
 from .client import Client, ClientSerial, ClientContext
 from .server import Server, ServerContext

@@ -2,37 +2,37 @@ import pytest
 from unittest.mock import MagicMock
 from arcam.fmj.client import Client
 from arcam.fmj.state import State, _get_scaled_negative, _set_scaled
-from arcam.fmj import (
-    AmxDuetResponse,
+from arcam.fmj.codecs import (
     AnswerCodes,
-    ApiModel,
     BluetoothAudioStatus,
-    CommandCodes,
     CompressionMode,
+    DisplayBrightness,
     DolbyAudioMode,
+    HdmiOutput,
     ImaxEnhancedMode,
     IncomingAudioFormat,
     NetworkPlaybackStatus,
     NowPlayingEncoder,
     NowPlayingInfo,
-    DisplayBrightness,
-    HdmiOutput,
-    RC5CodeNavigation,
-    RC5CodePlayback,
-    RC5CodeToggle,
-    RC5CODE_NAVIGATION,
-    RC5CODE_PLAYBACK,
-    RC5CODE_TOGGLE,
+    RoomEqMode,
+    SAVE_RESTORE_CONFIRMATION,
+    SaveRestoreSubCommand,
+    VideoSelection,
+)
+from arcam.fmj.commands import CommandCodes, POWER_WRITE_SUPPORTED
+from arcam.fmj.errors import UnsupportedCommand
+from arcam.fmj.models import ApiModel
+from arcam.fmj.packets import AmxDuetResponse, ResponsePacket
+from arcam.fmj.rc5 import (
     RC5CODE_BASS,
     RC5CODE_DISPLAY_BRIGHTNESS,
     RC5CODE_HDMI_OUTPUT,
-    ResponsePacket,
-    RoomEqMode,
-    UnsupportedCommand,
-    VideoSelection,
-    POWER_WRITE_SUPPORTED,
-    SAVE_RESTORE_CONFIRMATION,
-    SaveRestoreSubCommand,
+    RC5CODE_NAVIGATION,
+    RC5CODE_PLAYBACK,
+    RC5CODE_TOGGLE,
+    RC5CodeNavigation,
+    RC5CodePlayback,
+    RC5CodeToggle,
 )
 
 TEST_PARAMS = [
@@ -1045,7 +1045,7 @@ async def test_setter_raises_for_runtime_blocked_command():
 
 async def test_update_skips_unsupported_commands():
     """update() should not request commands that are not supported by the device."""
-    from arcam.fmj import CommandInvalidAtThisTime
+    from arcam.fmj.errors import CommandInvalidAtThisTime
 
     client = MagicMock(spec=Client)
     client.connected = True
@@ -1066,7 +1066,7 @@ async def test_update_skips_unsupported_commands():
 
 async def test_update_records_command_not_recognised():
     """update() should record COMMAND_NOT_RECOGNISED in the runtime blocklist."""
-    from arcam.fmj import CommandNotRecognised
+    from arcam.fmj.errors import CommandNotRecognised
 
     client = MagicMock(spec=Client)
     client.connected = True

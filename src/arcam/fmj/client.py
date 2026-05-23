@@ -11,19 +11,20 @@ from collections.abc import Callable
 from copy import copy
 from serialx import open_serial_connection
 
-from . import (
-    AmxDuetRequest,
-    AmxDuetResponse,
-    AnswerCodes,
+from .codecs import AnswerCodes
+from .commands import CommandCodes, CommandFlags
+from .errors import (
     ArcamException,
-    CommandCodes,
-    CommandPacket,
     ConnectionFailed,
-    EnumFlags,
     NotConnectedException,
     ResponseException,
-    ResponsePacket,
     UnsupportedZone,
+)
+from .packets import (
+    AmxDuetRequest,
+    AmxDuetResponse,
+    CommandPacket,
+    ResponsePacket,
     read_response,
     write_packet,
 )
@@ -148,7 +149,7 @@ class ClientBase:
         if not self._writer:
             raise NotConnectedException()
 
-        if not (cc.flags & EnumFlags.ZONE_SUPPORT) and zn != 1:
+        if not (cc.flags & CommandFlags.ZONE_SUPPORT) and zn != 1:
             raise UnsupportedZone()
 
         writer = self._writer
@@ -161,10 +162,10 @@ class ClientBase:
         if not self._writer:
             raise NotConnectedException()
 
-        if not (cc.flags & EnumFlags.ZONE_SUPPORT) and zn != 1:
+        if not (cc.flags & CommandFlags.ZONE_SUPPORT) and zn != 1:
             raise UnsupportedZone()
 
-        if cc.flags & EnumFlags.SEND_ONLY:
+        if cc.flags & CommandFlags.SEND_ONLY:
             await self.send(zn, cc, data, priority)
             return
 

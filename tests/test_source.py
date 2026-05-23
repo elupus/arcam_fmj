@@ -5,13 +5,10 @@ from unittest.mock import MagicMock
 
 from arcam.fmj.client import Client
 from arcam.fmj.state import State
-from arcam.fmj import (
-    SourceCodes,
-    ApiModel,
-    AnswerCodes,
-    CommandCodes,
-    ResponsePacket,
-)
+from arcam.fmj.codecs import AnswerCodes, SourceCodes
+from arcam.fmj.commands import CommandCodes
+from arcam.fmj.models import ApiModel
+from arcam.fmj.packets import ResponsePacket
 
 
 @pytest.mark.parametrize(

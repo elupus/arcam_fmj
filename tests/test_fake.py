@@ -7,8 +7,8 @@ import pytest
 from datetime import timedelta
 from unittest.mock import ANY
 
-from arcam.fmj import (
-    CommandCodes,
+from arcam.fmj.commands import CommandCodes
+from arcam.fmj.errors import (
     CommandNotRecognised,
     ConnectionFailed,
     UnsupportedZone,

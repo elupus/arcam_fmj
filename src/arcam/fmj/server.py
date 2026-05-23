@@ -4,13 +4,12 @@ import asyncio
 import logging
 from collections.abc import Callable
 
-from . import (
+from .codecs import AnswerCodes
+from .errors import CommandNotRecognised, ResponseException
+from .packets import (
     AmxDuetRequest,
     AmxDuetResponse,
-    AnswerCodes,
-    CommandNotRecognised,
     CommandPacket,
-    ResponseException,
     ResponsePacket,
     read_command,
     write_packet,
