@@ -131,6 +131,7 @@ class CommandCodes(IntOrTypeEnum):
         obj.flags = flags
         return obj
 
+    # fmt: off
     # Name                            CC    Version     Flags
     # ====                            ==    =======     =====
 
@@ -242,3 +243,4 @@ class CommandCodes(IntOrTypeEnum):
     MAXIMUM_TURN_ON_VOLUME          = 0x65, _APP_SAFE
     MAXIMUM_VOLUME                  = 0x66, _APP_SAFE
     MAXIMUM_STREAMING_VOLUME        = 0x67, _APP_SAFE
+    # fmt: on
