@@ -5,26 +5,30 @@ from unittest.mock import MagicMock, call
 
 import pytest
 
-from arcam.fmj import (
-    AmxDuetResponse,
+from arcam.fmj.codecs import (
     AnswerCodes,
-    CommandCodes,
-    CommandInvalidAtThisTime,
-    CommandNotRecognised,
-    CommandPacket,
-    ConnectionFailed,
     IncomingVideoAspectRatio,
     IncomingVideoColorspace,
+    VideoParameters,
+)
+from arcam.fmj.commands import CommandCodes
+from arcam.fmj.errors import (
+    CommandInvalidAtThisTime,
+    CommandNotRecognised,
+    ConnectionFailed,
     InvalidDataLength,
     InvalidPacket,
     InvalidZoneException,
     ParameterNotRecognised,
     ResponseException,
+)
+from arcam.fmj.models import IntOrTypeEnum
+from arcam.fmj.packets import (
+    AmxDuetResponse,
+    CommandPacket,
     ResponsePacket,
-    VideoParameters,
     _read_response,
     write_packet,
-    IntOrTypeEnum,
 )
 
 

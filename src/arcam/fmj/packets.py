@@ -14,13 +14,13 @@ from typing import Union
 
 import attr
 
-from ._errors import (
+from .errors import (
     ConnectionFailed,
     InvalidPacket,
     NullPacket,
 )
-from ._codecs import AnswerCodes
-from ._commands import CommandCodes
+from .codecs import AnswerCodes
+from .commands import CommandCodes
 
 _LOGGER = logging.getLogger(__name__)
 _WRITE_TIMEOUT = 3

@@ -11,19 +11,20 @@ from collections.abc import Callable
 from copy import copy
 from serialx import open_serial_connection
 
-from . import (
-    AmxDuetRequest,
-    AmxDuetResponse,
-    AnswerCodes,
+from .codecs import AnswerCodes
+from .commands import CommandCodes, CommandFlags
+from .errors import (
     ArcamException,
-    CommandCodes,
-    CommandPacket,
     ConnectionFailed,
-    CommandFlags,
     NotConnectedException,
     ResponseException,
-    ResponsePacket,
     UnsupportedZone,
+)
+from .packets import (
+    AmxDuetRequest,
+    AmxDuetResponse,
+    CommandPacket,
+    ResponsePacket,
     read_response,
     write_packet,
 )

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import enum
 
-from ._models import (
+from .models import (
     APIVERSION_450_SERIES,
     APIVERSION_AMP_DIAGNOSTICS_SERIES,
     APIVERSION_APP_SAFETY_SERIES,

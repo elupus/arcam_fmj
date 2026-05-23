@@ -15,14 +15,14 @@ from __future__ import annotations
 
 import enum
 
-from ._codecs import (
+from .codecs import (
     DecodeMode2CH,
     DecodeModeMCH,
     DisplayBrightness,
     HdmiOutput,
     SourceCodes,
 )
-from ._models import ApiModel
+from .models import ApiModel
 
 # --- Parameter enums ---
 # Keys for the RC5CODE_* lookup tables below.  Used by State's send_*

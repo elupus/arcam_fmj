@@ -3,10 +3,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ._codecs import AnswerCodes
+from .codecs import AnswerCodes
 
 if TYPE_CHECKING:
-    from ._packets import ResponsePacket
+    from .packets import ResponsePacket
 
 class ArcamException(Exception):
     pass

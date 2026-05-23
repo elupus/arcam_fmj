@@ -11,7 +11,7 @@ from typing import Any, Union
 
 import attr
 
-from ._models import (
+from .models import (
     APIVERSION_AURO_SERIES,
     APIVERSION_AVR_860_ONWARD_SERIES,
     APIVERSION_DOLBY_PL_SERIES,
