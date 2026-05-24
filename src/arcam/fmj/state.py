@@ -564,6 +564,14 @@ class State:
                     self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command
                 )
 
+    # SOFTWARE_VERSION (0x04)
+    def get_software_version(self) -> str | None:
+        """Return the RS232 protocol version as ``"major.minor"``."""
+        value = self._state.get(CommandCodes.SOFTWARE_VERSION)
+        if value is None or len(value) < 3:
+            return None
+        return f"{value[1]}.{value[2]}"
+
     # SAVE_RESTORE_COPY_OF_SETTINGS (0x06)
     async def save_settings(self, pin: tuple[int, int, int, int] = (1, 2, 3, 4)) -> None:
         """Save a secure backup of device settings.
