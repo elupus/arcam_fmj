@@ -47,62 +47,12 @@ class ClientBase:
         self._request_lock = PriorityLock()
         self._timestamp = datetime.now()
 
-    @contextmanager
-    def listen(self, listener: Callable):
-        self._listen.add(listener)
-        try:
-            yield self
-        finally:
-            self._listen.remove(listener)
+    @property
+    def peer(self) -> str:
+        raise NotImplementedError()
 
-    async def _process_heartbeat(self):
-        while True:
-            delay = self._timestamp + _HEARTBEAT_INTERVAL - datetime.now()
-            if delay > timedelta():
-                await asyncio.sleep(delay.total_seconds())
-            else:
-                _LOGGER.debug("Sending ping")
-                try:
-                    await self.request(1, CommandCodes.POWER, bytes([0xF0]))
-                except (ArcamException, TimeoutError):
-                    _LOGGER.debug("Heartbeat failed")
-                    return
-                self._timestamp = datetime.now()
-
-    async def _process_data(self, reader: StreamReader):
-        while True:
-            try:
-                async with asyncio.timeout(_HEARTBEAT_TIMEOUT.total_seconds()):
-                    packet = await read_response(reader)
-            except TimeoutError as exception:
-                _LOGGER.debug("Missed all pings")
-                raise ConnectionFailed("Missed all pings") from exception
-
-            if packet is None:
-                _LOGGER.debug("Server disconnected")
-                raise ConnectionFailed("Server disconnected")
-
-            _LOGGER.debug("Packet received: %s", packet)
-            for listener in self._listen:
-                listener(packet)
-
-    async def process(self) -> None:
-        assert self._writer, "Writer missing"
-        assert self._reader, "Reader missing"
-
-        reader = self._reader
-        writer = self._writer
-
-        try:
-            async with asyncio.TaskGroup() as group:
-                group.create_task(self._process_heartbeat())
-                group.create_task(self._process_data(reader))
-        except BaseExceptionGroup as exc:
-            # convert to a non group exception to keep compatibility
-            raise copy(exc.exceptions[0]).with_traceback(exc.exceptions[0].__traceback__)
-        finally:
-            _LOGGER.debug("Process task shutting down")
-            writer.close()
+    async def _open(self) -> tuple[StreamReader, StreamWriter]:
+        raise NotImplementedError()
 
     @property
     def connected(self) -> bool:
@@ -111,6 +61,34 @@ class ClientBase:
     @property
     def started(self) -> bool:
         return self._writer is not None
+
+    @contextmanager
+    def listen(self, listener: Callable):
+        self._listen.add(listener)
+        try:
+            yield self
+        finally:
+            self._listen.remove(listener)
+
+    async def start(self) -> None:
+        if self._writer:
+            raise ArcamException("Already started")
+
+        _LOGGER.debug("Connecting to %s", self.peer)
+        self._reader, self._writer = await self._open()
+        _LOGGER.info("Connected to %s", self.peer)
+
+    async def stop(self) -> None:
+        if writer := self._writer:
+            try:
+                _LOGGER.info("Disconnecting from %s", self.peer)
+                writer.close()
+                await writer.wait_closed()
+            except (ConnectionError, OSError):
+                pass
+            finally:
+                self._writer = None
+                self._reader = None
 
     @overload
     async def request_raw(self, request: CommandPacket, priority: int = 0) -> ResponsePacket: ...
@@ -159,32 +137,54 @@ class ClientBase:
 
         raise ResponseException.from_response(response)
 
-    @property
-    def peer(self) -> str:
-        raise NotImplementedError()  
-
-    async def _open(self) -> tuple[StreamReader, StreamWriter]:
-        raise NotImplementedError()    
-
-    async def start(self) -> None:
-        if self._writer:
-            raise ArcamException("Already started")
-
-        _LOGGER.debug("Connecting to %s", self.peer)
-        self._reader, self._writer = await self._open()
-        _LOGGER.info("Connected to %s", self.peer)
-
-    async def stop(self) -> None:
-        if writer := self._writer:
+    async def _process_data(self, reader: StreamReader):
+        while True:
             try:
-                _LOGGER.info("Disconnecting from %s", self.peer)
-                writer.close()
-                await writer.wait_closed()
-            except (ConnectionError, OSError):
-                pass
-            finally:
-                self._writer = None
-                self._reader = None
+                async with asyncio.timeout(_HEARTBEAT_TIMEOUT.total_seconds()):
+                    packet = await read_response(reader)
+            except TimeoutError as exception:
+                _LOGGER.debug("Missed all pings")
+                raise ConnectionFailed("Missed all pings") from exception
+
+            if packet is None:
+                _LOGGER.debug("Server disconnected")
+                raise ConnectionFailed("Server disconnected")
+
+            _LOGGER.debug("Packet received: %s", packet)
+            for listener in self._listen:
+                listener(packet)
+
+    async def _process_heartbeat(self):
+        while True:
+            delay = self._timestamp + _HEARTBEAT_INTERVAL - datetime.now()
+            if delay > timedelta():
+                await asyncio.sleep(delay.total_seconds())
+            else:
+                _LOGGER.debug("Sending ping")
+                try:
+                    await self.request(1, CommandCodes.POWER, bytes([0xF0]))
+                except (ArcamException, TimeoutError):
+                    _LOGGER.debug("Heartbeat failed")
+                    return
+                self._timestamp = datetime.now()
+
+    async def process(self) -> None:
+        assert self._writer, "Writer missing"
+        assert self._reader, "Reader missing"
+
+        reader = self._reader
+        writer = self._writer
+
+        try:
+            async with asyncio.TaskGroup() as group:
+                group.create_task(self._process_heartbeat())
+                group.create_task(self._process_data(reader))
+        except BaseExceptionGroup as exc:
+            # convert to a non group exception to keep compatibility
+            raise copy(exc.exceptions[0]).with_traceback(exc.exceptions[0].__traceback__)
+        finally:
+            _LOGGER.debug("Process task shutting down")
+            writer.close()
 
 class Client(ClientBase):
     def __init__(self, host: str, port: int) -> None:
