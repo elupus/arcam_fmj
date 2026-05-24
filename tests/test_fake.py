@@ -60,7 +60,7 @@ async def client(request):
 async def speedy_client(mocker):
     mocker.patch("arcam.fmj.client._HEARTBEAT_INTERVAL", new=timedelta(seconds=1))
     mocker.patch("arcam.fmj.client._HEARTBEAT_TIMEOUT", new=timedelta(seconds=2))
-    mocker.patch("arcam.fmj.client._REQUEST_TIMEOUT", new=timedelta(seconds=0.5))
+    mocker.patch("arcam.fmj.client._REQUEST_TIMEOUT", new=timedelta(milliseconds=250))
 
 
 async def test_power(server, client):
@@ -122,8 +122,6 @@ async def test_heartbeat(speedy_client, server, client):
 
 
 async def test_cancellation(silent_server):
-    from arcam.fmj.client import _HEARTBEAT_TIMEOUT
-
     e = asyncio.Event()
     c = Client("localhost", 8888)
 
