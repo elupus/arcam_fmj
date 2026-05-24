@@ -36,21 +36,11 @@ from .models import (
 )
 
 class CommandFlags(enum.IntFlag):
-    """Behavioural protocol traits of a command code.
-
-    ``priority`` controls update-loop ordering: higher-priority commands
-    are fetched first.
-    """
-
-    def __new__(cls, value, priority=0):
-        obj = int.__new__(cls, value)
-        obj._value_ = value
-        obj.priority = priority
-        return obj
+    """Behavioural protocol traits of a command code."""
 
     ZONE_SUPPORT = enum.auto()
-    POLL_REQUIRED = (enum.auto(), 20)
-    FULL_UPDATE = (enum.auto(), 10)
+    UPDATE = enum.auto()        # Fetched by the State update loop.
+    NOT_PUSHED = enum.auto()    # Device does not send unsolicited updates
 
 #: Models that accept a direct CC write for power on/off.
 POWER_WRITE_SUPPORTED = {
@@ -74,8 +64,8 @@ VOLUME_STEP_SUPPORTED = {
 
 # Short aliases for the table below.
 _Z = CommandFlags.ZONE_SUPPORT
-_P = CommandFlags.POLL_REQUIRED
-_F = CommandFlags.FULL_UPDATE
+_U = CommandFlags.UPDATE
+_NP = CommandFlags.NOT_PUSHED
 
 _AVR = APIVERSION_AVR_SERIES
 _AVR_SA = APIVERSION_AVR_AND_SA_SERIES
@@ -134,40 +124,40 @@ class CommandCodes(IntOrTypeEnum):
     # ====                            ==    =======     =====
 
     # --- System ---
-    POWER                           = 0x00, None,       _Z | _F
+    POWER                           = 0x00, None,       _Z | _U
     DISPLAY_BRIGHTNESS              = 0x01, _AVR_SA_ST
-    HEADPHONES                      = 0x02, _AVR_SA,    _F
+    HEADPHONES                      = 0x02, _AVR_SA,    _U
     FMGENRE                         = 0x03, _AVR,       _Z
     SOFTWARE_VERSION                = 0x04, None
     RESTORE_FACTORY_DEFAULT         = 0x05, None
     SAVE_RESTORE_COPY_OF_SETTINGS   = 0x06, _AVR
     SIMULATE_RC5_IR_COMMAND         = 0x08, _AVR_SA_ST, _Z
-    DISPLAY_INFORMATION_TYPE        = 0x09, _AVR,       _Z | _F
+    DISPLAY_INFORMATION_TYPE        = 0x09, _AVR,       _Z | _U
 
     # --- Input ---
-    VIDEO_SELECTION                 = 0x0A, _PRE_HDA,   _F
+    VIDEO_SELECTION                 = 0x0A, _PRE_HDA,   _U
     SELECT_ANALOG_DIGITAL           = 0x0B, _AVR,       _Z
-    IMAX_ENHANCED                   = 0x0C, _IMAX,      _F          # was "Video input type" in 450 (SH256E); not AVR5 (SH289E)
+    IMAX_ENHANCED                   = 0x0C, _IMAX,      _U          # was "Video input type" in 450 (SH256E); not AVR5 (SH289E)
 
     # --- Output ---
-    VOLUME                          = 0x0D, _AVR_SA_ST, _Z | _F
-    MUTE                            = 0x0E, None,       _Z | _F
+    VOLUME                          = 0x0D, _AVR_SA_ST, _Z | _U
+    MUTE                            = 0x0E, None,       _Z | _U
     DIRECT_MODE_STATUS              = 0x0F, _DIRECT
-    DECODE_MODE_STATUS_2CH          = 0x10, _AVR,       _F
-    DECODE_MODE_STATUS_MCH          = 0x11, _AVR,       _F
-    RDS_INFORMATION                 = 0x12, _AVR,       _Z | _F
+    DECODE_MODE_STATUS_2CH          = 0x10, _AVR,       _U
+    DECODE_MODE_STATUS_MCH          = 0x11, _AVR,       _U
+    RDS_INFORMATION                 = 0x12, _AVR,       _Z | _U
     VIDEO_OUTPUT_RESOLUTION         = 0x13, _AVR
 
     # --- Menu / Tuner / Source ---
-    MENU                            = 0x14, _AVR,       _F
-    TUNER_PRESET                    = 0x15, _AVR,       _Z | _F
+    MENU                            = 0x14, _AVR,       _U
+    TUNER_PRESET                    = 0x15, _AVR,       _Z | _U
     TUNE                            = 0x16, _AVR,       _Z
-    DAB_STATION                     = 0x18, _AVR,       _Z | _F
+    DAB_STATION                     = 0x18, _AVR,       _Z | _U
     DAB_PROGRAM_TYPE_CATEGORY       = 0x19, _AVR,       _Z
-    DLS_PDT_INFO                    = 0x1A, _AVR,       _Z | _F
-    PRESET_DETAIL                   = 0x1B, _AVR,       _Z | _F
-    NETWORK_PLAYBACK_STATUS         = 0x1C, _NET_PLAY,  _P | _F
-    CURRENT_SOURCE                  = 0x1D, _AVR_SA_ST, _Z | _F
+    DLS_PDT_INFO                    = 0x1A, _AVR,       _Z | _U
+    PRESET_DETAIL                   = 0x1B, _AVR,       _Z | _U
+    NETWORK_PLAYBACK_STATUS         = 0x1C, _NET_PLAY,  _U | _NP
+    CURRENT_SOURCE                  = 0x1D, _AVR_SA_ST, _Z | _U
     HEADPHONES_OVERRIDE             = 0x1F, _AVR_SA,    _Z
 
     # --- Extended (2.0) ---
@@ -188,28 +178,28 @@ class CommandCodes(IntOrTypeEnum):
     NETWORK_MENU_INFO               = 0x30, _NET_MENU
     BLUETOOTH_MENU_INFO             = 0x32, _HDA
     ENGINEERING_MENU_INFO           = 0x33, _HDA
-    ROOM_EQ_NAMES                   = 0x34, _ROOM_NAM,  _F
+    ROOM_EQ_NAMES                   = 0x34, _ROOM_NAM,  _U
 
     # --- Setup / EQ ---
-    TREBLE_EQUALIZATION             = 0x35, _AVR,       _Z | _F
-    BASS_EQUALIZATION               = 0x36, _AVR,       _Z | _F
-    ROOM_EQUALIZATION               = 0x37, _ROOM_EQ,   _Z | _F
-    DOLBY_AUDIO                     = 0x38, _AVR,       _Z | _F     # was "Dolby Volume" in 450/860 (SH256E/SH274E)
+    TREBLE_EQUALIZATION             = 0x35, _AVR,       _Z | _U
+    BASS_EQUALIZATION               = 0x36, _AVR,       _Z | _U
+    ROOM_EQUALIZATION               = 0x37, _ROOM_EQ,   _Z | _U
+    DOLBY_AUDIO                     = 0x38, _AVR,       _Z | _U     # was "Dolby Volume" in 450/860 (SH256E/SH274E)
     DOLBY_LEVELER                   = 0x39, _PRE_HDA,   _Z          # removed from HDA (SH289E issue C.0)
     DOLBY_VOLUME_CALIBRATION_OFFSET = 0x3A, _PRE_HDA,   _Z          # removed from HDA (SH289E issue C.0)
-    BALANCE                         = 0x3B, _AVR_SA,    _Z | _F
+    BALANCE                         = 0x3B, _AVR_SA,    _Z | _U
     DOLBY_PLII_X_MUSIC_DIMENSION    = 0x3C, _450
     DOLBY_PLII_X_MUSIC_CENTRE_WIDTH = 0x3D, _450
     DOLBY_PLII_X_MUSIC_PANORAMA     = 0x3E, _450
-    SUBWOOFER_TRIM                  = 0x3F, _AVR,       _Z | _F
-    LIPSYNC_DELAY                   = 0x40, _AVR,       _Z | _F
-    COMPRESSION                     = 0x41, _AVR,       _Z | _F
+    SUBWOOFER_TRIM                  = 0x3F, _AVR,       _Z | _U
+    LIPSYNC_DELAY                   = 0x40, _AVR,       _Z | _U
+    COMPRESSION                     = 0x41, _AVR,       _Z | _U
 
     # --- Incoming Signal / Video ---
-    INCOMING_VIDEO_PARAMETERS       = 0x42, _AVR,       _F
-    INCOMING_AUDIO_FORMAT           = 0x43, _AVR,       _F
-    INCOMING_AUDIO_SAMPLE_RATE      = 0x44, _AVR_SA_ST, _F
-    SUB_STEREO_TRIM                 = 0x45, _AVR,       _F
+    INCOMING_VIDEO_PARAMETERS       = 0x42, _AVR,       _U
+    INCOMING_AUDIO_FORMAT           = 0x43, _AVR,       _U
+    INCOMING_AUDIO_SAMPLE_RATE      = 0x44, _AVR_SA_ST, _U
+    SUB_STEREO_TRIM                 = 0x45, _AVR,       _U
     VIDEO_BRIGHTNESS                = 0x46, _450
     VIDEO_CONTRAST                  = 0x47, _450
     VIDEO_COLOUR                    = 0x48, _450
@@ -219,7 +209,7 @@ class CommandCodes(IntOrTypeEnum):
     VIDEO_MPEG_NOISE_REDUCTION      = 0x4D, _450
     ZONE_1_OSD_ON_OFF               = 0x4E, _AVR
     VIDEO_OUTPUT_SWITCHING          = 0x4F, _AVR
-    BLUETOOTH_STATUS                = 0x50, _HDA,       _P | _F     # was "Output Frame Rate" in 450 (SH256E)
+    BLUETOOTH_STATUS                = 0x50, _HDA,       _U | _NP     # was "Output Frame Rate" in 450 (SH256E)
 
     # --- Diagnostics / Amp Control ---
     DC_OFFSET                       = 0x51, _THERM
@@ -237,7 +227,7 @@ class CommandCodes(IntOrTypeEnum):
     SYSTEM_STATUS                   = 0x5D, _AMP_DIAG
     SYSTEM_MODEL                    = 0x5E, _AMP_DIAG
     DAC_FILTER                      = 0x61, _DAC_FILT                # clashes with AMPLIFIER_MODE on PA240
-    NOW_PLAYING_INFO                = 0x64, _NOW_PLAY,  _Z | _P | _F
+    NOW_PLAYING_INFO                = 0x64, _NOW_PLAY,  _Z | _U | _NP
     MAXIMUM_TURN_ON_VOLUME          = 0x65, _APP_SAFE
     MAXIMUM_VOLUME                  = 0x66, _APP_SAFE
     MAXIMUM_STREAMING_VOLUME        = 0x67, _APP_SAFE

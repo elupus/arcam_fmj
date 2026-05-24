@@ -1,4 +1,7 @@
+import asyncio
 import aiohttp
+from collections.abc import Coroutine
+from copy import copy
 import functools
 import logging
 import re
@@ -6,6 +9,16 @@ from defusedxml import ElementTree
 from typing import Optional, Any
 
 _LOGGER = logging.getLogger(__name__)
+
+
+async def run_tasks(*tasks: Coroutine) -> None:
+    """Run coroutines in a TaskGroup, unwrapping BaseExceptionGroup on failure."""
+    try:
+        async with asyncio.TaskGroup() as group:
+            for task in tasks:
+                group.create_task(task)
+    except BaseExceptionGroup as exc:
+        raise copy(exc.exceptions[0]).with_traceback(exc.exceptions[0].__traceback__)
 
 
 def async_retry(attempts=2, allowed_exceptions=()):

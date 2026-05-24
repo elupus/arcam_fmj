@@ -5,7 +5,6 @@ from asyncio.streams import StreamReader, StreamWriter
 import logging
 from collections.abc import Callable
 from contextlib import contextmanager
-from copy import copy
 from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import overload
@@ -29,7 +28,7 @@ from .packets import (
     read_response,
     write_packet,
 )
-from .utils import async_retry
+from .utils import async_retry, run_tasks
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -37,10 +36,13 @@ _REQUEST_TIMEOUT = timedelta(milliseconds=500)
 _REQUEST_RETRY_COUNT = 2
 _REQUEST_SETTLE_TIME = timedelta(milliseconds=5)
 
+_UPDATE_IDLE_INTERVAL = timedelta(milliseconds=200)
+
 _HEARTBEAT_INTERVAL = timedelta(seconds=5)
 _HEARTBEAT_TIMEOUT = _HEARTBEAT_INTERVAL + _HEARTBEAT_INTERVAL
 
 _USER_PRIORITY = 0
+_UPDATE_PRIORITY = 10
 _HEARTBEAT_PRIORITY = 100
 
 
@@ -57,6 +59,7 @@ class ClientBase:
         self._reader: StreamReader | None = None
         self._writer: StreamWriter | None = None
         self._listen: set[Callable] = set()
+        self._update_providers: set[Callable] = set()
         self._queue: asyncio.PriorityQueue[_QueueItem] | None = None
         self._seq: int = 0
 
@@ -82,6 +85,12 @@ class ClientBase:
             yield self
         finally:
             self._listen.remove(listener)
+
+    def register_update_provider(self, provider: Callable) -> None:
+        self._update_providers.add(provider)
+
+    def unregister_update_provider(self, provider: Callable) -> None:
+        self._update_providers.discard(provider)
 
     async def start(self) -> None:
         if self._writer:
@@ -204,6 +213,16 @@ class ClientBase:
                         NotConnectedException("Connection closed")
                     )
 
+    async def _process_updates(self) -> None:
+        while True:
+            tasks: list = []
+            for provider in self._update_providers:
+                tasks.extend(await provider())
+            if not tasks:
+                await asyncio.sleep(_UPDATE_IDLE_INTERVAL.total_seconds())
+                continue
+            await run_tasks(*tasks)
+
     async def _process_heartbeat(self):
         while True:
             await asyncio.sleep(_HEARTBEAT_INTERVAL.total_seconds())
@@ -218,13 +237,12 @@ class ClientBase:
         assert self._reader, "Reader missing"
 
         try:
-            async with asyncio.TaskGroup() as group:
-                group.create_task(self._process_receive(self._reader))
-                group.create_task(self._process_send(self._writer))
-                group.create_task(self._process_heartbeat())
-        except BaseExceptionGroup as exc:
-            # convert to a non group exception to keep compatibility
-            raise copy(exc.exceptions[0]).with_traceback(exc.exceptions[0].__traceback__)
+            await run_tasks(
+                self._process_receive(self._reader),
+                self._process_send(self._writer),
+                self._process_updates(),
+                self._process_heartbeat(),
+            )
         finally:
             _LOGGER.debug("Process task shutting down")
             self._writer.close()
