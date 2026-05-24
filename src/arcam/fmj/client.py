@@ -144,19 +144,6 @@ class ClientBase:
                             return await asyncio.shield(future)
                     await stack.aclose()
                     return await future
-                    
-    async def send(self, zn: int, cc: CommandCodes, data: bytes, priority: int = 0) -> None:
-        if not self._writer:
-            raise NotConnectedException()
-
-        if not (cc.flags & CommandFlags.ZONE_SUPPORT) and zn != 1:
-            raise UnsupportedZone()
-
-        writer = self._writer
-        request = CommandPacket(zn, cc, data)
-        async with self._request_lock(priority):
-            await write_packet(writer, request)
-            await asyncio.sleep(_REQUEST_THROTTLE)
 
     async def request(self, zn: int, cc: CommandCodes, data: bytes, priority: int = 0):
         if not self._writer:
@@ -164,10 +151,6 @@ class ClientBase:
 
         if not (cc.flags & CommandFlags.ZONE_SUPPORT) and zn != 1:
             raise UnsupportedZone()
-
-        if cc.flags & CommandFlags.SEND_ONLY:
-            await self.send(zn, cc, data, priority)
-            return
 
         response = await self.request_raw(CommandPacket(zn, cc, data), priority)
 

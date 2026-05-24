@@ -49,7 +49,6 @@ class CommandFlags(enum.IntFlag):
         return obj
 
     ZONE_SUPPORT = enum.auto()
-    SEND_ONLY = enum.auto()
     POLL_REQUIRED = (enum.auto(), 20)
     FULL_UPDATE = (enum.auto(), 10)
 
@@ -75,7 +74,6 @@ VOLUME_STEP_SUPPORTED = {
 
 # Short aliases for the table below.
 _Z = CommandFlags.ZONE_SUPPORT
-_S = CommandFlags.SEND_ONLY
 _P = CommandFlags.POLL_REQUIRED
 _F = CommandFlags.FULL_UPDATE
 
@@ -143,7 +141,7 @@ class CommandCodes(IntOrTypeEnum):
     SOFTWARE_VERSION                = 0x04, None
     RESTORE_FACTORY_DEFAULT         = 0x05, None
     SAVE_RESTORE_COPY_OF_SETTINGS   = 0x06, _AVR
-    SIMULATE_RC5_IR_COMMAND         = 0x08, _AVR_SA_ST, _Z | _S
+    SIMULATE_RC5_IR_COMMAND         = 0x08, _AVR_SA_ST, _Z
     DISPLAY_INFORMATION_TYPE        = 0x09, _AVR,       _Z | _F
 
     # --- Input ---
