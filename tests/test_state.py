@@ -356,24 +356,8 @@ def test_get_display_info_type_none():
 def test_get_display_info_type():
     client = MagicMock(spec=Client)
     state = State(client, 1)
-    state._state[CommandCodes.DISPLAY_INFORMATION_TYPE] = bytes([0x02])
+    state._state[CommandCodes.DISPLAY_INFO_TYPE] = bytes([0x02])
     assert state.get_display_info_type() == 2
-
-
-async def test_set_display_info_type():
-    client = MagicMock(spec=Client)
-    state = State(client, 1)
-    await state.set_display_info_type(0x03)
-    client.request.assert_called_with(
-        1, CommandCodes.DISPLAY_INFORMATION_TYPE, bytes([0x03]), 0)
-
-
-async def test_set_display_info_type_cycle():
-    client = MagicMock(spec=Client)
-    state = State(client, 1)
-    await state.set_display_info_type(0xE0)
-    client.request.assert_called_with(
-        1, CommandCodes.DISPLAY_INFORMATION_TYPE, bytes([0xE0]), 0)
 
 
 # --- Lipsync Delay (0x40) ---
@@ -1241,7 +1225,7 @@ def test_get_dab_station_returns_value_when_source_matches():
 
 def test_get_dls_pdt_gated_by_source():
     state = _state_at_source(SourceCodes.CD)
-    state._state[CommandCodes.DLS_PDT_INFO] = b"Now Playing"
+    state._state[CommandCodes.DLS_PDT] = b"Now Playing"
     assert state.get_dls_pdt() is None
 
 

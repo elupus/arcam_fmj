@@ -1,4 +1,4 @@
-"""Zone state"""
+"""Manages cached zone state and translates high-level operations into protocol requests."""
 
 import asyncio
 import logging
@@ -8,8 +8,10 @@ import attr
 
 from .codecs import (
     AnswerCodes,
+    AutoShutdown,
     BluetoothAudioStatus,
     CompressionMode,
+    DacFilter,
     DecodeMode2CH,
     DecodeModeMCH,
     DisplayBrightness,
@@ -28,8 +30,11 @@ from .codecs import (
     SAVE_RESTORE_CONFIRMATION,
     SaveRestoreSubCommand,
     SourceCodes,
+    VideoFilmMode,
+    VideoNoiseReduction,
     VideoParameters,
     VideoSelection,
+    ZoneOsd,
 )
 from .commands import (
     CommandCodes,
@@ -87,37 +92,161 @@ from .rc5 import (
     RC5CodePlayback,
     RC5CodeToggle,
 )
+from .schemas import IncDecRc5, Rc5Fallback
+from .schemas import _get_scaled_negative, _set_scaled  # re-exported for tests
 from .client import Client, UpdateTask, _UPDATE_PRIORITY
 from .utils import run_tasks, wait_any
+
+
+def _schema_types(schema) -> tuple[str | None, str | None]:
+    """Return ``(value_type_name, return_type_name)`` for a schema."""
+    ret_name = getattr(schema, "type_name", None)
+    inner = schema.inner if isinstance(schema, Rc5Fallback) else schema
+    val_name = ret_name if hasattr(inner, "encode") else None
+    return val_name, ret_name
+
+
+def add_accessors(cls: type) -> type:
+    """Install auto-generated get/set/inc/dec methods from ``CommandCodes`` metadata.
+
+    Method names are derived from ``cc.name.lower()``.  Manual methods
+    already on the class win -- the decorator never replaces an existing
+    attribute.  After installing methods, it collects the list of sync,
+    no-arg getters into ``_to_dict_getters`` for :meth:`State.to_dict`.
+    """
+    for cc in CommandCodes:
+        schema = cc.schema
+        if schema is None:
+            continue
+        stem = cc.name.lower()
+
+        getter_name = f"get_{stem}"
+        if (
+            getter_name not in cls.__dict__
+            and not (cc.flags & CommandFlags.WRITE_ONLY)
+            and hasattr(schema, "decode")
+        ):
+            setattr(cls, getter_name, _make_getter(cc, schema))
+
+        setter_name = f"set_{stem}"
+        if setter_name not in cls.__dict__:
+            if isinstance(schema, Rc5Fallback):
+                setattr(cls, setter_name, _make_rc5_fallback_setter(cc, schema))
+            elif hasattr(schema, "encode") and not (cc.flags & CommandFlags.READ_ONLY):
+                setattr(cls, setter_name, _make_setter(cc, schema))
+
+        if schema.inc_dec is not None:
+            inc_name = f"inc_{stem}"
+            if inc_name not in cls.__dict__:
+                setattr(cls, inc_name, _make_inc_dec(cc, schema.inc_dec, increment=True))
+            dec_name = f"dec_{stem}"
+            if dec_name not in cls.__dict__:
+                setattr(cls, dec_name, _make_inc_dec(cc, schema.inc_dec, increment=False))
+
+    getters = []
+    for name in sorted(cls.__dict__):
+        if not name.startswith("get_"):
+            continue
+        method = cls.__dict__[name]
+        if isinstance(method, property) or not callable(method):
+            continue
+        if asyncio.iscoroutinefunction(method):
+            continue
+        if method.__code__.co_argcount != 1:
+            continue
+        getters.append(name)
+    cls._to_dict_getters = tuple(getters)
+
+    return cls
+
+
+def _make_getter(cc, schema):
+    """Create a sync getter that decodes ``_state[cc]``."""
+    _, ret_name = _schema_types(schema)
+
+    def getter(self):
+        if not self._is_command_supported_on_source(cc):
+            return None
+        data = self._state.get(cc)
+        if data is None:
+            return None
+        return schema.decode(data)
+
+    getter.__name__ = f"get_{cc.name.lower()}"
+    getter.__qualname__ = f"State.{getter.__name__}"
+    if ret_name:
+        getter.__annotations__ = {"return": f"{ret_name} | None"}
+    return getter
+
+
+def _make_setter(cc, schema):
+    """Create an async setter that encodes and sends a direct CC write."""
+    val_name, _ = _schema_types(schema)
+
+    async def setter(self, value):
+        if not self._is_command_supported_on_source(cc):
+            return
+        await self._request(self._zn, cc, schema.encode(value))
+
+    setter.__name__ = f"set_{cc.name.lower()}"
+    setter.__qualname__ = f"State.{setter.__name__}"
+    if val_name:
+        setter.__annotations__ = {"value": val_name, "return": None}
+    return setter
+
+
+def _make_rc5_fallback_setter(cc, schema: Rc5Fallback):
+    """Create an async setter that uses direct CC write when supported, RC5 otherwise."""
+    val_name, _ = _schema_types(schema)
+
+    async def setter(self, value):
+        if not self._is_command_supported_on_source(cc):
+            return
+        if self._api_model in schema.direct_set_supported:
+            await self._request(self._zn, cc, schema.inner.encode(value))
+        else:
+            await self._send_rc5(schema.rc5_table, value)
+
+    setter.__name__ = f"set_{cc.name.lower()}"
+    setter.__qualname__ = f"State.{setter.__name__}"
+    if val_name:
+        setter.__annotations__ = {"value": val_name, "return": None}
+    return setter
+
+
+def _make_inc_dec(cc, schema: IncDecRc5, increment: bool):
+    """Create an async increment or decrement stepper."""
+    direct_data = schema.inc_data if increment else schema.dec_data
+
+    async def stepper(self):
+        if not self._is_command_supported_on_source(cc):
+            return
+        if self._api_model in schema.step_via_cc_supported:
+            await self._request(self._zn, cc, direct_data)
+        else:
+            await self._send_rc5(schema.rc5_table, increment)
+
+    prefix = "inc" if increment else "dec"
+    stepper.__name__ = f"{prefix}_{cc.name.lower()}"
+    stepper.__qualname__ = f"State.{stepper.__name__}"
+    stepper.__annotations__ = {"return": None}
+    return stepper
+
 
 _LOGGER = logging.getLogger(__name__)
 _T = TypeVar("_T")
 
 
-
-def _get_scaled_negative(data: bytes | None, min_value: float, max_value: float, scale: float) -> float | None:
-    if data is None:
-        return None
-
-    neg_limit = round(-min_value / scale) + 0x80
-    pos_limit = round(max_value / scale)
-
-    byte_val = int.from_bytes(data, "big")
-    if byte_val >= 0x81 and byte_val <= neg_limit:
-        return - (byte_val - 0x80) * scale
-    if byte_val >= 0x00 and byte_val <= pos_limit:
-        return  byte_val * scale
-    return None
-
-def _set_scaled(value: float, min_value: float, max_value: float, scale: float) -> bytes:
-    value = max(min_value, min(max_value, value))
-    value = round(value / scale)
-    if value >= 0:
-        return value
-    else:
-        return 0x80 - value
-
+@add_accessors
 class State:
+    """Cached view of a single zone's state, kept in sync via status-update listener.
+
+    Most getters and setters are auto-generated by :func:`add_accessors`
+    from schemas on :class:`CommandCodes`.  Methods that require special
+    logic (multi-byte parsing, RC5 fallback with model gating, etc.) are
+    hand-written in the *Manual accessors* section at the bottom.
+    """
+
     _state: dict[int, bytes | None]
     _presets: dict[int, PresetDetail]
 
@@ -132,63 +261,64 @@ class State:
         self._updated = asyncio.Event()
 
     async def start(self) -> None:
+        """Register the status-update listener and update provider."""
         # pylint: disable=protected-access
         self._client._listen.add(self._listen)
         self._client.register_update_provider(self.get_update_tasks)
 
     async def stop(self) -> None:
+        """Unregister the status-update listener and update provider."""
         # pylint: disable=protected-access
         self._client._listen.remove(self._listen)
         self._client.unregister_update_provider(self.get_update_tasks)
 
     async def __aenter__(self) -> "State":
+        """Start listening and return self."""
         await self.start()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Stop listening."""
         await self.stop()
 
     def to_dict(self) -> dict[str, Any]:
-        return {
-            "POWER": self.get_power(),
-            "VOLUME": self.get_volume(),
-            "SOURCE": self.get_source(),
-            "MUTE": self.get_mute(),
-            "HEADPHONES": self.get_headphones(),
-            "MENU": self.get_menu(),
-            "DISPLAY_INFO_TYPE": self.get_display_info_type(),
-            "IMAX_ENHANCED": self.get_imax_enhanced(),
-            "INCOMING_VIDEO_PARAMETERS": self.get_incoming_video_parameters(),
-            "INCOMING_AUDIO_FORMAT": self.get_incoming_audio_format(),
-            "INCOMING_AUDIO_SAMPLE_RATE": self.get_incoming_audio_sample_rate(),
-            "DECODE_MODE_2CH": self.get_decode_mode_2ch(),
-            "DECODE_MODE_MCH": self.get_decode_mode_mch(),
-            "ROOM_EQUALIZATION": self.get_room_equalization(),
-            "ROOM_EQ_NAMES": self.get_room_eq_names(),
-            "DOLBY_AUDIO": self.get_dolby_audio(),
-            "BASS_EQUALIZATION": self.get_bass_equalization(),
-            "TREBLE_EQUALIZATION": self.get_treble_equalization(),
-            "BALANCE": self.get_balance(),
-            "LIPSYNC_DELAY": self.get_lipsync_delay(),
-            "SUBWOOFER_TRIM": self.get_subwoofer_trim(),
-            "SUB_STEREO_TRIM": self.get_sub_stereo_trim(),
-            "COMPRESSION": self.get_compression(),
-            "DAB_STATION": self.get_dab_station(),
-            "DLS_PDT": self.get_dls_pdt(),
-            "RDS_INFORMATION": self.get_rds_information(),
-            "TUNER_PRESET": self.get_tuner_preset(),
-            "PRESET_DETAIL": self.get_preset_details(),
-            "NETWORK_PLAYBACK_STATUS": self.get_network_playback_status(),
-            "NOW_PLAYING": self.get_now_playing(),
-            "BLUETOOTH_STATUS": self.get_bluetooth_status(),
-        }
+        """Return all readable state as a flat dict keyed by command stem."""
+        return {name[4:].upper(): getattr(self, name)() for name in self._to_dict_getters}
 
     def __repr__(self) -> str:
+        """Show cached state and AMX discovery info."""
         return "State ({}) Amx ({})".format(
             self.to_dict(), self._amxduet.values if self._amxduet else {}
         )
 
+    @property
+    def zn(self) -> int:
+        """Zone number (1-based)."""
+        return self._zn
+
+    @property
+    def client(self) -> Client:
+        """Underlying protocol client."""
+        return self._client
+
+    @property
+    def model(self) -> str | None:
+        """Device model string from AMX discovery, or None."""
+        if self._amxduet:
+            return self._amxduet.device_model
+        return None
+
+    @property
+    def revision(self) -> str | None:
+        """Device revision string from AMX discovery, or None."""
+        if self._amxduet:
+            return self._amxduet.device_revision
+        return None
+
+    # --- Internal helpers ---
+
     def _listen(self, packet: ResponsePacket | AmxDuetResponse) -> None:
+        """Handle incoming packets: cache status updates."""
         if isinstance(packet, AmxDuetResponse):
             self._amxduet = packet
             return
@@ -200,26 +330,6 @@ class State:
             self._state[packet.cc] = packet.data
         else:
             self._state[packet.cc] = None
-
-    @property
-    def zn(self) -> int:
-        return self._zn
-
-    @property
-    def client(self) -> Client:
-        return self._client
-
-    @property
-    def model(self) -> str | None:
-        if self._amxduet:
-            return self._amxduet.device_model
-        return None
-
-    @property
-    def revision(self) -> str | None:
-        if self._amxduet:
-            return self._amxduet.device_revision
-        return None
 
     @property
     def _api_model(self) -> ApiModel:
@@ -270,9 +380,21 @@ class State:
             self._unsupported_commands.add(cc)
             raise
 
+    async def _send_rc5(self, table: dict, value) -> None:
+        """Send an RC5 IR command via the SIMULATE_RC5_IR_COMMAND CC."""
+        command = self.get_rc5code(table, value)
+        await self._request(
+            self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command
+        )
+
+    def get(self, cc):
+        """Return raw cached bytes for a command code."""
+        return self._state[cc]
+
     def get_rc5code(
         self, table: dict[tuple[ApiModel, int], dict[_T, bytes]], value: _T
     ) -> bytes:
+        """Look up an RC5 IR code from a model+zone keyed table."""
         lookup = table.get((self._api_model, self._zn))
         if not lookup:
             raise ValueError(
@@ -290,515 +412,7 @@ class State:
             )
         return command
 
-    async def _send_rc5(self, table: dict, value) -> None:
-        command = self.get_rc5code(table, value)
-        await self._request(
-            self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command
-        )
-
-    def get(self, cc):
-        return self._state[cc]
-
-    def get_incoming_video_parameters(self) -> VideoParameters | None:
-        value = self._state.get(CommandCodes.INCOMING_VIDEO_PARAMETERS)
-        if value is None:
-            return None
-        return VideoParameters.from_bytes(value)
-
-    def get_incoming_audio_format(
-        self,
-    ) -> tuple[IncomingAudioFormat, IncomingAudioConfig] | tuple[None, None]:
-        value = self._state.get(CommandCodes.INCOMING_AUDIO_FORMAT)
-        if value is None:
-            return None, None
-        return (
-            IncomingAudioFormat.from_int(value[0]),
-            IncomingAudioConfig.from_int(value[1]),
-        )
-
-    def get_incoming_audio_sample_rate(self) -> int | None:
-        value = self._state.get(CommandCodes.INCOMING_AUDIO_SAMPLE_RATE)
-        if value is None:
-            return None
-        return SAMPLE_RATE_MAP.get(value[0], 0)
-
-    def get_decode_mode_2ch(self) -> DecodeMode2CH | None:
-        value = self._state.get(CommandCodes.DECODE_MODE_STATUS_2CH)
-        if value is None:
-            return None
-        return DecodeMode2CH.from_bytes(value)
-
-    async def set_decode_mode_2ch(self, mode: DecodeMode2CH) -> None:
-        await self._send_rc5(RC5CODE_DECODE_MODE_2CH, mode)
-
-    def get_decode_mode_mch(self) -> DecodeModeMCH | None:
-        value = self._state.get(CommandCodes.DECODE_MODE_STATUS_MCH)
-        if value is None:
-            return None
-        return DecodeModeMCH.from_bytes(value)
-
-    async def set_decode_mode_mch(self, mode: DecodeModeMCH) -> None:
-        await self._send_rc5(RC5CODE_DECODE_MODE_MCH, mode)
-
-    def get_2ch(self) -> bool:
-        """Return if source is 2 channel or not."""
-        audio_format, _ = self.get_incoming_audio_format()
-        return bool(
-            audio_format
-            in (
-                IncomingAudioFormat.PCM,
-                IncomingAudioFormat.ANALOGUE_DIRECT,
-                IncomingAudioFormat.UNDETECTED,
-                None,
-            )
-        )
-
-    def get_decode_mode(self) -> DecodeModeMCH | DecodeMode2CH | None:
-        if self.get_2ch():
-            return self.get_decode_mode_2ch()
-        else:
-            return self.get_decode_mode_mch()
-
-    def get_decode_modes(
-        self,
-    ) -> list[DecodeModeMCH] | list[DecodeMode2CH] | None:
-        if self.get_2ch():
-            return list(RC5CODE_DECODE_MODE_2CH.get((self._api_model, self._zn), {}))
-        else:
-            return list(RC5CODE_DECODE_MODE_MCH.get((self._api_model, self._zn), {}))
-
-    async def set_decode_mode(self, mode: str | DecodeModeMCH | DecodeMode2CH) -> None:
-        if self.get_2ch():
-            if isinstance(mode, str):
-                mode = DecodeMode2CH[mode]
-            elif not isinstance(mode, DecodeMode2CH):
-                raise ValueError("Decode mode not supported at this time")
-            await self.set_decode_mode_2ch(mode)
-        else:
-            if isinstance(mode, str):
-                mode = DecodeModeMCH[mode]
-            elif not isinstance(mode, DecodeModeMCH):
-                raise ValueError("Decode mode not supported at this time")
-            await self.set_decode_mode_mch(mode)
-
-    async def set_direct_mode(self, on: bool) -> None:
-        await self._send_rc5(RC5CODE_DIRECT_MODE, on)
-
-    def get_power(self) -> bool | None:
-        value = self._state.get(CommandCodes.POWER)
-        if value is None:
-            return None
-        return int.from_bytes(value, "big") == 0x01
-
-    async def set_power(self, power: bool) -> None:
-        if self._api_model in POWER_WRITE_SUPPORTED:
-            bool_to_hex = 0x01 if power else 0x00
-            if not power:
-                self._state[CommandCodes.POWER] = bytes([0])
-            await self._request(self._zn, CommandCodes.POWER, bytes([bool_to_hex]))
-        else:
-            if power:
-                await self._send_rc5(RC5CODE_POWER, power)
-            else:
-                command = self.get_rc5code(RC5CODE_POWER, power)
-                # seed with a response, since device might not
-                # respond in timely fashion, so let's just
-                # assume we succeded until response come
-                # back.
-                self._state[CommandCodes.POWER] = bytes([0])
-                await self._client.request(
-                    self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command
-                )
-
-    def get_menu(self) -> MenuCodes | None:
-        value = self._state.get(CommandCodes.MENU)
-        if value is None:
-            return None
-        return MenuCodes.from_bytes(value)
-
-    def get_mute(self) -> bool | None:
-        value = self._state.get(CommandCodes.MUTE)
-        if value is None:
-            return None
-        return int.from_bytes(value, "big") == 0
-
-    async def set_mute(self, mute: bool) -> None:
-        if self._api_model in MUTE_WRITE_SUPPORTED:
-            bool_to_hex = 0x00 if mute else 0x01
-            await self._request(self._zn, CommandCodes.MUTE, bytes([bool_to_hex]))
-        else:
-            await self._send_rc5(RC5CODE_MUTE, mute)
-
-    def get_headphones(self) -> bool | None:
-        """Return whether headphones are connected."""
-        value = self._state.get(CommandCodes.HEADPHONES)
-        if value is None:
-            return None
-        return int.from_bytes(value, "big") == 0x01
-
-    def get_display_info_type(self) -> int | None:
-        """Return the current display information type."""
-        value = self._state.get(CommandCodes.DISPLAY_INFORMATION_TYPE)
-        if value is None:
-            return None
-        return int.from_bytes(value, "big")
-
-    async def set_display_info_type(self, info_type: int) -> None:
-        """Set the display information type. Use 0xE0 to cycle."""
-        await self._request(self._zn, CommandCodes.DISPLAY_INFORMATION_TYPE, bytes([info_type]))
-
-    async def set_display_brightness(self, level: DisplayBrightness) -> None:
-        await self._send_rc5(RC5CODE_DISPLAY_BRIGHTNESS, level)
-
-    def get_lipsync_delay(self) -> int | None:
-        """Return lip sync delay in milliseconds (0-250ms in 5ms steps)."""
-        data = self._state.get(CommandCodes.LIPSYNC_DELAY)
-        return _get_scaled_negative(data, 0.0, 250.0, 5.0)
-
-    async def set_lipsync_delay(self, delay_ms: int) -> None:
-        """Set lip sync delay in milliseconds (0-250ms in 5ms steps)."""
-        byte_val = _set_scaled(delay_ms, 0.0, 250.0, 5.0)
-        await self._request(self._zn, CommandCodes.LIPSYNC_DELAY, bytes([byte_val]))
-
-    async def inc_lipsync_delay(self) -> None:
-        await self._send_rc5(RC5CODE_LIPSYNC, True)
-
-    async def dec_lipsync_delay(self) -> None:
-        await self._send_rc5(RC5CODE_LIPSYNC, False)
-
-    def get_subwoofer_trim(self) -> float | None:
-        """Return subwoofer trim level in dB (-10 to +10 dB in 0.5dB steps)."""
-        data = self._state.get(CommandCodes.SUBWOOFER_TRIM)
-        return _get_scaled_negative(data, -10.0, 10.0, 0.5)
-
-    async def set_subwoofer_trim(self, trim_db: float) -> None:
-        """Set subwoofer trim level in dB (-10 to +10 dB in 0.5dB steps)."""
-        byte_val = _set_scaled(trim_db, -10.0, 10.0, 0.5)
-        await self._request(self._zn, CommandCodes.SUBWOOFER_TRIM, bytes([byte_val]))
-
-    async def inc_subwoofer_trim(self) -> None:
-        await self._send_rc5(RC5CODE_SUB_TRIM, True)
-
-    async def dec_subwoofer_trim(self) -> None:
-        await self._send_rc5(RC5CODE_SUB_TRIM, False)
-
-    def get_sub_stereo_trim(self) -> float | None:
-        """Return sub stereo trim level in dB (0 to -10 dB in 0.5dB steps)."""
-        data = self._state.get(CommandCodes.SUB_STEREO_TRIM)
-        return _get_scaled_negative(data, -10.0, 0.0, 0.5)
-
-    async def set_sub_stereo_trim(self, trim_db: float) -> None:
-        """Set sub stereo trim level in dB (0 to -10 dB in 0.5dB steps)."""
-        byte_val = _set_scaled(trim_db, -10.0, 0.0, 0.5)
-        await self._request(self._zn, CommandCodes.SUB_STEREO_TRIM, bytes([byte_val]))
-
-    def get_treble_equalization(self) -> float | None:
-        """Return treble equalization level in dB (-12 to +12 dB in 1dB steps)."""
-        data = self._state.get(CommandCodes.TREBLE_EQUALIZATION)
-        return _get_scaled_negative(data, -12.0, 12.0, 1.0)
-
-    async def set_treble_equalization(self, trim_db: float) -> None:
-        """Set treble equalization level in dB (-12 to +12 dB in 1dB steps)."""
-        byte_val = _set_scaled(trim_db, -12.0, 12.0, 1.0)
-        await self._request(self._zn, CommandCodes.TREBLE_EQUALIZATION, bytes([byte_val]))
-
-    async def inc_treble_equalization(self) -> None:
-        await self._send_rc5(RC5CODE_TREBLE, True)
-
-    async def dec_treble_equalization(self) -> None:
-        await self._send_rc5(RC5CODE_TREBLE, False)
-
-    def get_bass_equalization(self) -> float | None:
-        """Return bass equalization level in dB (-12 to +12 dB in 1dB steps)."""
-        data = self._state.get(CommandCodes.BASS_EQUALIZATION)
-        return _get_scaled_negative(data, -12.0, 12.0, 1.0)
-
-    async def set_bass_equalization(self, trim_db: float) -> None:
-        """Set bass equalization level in dB (-12 to +12 dB in 1dB steps)."""
-        byte_val = _set_scaled(trim_db, -12.0, 12.0, 1.0)
-        await self._request(self._zn, CommandCodes.BASS_EQUALIZATION, bytes([byte_val]))
-
-    async def inc_bass_equalization(self) -> None:
-        await self._send_rc5(RC5CODE_BASS, True)
-
-    async def dec_bass_equalization(self) -> None:
-        await self._send_rc5(RC5CODE_BASS, False)
-
-    def get_room_equalization(self) -> RoomEqMode | None:
-        """Return room equalization (DIRAC) mode."""
-        value = self._state.get(CommandCodes.ROOM_EQUALIZATION)
-        if value is None:
-            return None
-        return RoomEqMode.from_bytes(value)
-
-    async def set_room_equalization(self, mode: RoomEqMode) -> None:
-        """Set room equalization (DIRAC) mode."""
-        await self._request(self._zn, CommandCodes.ROOM_EQUALIZATION, bytes([mode]))
-
-    def get_room_eq_names(self) -> list[str] | None:
-        """Return user-defined names for the room EQ profiles."""
-        value = self._state.get(CommandCodes.ROOM_EQ_NAMES)
-        if value is None:
-            return None
-        names = []
-        for i in range(0, len(value), 20):
-            name = value[i:i + 20].decode("ascii", errors="replace").rstrip("\x00").strip()
-            names.append(name)
-        return names
-
-    def get_dolby_audio(self) -> DolbyAudioMode | None:
-        """Return the current Dolby Audio mode."""
-        value = self._state.get(CommandCodes.DOLBY_AUDIO)
-        if value is None:
-            return None
-        return DolbyAudioMode.from_bytes(value)
-
-    async def set_dolby_audio(self, mode: DolbyAudioMode) -> None:
-        """Set the Dolby Audio mode."""
-        await self._request(self._zn, CommandCodes.DOLBY_AUDIO, bytes([mode]))
-
-    async def inc_dolby_pliix_centre_width(self) -> None:
-        await self._send_rc5(RC5CODE_DOLBY_PLIIX_CENTRE_WIDTH, True)
-
-    async def dec_dolby_pliix_centre_width(self) -> None:
-        await self._send_rc5(RC5CODE_DOLBY_PLIIX_CENTRE_WIDTH, False)
-
-    async def inc_dolby_pliix_dimension(self) -> None:
-        await self._send_rc5(RC5CODE_DOLBY_PLIIX_DIMENSION, True)
-
-    async def dec_dolby_pliix_dimension(self) -> None:
-        await self._send_rc5(RC5CODE_DOLBY_PLIIX_DIMENSION, False)
-
-    async def set_dolby_pliix_panorama(self, on: bool) -> None:
-        await self._send_rc5(RC5CODE_DOLBY_PLIIX_PANORAMA, on)
-
-    def get_balance(self) -> float | None:
-        """Return balance level (-6 to +6 in 1dB steps)."""
-        data = self._state.get(CommandCodes.BALANCE)
-        return _get_scaled_negative(data, -6.0, 6.0, 1.0)
-
-    async def set_balance(self, value: float) -> None:
-        """Set balance level (-6 to +6 in 1dB steps)."""
-        byte_val = _set_scaled(value, -6.0, 6.0, 1.0)
-        await self._request(self._zn, CommandCodes.BALANCE, bytes([byte_val]))
-
-    async def inc_balance(self) -> None:
-        """Shift balance right."""
-        await self._send_rc5(RC5CODE_BALANCE, True)
-
-    async def dec_balance(self) -> None:
-        """Shift balance left."""
-        await self._send_rc5(RC5CODE_BALANCE, False)
-
-    def get_compression(self) -> CompressionMode | None:
-        """Return the dynamic range compression setting."""
-        value = self._state.get(CommandCodes.COMPRESSION)
-        if value is None:
-            return None
-        return CompressionMode.from_bytes(value)
-
-    async def set_compression(self, mode: CompressionMode) -> None:
-        """Set the dynamic range compression setting."""
-        await self._request(self._zn, CommandCodes.COMPRESSION, bytes([mode]))
-
-    def get_imax_enhanced(self) -> ImaxEnhancedMode | None:
-        """Return the IMAX Enhanced mode (HDA premium series)."""
-        value = self._state.get(CommandCodes.IMAX_ENHANCED)
-        if value is None:
-            return None
-        return ImaxEnhancedMode.from_bytes(value)
-
-    async def set_imax_enhanced(self, mode: ImaxEnhancedMode) -> None:
-        """Set the IMAX Enhanced mode (HDA premium series)."""
-        command_byte = IMAX_ENHANCED_SET_MAP[mode]
-        await self._request(self._zn, CommandCodes.IMAX_ENHANCED, bytes([command_byte]))
-
-    def get_video_selection(self) -> VideoSelection | None:
-        """Return the video input selection (pre-HDA AVR series)."""
-        value = self._state.get(CommandCodes.VIDEO_SELECTION)
-        if value is None:
-            return None
-        return VideoSelection.from_bytes(value)
-
-    async def set_video_selection(self, mode: VideoSelection) -> None:
-        """Set the video input selection (pre-HDA AVR series)."""
-        await self._request(
-            self._zn, CommandCodes.VIDEO_SELECTION, bytes([mode])
-        )
-
-    async def set_hdmi_output(self, output: HdmiOutput) -> None:
-        await self._send_rc5(RC5CODE_HDMI_OUTPUT, output)
-
-    def get_source(self) -> SourceCodes | None:
-        value = self._state.get(CommandCodes.CURRENT_SOURCE)
-        if value is None:
-            return None
-        try:
-            return SourceCodes.from_bytes(value, self._api_model, self._zn)
-        except ValueError:
-            return None
-
-    def get_source_list(self) -> list[SourceCodes]:
-        return list(RC5CODE_SOURCE.get((self._api_model, self._zn), {}).keys())
-
-    async def get_input_name(self) -> str | None:
-        """Query the user-configured input name for the current source."""
-        try:
-            data = await self._request(self._zn, CommandCodes.INPUT_NAME, bytes([0xF0]))
-            return data.decode('utf-8', errors='replace').rstrip('\x00').strip()
-        except UnsupportedCommand:
-            raise
-        except Exception as e:
-            _LOGGER.warning("Failed to get input name: %s", e)
-            return None
-
-    async def set_source(self, src: SourceCodes) -> None:
-        if self._api_model in SOURCE_WRITE_SUPPORTED:
-            value = src.to_bytes(self._api_model, self._zn)
-            await self._request(self._zn, CommandCodes.CURRENT_SOURCE, value)
-        else:
-            await self._send_rc5(RC5CODE_SOURCE, src)
-
-    def get_volume(self) -> int | None:
-        value = self._state.get(CommandCodes.VOLUME)
-        if value is None:
-            return None
-        return int.from_bytes(value, "big")
-
-    async def set_volume(self, volume: int) -> None:
-        await self._request(self._zn, CommandCodes.VOLUME, bytes([volume]))
-
-    async def inc_volume(self) -> None:
-        if self._api_model in VOLUME_STEP_SUPPORTED:
-            await self._request(self._zn, CommandCodes.VOLUME, bytes([0xF1]))
-        else:
-            await self._send_rc5(RC5CODE_VOLUME, True)
-
-    async def dec_volume(self) -> None:
-        if self._api_model in VOLUME_STEP_SUPPORTED:
-            await self._request(self._zn, CommandCodes.VOLUME, bytes([0xF2]))
-        else:
-            await self._send_rc5(RC5CODE_VOLUME, False)
-
-    def get_dab_station(self) -> str | None:
-        if not self._is_command_supported_on_source(CommandCodes.DAB_STATION):
-            return None
-        value = self._state.get(CommandCodes.DAB_STATION)
-        if value is None:
-            return None
-        return value.decode("utf8", errors="replace").rstrip()
-
-    def get_dls_pdt(self) -> str | None:
-        if not self._is_command_supported_on_source(CommandCodes.DLS_PDT_INFO):
-            return None
-        value = self._state.get(CommandCodes.DLS_PDT_INFO)
-        if value is None:
-            return None
-        return value.decode("utf8", errors="replace").rstrip()
-
-    def get_rds_information(self) -> str | None:
-        if not self._is_command_supported_on_source(CommandCodes.RDS_INFORMATION):
-            return None
-        value = self._state.get(CommandCodes.RDS_INFORMATION)
-        if value is None:
-            return None
-        return value.decode("utf8", errors="replace").rstrip()
-
-    async def set_tuner_preset(self, preset: int) -> None:
-        if not self._is_command_supported_on_source(CommandCodes.TUNER_PRESET):
-            return
-        await self._request(self._zn, CommandCodes.TUNER_PRESET, bytes([preset]))
-
-    def get_tuner_preset(self) -> int | None:
-        if not self._is_command_supported_on_source(CommandCodes.TUNER_PRESET):
-            return None
-        value = self._state.get(CommandCodes.TUNER_PRESET)
-        if value is None or value == b"\xff":
-            return None
-        return int.from_bytes(value, "big")
-
-    def get_preset_details(self) -> dict[int, PresetDetail] | None:
-        if not self._is_command_supported_on_source(CommandCodes.PRESET_DETAIL):
-            return None
-        return self._presets
-
-    async def send_navigation(self, code: RC5CodeNavigation) -> None:
-        await self._send_rc5(RC5CODE_NAVIGATION, code)
-
-    async def send_playback(self, code: RC5CodePlayback) -> None:
-        await self._send_rc5(RC5CODE_PLAYBACK, code)
-
-    async def send_toggle(self, code: RC5CodeToggle) -> None:
-        await self._send_rc5(RC5CODE_TOGGLE, code)
-
-    async def send_menu_access(self, code: RC5CodeMenuAccess) -> None:
-        await self._send_rc5(RC5CODE_MENU_ACCESS, code)
-
-    async def send_numeric(self, digit: int) -> None:
-        if not 0 <= digit <= 9:
-            raise ValueError(f"Digit must be 0-9, got {digit}")
-        if self.model and self.model not in APIVERSION_RC5_NUMERIC_SERIES:
-            raise ValueError(
-                f"Numeric RC5 not supported on {self.model}"
-            )
-        await self._request(
-            self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, bytes([0x10, digit])
-        )
-
-    async def send_color(self, color: RC5CodeColor) -> None:
-        await self._send_rc5(RC5CODE_COLOR, color)
-
-    async def save_settings(self, pin: tuple[int, int, int, int] = (1, 2, 3, 4)) -> None:
-        """Save a secure backup of device settings.
-
-        The PIN defaults to (1, 2, 3, 4), the factory default installer PIN.
-        """
-        await self._request(
-            1, CommandCodes.SAVE_RESTORE_COPY_OF_SETTINGS,
-            bytes([SaveRestoreSubCommand.SAVE, *SAVE_RESTORE_CONFIRMATION, *pin]),
-        )
-
-    async def restore_settings(self, pin: tuple[int, int, int, int] = (1, 2, 3, 4)) -> None:
-        """Restore settings from the secure backup.
-
-        The PIN defaults to (1, 2, 3, 4), the factory default installer PIN.
-        Raises CommandInvalidAtThisTime if no backup exists.
-        """
-        await self._request(
-            1, CommandCodes.SAVE_RESTORE_COPY_OF_SETTINGS,
-            bytes([SaveRestoreSubCommand.RESTORE, *SAVE_RESTORE_CONFIRMATION, *pin]),
-        )
-
-    def get_network_playback_status(self) -> NetworkPlaybackStatus | None:
-        """Return the network playback status (stopped/transitioning/playing/paused)."""
-        if not self._is_command_supported_on_source(CommandCodes.NETWORK_PLAYBACK_STATUS):
-            return None
-        value = self._state.get(CommandCodes.NETWORK_PLAYBACK_STATUS)
-        if value is None:
-            return None
-        return NetworkPlaybackStatus.from_bytes(value)
-
-    def get_now_playing(self) -> NowPlayingInfo | None:
-        """Return now-playing metadata (HDA series, NET/BT sources)."""
-        if not self._is_command_supported_on_source(CommandCodes.NOW_PLAYING_INFO):
-            return None
-        return self._now_playing
-
-    def get_bluetooth_status(
-        self,
-    ) -> tuple[BluetoothAudioStatus, str] | tuple[None, None]:
-        """Return Bluetooth audio status and track name (HDA series)."""
-        if not self._is_command_supported_on_source(CommandCodes.BLUETOOTH_STATUS):
-            return None, None
-        value = self._state.get(CommandCodes.BLUETOOTH_STATUS)
-        if value is None:
-            return None, None
-        status = BluetoothAudioStatus.from_int(value[0])
-        if len(value) > 1:
-            track = value[1:].decode("ascii", errors="replace").rstrip("\x00").strip()
-        else:
-            track = ""
-        return status, track
+    # --- Update provider ---
 
     async def get_update_tasks(self) -> list[UpdateTask]:
         """Return a list of update coroutines for the current device state.
@@ -927,3 +541,240 @@ class State:
         await wait_any(self._updated, self._client._disconnected)
         if self._client._disconnected.is_set():
             raise NotConnectedException()
+
+    # --- Manual accessors (ordered by CommandCodes value) ---
+
+    # POWER (0x00)
+    async def set_power(self, power: bool) -> None:
+        """Turn the zone on or off, using direct CC or RC5 per model support."""
+        if self._api_model in POWER_WRITE_SUPPORTED:
+            bool_to_hex = 0x01 if power else 0x00
+            if not power:
+                self._state[CommandCodes.POWER] = bytes([0])
+            await self._request(self._zn, CommandCodes.POWER, bytes([bool_to_hex]))
+        else:
+            if power:
+                await self._send_rc5(RC5CODE_POWER, power)
+            else:
+                command = self.get_rc5code(RC5CODE_POWER, power)
+                # Seed with a response since the device might not respond
+                # in a timely fashion on power-off.
+                self._state[CommandCodes.POWER] = bytes([0])
+                await self._client.request(
+                    self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, command
+                )
+
+    # SAVE_RESTORE_COPY_OF_SETTINGS (0x06)
+    async def save_settings(self, pin: tuple[int, int, int, int] = (1, 2, 3, 4)) -> None:
+        """Save a secure backup of device settings.
+
+        The PIN defaults to (1, 2, 3, 4), the factory default installer PIN.
+        """
+        await self._request(
+            1, CommandCodes.SAVE_RESTORE_COPY_OF_SETTINGS,
+            bytes([SaveRestoreSubCommand.SAVE, *SAVE_RESTORE_CONFIRMATION, *pin]),
+        )
+
+    async def restore_settings(self, pin: tuple[int, int, int, int] = (1, 2, 3, 4)) -> None:
+        """Restore settings from the secure backup.
+
+        The PIN defaults to (1, 2, 3, 4), the factory default installer PIN.
+        Raises CommandInvalidAtThisTime if no backup exists.
+        """
+        await self._request(
+            1, CommandCodes.SAVE_RESTORE_COPY_OF_SETTINGS,
+            bytes([SaveRestoreSubCommand.RESTORE, *SAVE_RESTORE_CONFIRMATION, *pin]),
+        )
+
+    # SIMULATE_RC5_IR_COMMAND (0x08) — RC5 command senders
+    async def set_hdmi_output(self, output: HdmiOutput) -> None:
+        """Switch the HDMI output via RC5."""
+        await self._send_rc5(RC5CODE_HDMI_OUTPUT, output)
+
+    async def send_navigation(self, code: RC5CodeNavigation) -> None:
+        """Send a navigation RC5 command."""
+        await self._send_rc5(RC5CODE_NAVIGATION, code)
+
+    async def send_playback(self, code: RC5CodePlayback) -> None:
+        """Send a playback RC5 command."""
+        await self._send_rc5(RC5CODE_PLAYBACK, code)
+
+    async def send_toggle(self, code: RC5CodeToggle) -> None:
+        """Send a toggle RC5 command."""
+        await self._send_rc5(RC5CODE_TOGGLE, code)
+
+    async def send_menu_access(self, code: RC5CodeMenuAccess) -> None:
+        """Send a menu-access RC5 command."""
+        await self._send_rc5(RC5CODE_MENU_ACCESS, code)
+
+    async def send_numeric(self, digit: int) -> None:
+        """Send a numeric digit (0-9) via RC5."""
+        if not 0 <= digit <= 9:
+            raise ValueError(f"Digit must be 0-9, got {digit}")
+        if self.model and self.model not in APIVERSION_RC5_NUMERIC_SERIES:
+            raise ValueError(
+                f"Numeric RC5 not supported on {self.model}"
+            )
+        await self._request(
+            self._zn, CommandCodes.SIMULATE_RC5_IR_COMMAND, bytes([0x10, digit])
+        )
+
+    async def send_color(self, color: RC5CodeColor) -> None:
+        """Send a color-button RC5 command."""
+        await self._send_rc5(RC5CODE_COLOR, color)
+
+    # DECODE_MODE_2CH (0x10) / DECODE_MODE_MCH (0x11) — composite helpers
+    def get_2ch(self) -> bool:
+        """Return whether the incoming audio is 2-channel."""
+        audio_format, _ = self.get_incoming_audio_format()
+        return bool(
+            audio_format
+            in (
+                IncomingAudioFormat.PCM,
+                IncomingAudioFormat.ANALOGUE_DIRECT,
+                IncomingAudioFormat.UNDETECTED,
+                None,
+            )
+        )
+
+    def get_decode_mode(self) -> DecodeModeMCH | DecodeMode2CH | None:
+        """Return the active decode mode for the current channel count."""
+        if self.get_2ch():
+            return self.get_decode_mode_2ch()
+        else:
+            return self.get_decode_mode_mch()
+
+    def get_decode_modes(
+        self,
+    ) -> list[DecodeModeMCH] | list[DecodeMode2CH] | None:
+        """Return available decode modes for the current channel count."""
+        if self.get_2ch():
+            return list(RC5CODE_DECODE_MODE_2CH.get((self._api_model, self._zn), {}))
+        else:
+            return list(RC5CODE_DECODE_MODE_MCH.get((self._api_model, self._zn), {}))
+
+    async def set_decode_mode(self, mode: str | DecodeModeMCH | DecodeMode2CH) -> None:
+        """Set the decode mode, dispatching to 2CH or MCH by current channel count."""
+        if self.get_2ch():
+            if isinstance(mode, str):
+                mode = DecodeMode2CH[mode]
+            elif not isinstance(mode, DecodeMode2CH):
+                raise ValueError("Decode mode not supported at this time")
+            await self.set_decode_mode_2ch(mode)
+        else:
+            if isinstance(mode, str):
+                mode = DecodeModeMCH[mode]
+            elif not isinstance(mode, DecodeModeMCH):
+                raise ValueError("Decode mode not supported at this time")
+            await self.set_decode_mode_mch(mode)
+
+    # TUNER_PRESET (0x15)
+    def get_tuner_preset(self) -> int | None:
+        """Return the active tuner preset number, or None if no preset is selected."""
+        if not self._is_command_supported_on_source(CommandCodes.TUNER_PRESET):
+            return None
+        value = self._state.get(CommandCodes.TUNER_PRESET)
+        if value is None or value == b"\xff":
+            return None
+        return int.from_bytes(value, "big")
+
+    async def set_tuner_preset(self, preset: int) -> None:
+        """Select a tuner preset by number."""
+        if not self._is_command_supported_on_source(CommandCodes.TUNER_PRESET):
+            return
+        await self._request(self._zn, CommandCodes.TUNER_PRESET, bytes([preset]))
+
+    # PRESET_DETAIL (0x1B)
+    def get_preset_details(self) -> dict[int, PresetDetail] | None:
+        """Return the buffered preset detail map, or None when the current source isn't a tuner."""
+        if not self._is_command_supported_on_source(CommandCodes.PRESET_DETAIL):
+            return None
+        return self._presets
+
+    # CURRENT_SOURCE (0x1D)
+    def get_source(self) -> SourceCodes | None:
+        """Return the currently selected source."""
+        value = self._state.get(CommandCodes.CURRENT_SOURCE)
+        if value is None:
+            return None
+        try:
+            return SourceCodes.from_bytes(value, self._api_model, self._zn)
+        except ValueError:
+            return None
+
+    def get_source_list(self) -> list[SourceCodes]:
+        """Return the list of sources available for this model and zone."""
+        return list(RC5CODE_SOURCE.get((self._api_model, self._zn), {}).keys())
+
+    async def set_source(self, src: SourceCodes) -> None:
+        """Select a source, using direct CC or RC5 per model support."""
+        if self._api_model in SOURCE_WRITE_SUPPORTED:
+            value = src.to_bytes(self._api_model, self._zn)
+            await self._request(self._zn, CommandCodes.CURRENT_SOURCE, value)
+        else:
+            await self._send_rc5(RC5CODE_SOURCE, src)
+
+    # INPUT_NAME (0x20)
+    async def get_input_name(self) -> str | None:
+        """Fetch the name of the currently selected input (uncached)."""
+        if not self._is_command_supported_on_source(CommandCodes.INPUT_NAME):
+            return None
+        data = await self._request(self._zn, CommandCodes.INPUT_NAME, bytes([0xF0]))
+        return data.decode("utf-8", errors="replace").rstrip("\x00").strip()
+
+    # ROOM_EQ_NAMES (0x34)
+    def get_room_eq_names(self) -> list[str] | None:
+        """Return user-defined names for the room EQ profiles."""
+        value = self._state.get(CommandCodes.ROOM_EQ_NAMES)
+        if value is None:
+            return None
+        names = []
+        for i in range(0, len(value), 20):
+            name = value[i:i + 20].decode("ascii", errors="replace").rstrip("\x00").strip()
+            names.append(name)
+        return names
+
+    # INCOMING_AUDIO_FORMAT (0x43)
+    def get_incoming_audio_format(
+        self,
+    ) -> tuple[IncomingAudioFormat, IncomingAudioConfig] | tuple[None, None]:
+        """Return the incoming audio format and config as a 2-tuple."""
+        value = self._state.get(CommandCodes.INCOMING_AUDIO_FORMAT)
+        if value is None:
+            return None, None
+        return (
+            IncomingAudioFormat.from_int(value[0]),
+            IncomingAudioConfig.from_int(value[1]),
+        )
+
+    # INCOMING_AUDIO_SAMPLE_RATE (0x44)
+    def get_incoming_audio_sample_rate(self) -> int | None:
+        """Return the incoming audio sample rate in Hz."""
+        value = self._state.get(CommandCodes.INCOMING_AUDIO_SAMPLE_RATE)
+        if value is None:
+            return None
+        return SAMPLE_RATE_MAP.get(value[0], 0)
+
+    # BLUETOOTH_STATUS (0x50)
+    def get_bluetooth_status(
+        self,
+    ) -> tuple[BluetoothAudioStatus, str] | tuple[None, None]:
+        """Return Bluetooth audio status and track name."""
+        if not self._is_command_supported_on_source(CommandCodes.BLUETOOTH_STATUS):
+            return None, None
+        value = self._state.get(CommandCodes.BLUETOOTH_STATUS)
+        if value is None:
+            return None, None
+        status = BluetoothAudioStatus.from_int(value[0])
+        if len(value) > 1:
+            track = value[1:].decode("ascii", errors="replace").rstrip("\x00").strip()
+        else:
+            track = ""
+        return status, track
+
+    # NOW_PLAYING_INFO (0x64)
+    def get_now_playing(self) -> NowPlayingInfo | None:
+        """Return now-playing metadata (HDA series, NET/BT sources)."""
+        if not self._is_command_supported_on_source(CommandCodes.NOW_PLAYING_INFO):
+            return None
+        return self._now_playing
