@@ -26,6 +26,7 @@ from .schemas import *  # noqa: F401,F403
 __all__ = [
     "CommandCodes",
     "CommandFlags",
+    "DISPLAY_BRIGHTNESS_WRITE_SUPPORTED",
     "MUTE_WRITE_SUPPORTED",
     "POWER_WRITE_SUPPORTED",
     "SOURCE_WRITE_SUPPORTED",
@@ -51,13 +52,21 @@ POWER_WRITE_SUPPORTED = {
 #: Models that accept a direct CC write for mute on/off.
 MUTE_WRITE_SUPPORTED = POWER_WRITE_SUPPORTED
 
+#: Models that accept a direct CC write for display brightness.
+DISPLAY_BRIGHTNESS_WRITE_SUPPORTED = {
+    ApiModel.APISA_SERIES,
+    ApiModel.APIST_SERIES,
+}
+
 #: Models that accept a direct CC write for source selection.
 SOURCE_WRITE_SUPPORTED = {
     ApiModel.APISA_SERIES,
+    ApiModel.APIST_SERIES,
 }
 
 #: Models that accept a direct CC write for volume step (inc/dec).
 VOLUME_STEP_SUPPORTED = {
+    ApiModel.APISA_SERIES,
     ApiModel.APIST_SERIES,
 }
 
@@ -146,7 +155,7 @@ class CommandCodes(IntOrTypeEnum):
 
     # --- System ---
     POWER                           = 0x00, None,       _Z | _U,          None,    BoolByte()
-    DISPLAY_BRIGHTNESS              = 0x01, _AVR_SA_ST, _U,               None,    Rc5Fallback(inner=ByteEnum(DisplayBrightness), rc5_table=RC5CODE_DISPLAY_BRIGHTNESS)
+    DISPLAY_BRIGHTNESS              = 0x01, _AVR_SA_ST, _U,               None,    Rc5Fallback(inner=ByteEnum(DisplayBrightness), rc5_table=RC5CODE_DISPLAY_BRIGHTNESS, direct_set_supported=frozenset(DISPLAY_BRIGHTNESS_WRITE_SUPPORTED))
     HEADPHONES                      = 0x02, _AVR_SA,    _RO | _U,         None,    BoolByte()
     FM_GENRE                        = 0x03, _AVR,       _Z | _RO | _U,    _FM,     AsciiString()
     SOFTWARE_VERSION                = 0x04, None,       _RO | _U
