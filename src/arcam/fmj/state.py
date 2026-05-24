@@ -730,6 +730,22 @@ class State:
         data = await self._request(self._zn, CommandCodes.INPUT_NAME, bytes([0xF0]))
         return data.decode("utf-8", errors="replace").rstrip("\x00").strip()
 
+    # FM_SCAN (0x23)
+    async def fm_scan(self, up: bool = True) -> None:
+        """Trigger an FM frequency scan in the given direction."""
+        if not self._is_command_supported_on_source(CommandCodes.FM_SCAN):
+            return
+        await self._request(
+            self._zn, CommandCodes.FM_SCAN, bytes([0x01 if up else 0x00])
+        )
+
+    # DAB_SCAN (0x24)
+    async def dab_scan(self) -> None:
+        """Trigger a DAB station scan."""
+        if not self._is_command_supported_on_source(CommandCodes.DAB_SCAN):
+            return
+        await self._request(self._zn, CommandCodes.DAB_SCAN, bytes([0x01]))
+
     # ROOM_EQ_NAMES (0x34)
     def get_room_eq_names(self) -> list[str] | None:
         """Return user-defined names for the room EQ profiles."""

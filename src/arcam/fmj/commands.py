@@ -183,7 +183,7 @@ class CommandCodes(IntOrTypeEnum):
 
     # --- Extended (2.0) ---
     INPUT_NAME                      = 0x20, _AVR,       _RO
-    FM_SCAN                         = 0x23, _AVR,       _WO
+    FM_SCAN                         = 0x23, _AVR,       _WO,              _FM
     DAB_SCAN                        = 0x24, _AVR,       _WO | _U,         _DAB
     HEARTBEAT                       = 0x25, None,       _RO
     REBOOT                          = 0x26, None
