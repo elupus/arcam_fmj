@@ -57,7 +57,7 @@ class ClientBase:
         self._reader: StreamReader | None = None
         self._writer: StreamWriter | None = None
         self._listen: set[Callable] = set()
-        self._queue: asyncio.PriorityQueue[_QueueItem] = asyncio.PriorityQueue()
+        self._queue: asyncio.PriorityQueue[_QueueItem] | None = None
         self._seq: int = 0
 
     @property
@@ -89,6 +89,7 @@ class ClientBase:
 
         _LOGGER.debug("Connecting to %s", self.peer)
         self._reader, self._writer = await self._open()
+        self._queue = asyncio.PriorityQueue()
         _LOGGER.info("Connected to %s", self.peer)
 
     async def stop(self) -> None:
@@ -102,6 +103,7 @@ class ClientBase:
             finally:
                 self._writer = None
                 self._reader = None
+                self._queue = None
 
     @overload
     async def request_raw(self, request: CommandPacket, priority: int = _USER_PRIORITY) -> ResponsePacket: ...
@@ -112,7 +114,7 @@ class ClientBase:
     async def request_raw(
         self, request: CommandPacket | AmxDuetRequest, priority: int = _USER_PRIORITY
     ) -> ResponsePacket | AmxDuetResponse:
-        if not self._writer:
+        if self._queue is None:
             raise NotConnectedException()
         future: asyncio.Future[ResponsePacket | AmxDuetResponse] = asyncio.get_running_loop().create_future()
         self._seq += 1
@@ -120,7 +122,7 @@ class ClientBase:
         return await future
 
     async def request(self, zn: int, cc: CommandCodes, data: bytes, priority: int = _USER_PRIORITY):
-        if not self._writer:
+        if self._queue is None:
             raise NotConnectedException()
 
         if not (cc.flags & CommandFlags.ZONE_SUPPORT) and zn != 1:
@@ -192,11 +194,11 @@ class ClientBase:
                 await asyncio.sleep(_REQUEST_SETTLE_TIME.total_seconds())
         finally:
             # Clear this to prevent more commands from being queued
-            self._writer = None
-            writer.close()
+            queue = self._queue
+            self._queue = None
             # Drain what's already in the queue to unblock all waiters
-            while not self._queue.empty():
-                pending = self._queue.get_nowait()
+            while not queue.empty():
+                pending = queue.get_nowait()
                 if not pending.future.done():
                     pending.future.set_exception(
                         NotConnectedException("Connection closed")
@@ -225,6 +227,7 @@ class ClientBase:
             raise copy(exc.exceptions[0]).with_traceback(exc.exceptions[0].__traceback__)
         finally:
             _LOGGER.debug("Process task shutting down")
+            self._writer.close()
 
 class Client(ClientBase):
     def __init__(self, host: str, port: int) -> None:
