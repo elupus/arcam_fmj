@@ -11,6 +11,7 @@ from arcam.fmj.commands import CommandCodes
 from arcam.fmj.errors import (
     CommandNotRecognised,
     ConnectionFailed,
+    NotConnectedException,
     UnsupportedZone,
 )
 from arcam.fmj.client import Client, ClientContext
@@ -143,9 +144,10 @@ async def test_cancellation(silent_server):
 
 
 async def test_cancellation_unblocks_pending_requests(silent_server):
-    """Cancelling the process loop with requests pending must surface
-    CancelledError to the awaiters, not NotConnectedException — so enclosing
-    TaskGroups unwind cleanly instead of crashing on the masked exception.
+    """Cancelling the process loop must unblock pending request awaiters
+    with NotConnectedException (the connection is going down) while still
+    surfacing CancelledError from `await process_task` so callers using
+    `contextlib.suppress(CancelledError)` unwind cleanly.
 
     Exercises both shutdown paths: the request popped into ``_write_and_wait``
     (inner finally) and the request still sitting in the priority queue
@@ -168,9 +170,9 @@ async def test_cancellation_unblocks_pending_requests(silent_server):
 
         process_task.cancel()
 
-        with pytest.raises(asyncio.CancelledError):
+        with pytest.raises(NotConnectedException):
             await in_flight
-        with pytest.raises(asyncio.CancelledError):
+        with pytest.raises(NotConnectedException):
             await queued
         with pytest.raises(asyncio.CancelledError):
             await process_task

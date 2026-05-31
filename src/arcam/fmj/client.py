@@ -180,10 +180,6 @@ class ClientBase:
                 try:
                     try:
                         response = await self._write_and_wait(writer, item.packet)
-                    except asyncio.CancelledError:
-                        if not item.future.done():
-                            item.future.cancel()
-                        raise
                     except TimeoutError as e:
                         if not item.future.done():
                             item.future.set_exception(e)
@@ -201,14 +197,9 @@ class ClientBase:
             queue = self._queue
             self._queue = None
             # Drain what's already in the queue to unblock all waiters
-            cancelled = asyncio.current_task().cancelling() > 0
             while not queue.empty():
                 pending = queue.get_nowait()
-                if pending.future.done():
-                    continue
-                if cancelled:
-                    pending.future.cancel()
-                else:
+                if not pending.future.done():
                     pending.future.set_exception(
                         NotConnectedException("Connection closed")
                     )
@@ -232,8 +223,12 @@ class ClientBase:
                 group.create_task(self._process_send(self._writer))
                 group.create_task(self._process_heartbeat())
         except BaseExceptionGroup as exc:
-            # convert to a non group exception to keep compatibility
-            raise copy(exc.exceptions[0]).with_traceback(exc.exceptions[0].__traceback__)
+            # Convert to a non-group exception to keep compatibility
+            chosen = next(
+                (e for e in exc.exceptions if isinstance(e, asyncio.CancelledError)),
+                exc.exceptions[0],
+            )
+            raise copy(chosen).with_traceback(chosen.__traceback__)
         finally:
             _LOGGER.debug("Process task shutting down")
             self._writer.close()
