@@ -182,85 +182,83 @@ async def run_state(args):
         client = Client(args.host, args.port)
     else:
         client = ClientSerial(args.serial)
-    async with ClientContext(client):
-        state = State(client, args.zone)
-        async with state:
-            await state.update()
+    async with ClientContext(client), State(client, args.zone) as state:
+        await state.update()
 
-            pin = tuple(args.pin)
+        pin = tuple(args.pin)
 
-            if args.save_settings:
-                await state.save_settings(pin)
-                print("Settings saved.")
+        if args.save_settings:
+            await state.save_settings(pin)
+            print("Settings saved.")
 
-            if args.restore_settings:
-                await state.restore_settings(pin)
-                print("Settings restored.")
+        if args.restore_settings:
+            await state.restore_settings(pin)
+            print("Settings restored.")
 
-            if args.volume is not None:
-                await state.set_volume(args.volume)
+        if args.volume is not None:
+            await state.set_volume(args.volume)
 
-            if args.source is not None:
-                await state.set_source(args.source)
+        if args.source is not None:
+            await state.set_source(args.source)
 
-            if args.power_on is not None:
-                await state.set_power(True)
+        if args.power_on is not None:
+            await state.set_power(True)
 
-            if args.power_off is not None:
-                await state.set_power(False)
+        if args.power_off is not None:
+            await state.set_power(False)
 
-            if args.room_eq_on is not None:
-                await state.set_room_equalization(RoomEqMode.EQ1)
+        if args.room_eq_on is not None:
+            await state.set_room_equalization(RoomEqMode.EQ1)
 
-            if args.room_eq_off is not None:
-                await state.set_room_equalization(RoomEqMode.OFF)
+        if args.room_eq_off is not None:
+            await state.set_room_equalization(RoomEqMode.OFF)
 
-            if args.room_eq is not None:
-                await state.set_room_equalization(args.room_eq)
+        if args.room_eq is not None:
+            await state.set_room_equalization(args.room_eq)
 
-            if args.lipsync is not None:
-                await state.set_lipsync_delay(args.lipsync)
+        if args.lipsync is not None:
+            await state.set_lipsync_delay(args.lipsync)
 
-            if args.subwoofer_trim is not None:
-                await state.set_subwoofer_trim(args.subwoofer_trim)
+        if args.subwoofer_trim is not None:
+            await state.set_subwoofer_trim(args.subwoofer_trim)
 
-            if args.bass is not None:
-                await state.set_bass_equalization(args.bass)
+        if args.bass is not None:
+            await state.set_bass_equalization(args.bass)
 
-            if args.treble is not None:
-                await state.set_treble_equalization(args.treble)
+        if args.treble is not None:
+            await state.set_treble_equalization(args.treble)
 
-            if args.balance is not None:
-                await state.set_balance(args.balance)
+        if args.balance is not None:
+            await state.set_balance(args.balance)
 
-            if args.sub_stereo_trim is not None:
-                await state.set_sub_stereo_trim(args.sub_stereo_trim)
+        if args.sub_stereo_trim is not None:
+            await state.set_sub_stereo_trim(args.sub_stereo_trim)
 
-            if args.dolby_audio is not None:
-                await state.set_dolby_audio(args.dolby_audio)
+        if args.dolby_audio is not None:
+            await state.set_dolby_audio(args.dolby_audio)
 
-            if args.compression is not None:
-                await state.set_compression(args.compression)
+        if args.compression is not None:
+            await state.set_compression(args.compression)
 
-            if args.imax is not None:
-                await state.set_imax_enhanced(args.imax)
+        if args.imax is not None:
+            await state.set_imax_enhanced(args.imax)
 
-            if args.display_info is not None:
-                await state.set_display_info_type(args.display_info)
+        if args.display_info is not None:
+            await state.set_display_info_type(args.display_info)
 
-            if args.monitor:
-                updated = asyncio.Event()
-                prev = state.to_dict()
-                with client.listen(lambda _: updated.set()):
-                    while client.connected:
-                        await updated.wait()
-                        updated.clear()
-                        curr = state.to_dict()
-                        if prev != curr:
-                            pprint(curr)
-                            prev = curr
-            else:
-                pprint(state.to_dict())
+        if args.monitor:
+            updated = asyncio.Event()
+            prev = state.to_dict()
+            with client.listen(lambda _: updated.set()):
+                while client.connected:
+                    await updated.wait()
+                    updated.clear()
+                    curr = state.to_dict()
+                    if prev != curr:
+                        pprint(curr)
+                        prev = curr
+        else:
+            pprint(state.to_dict())
 
 
 async def run_server(args):
