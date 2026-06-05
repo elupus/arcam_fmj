@@ -175,3 +175,39 @@ async def test_cancellation(silent_server):
 
     with pytest.raises(asyncio.CancelledError):
         await task
+
+
+async def test_cancellation_unblocks_pending_requests(silent_server):
+    """Cancelling the process loop must wake pending request awaiters with
+    CancelledError, not NotConnectedException, so the cancel isn't masked
+    when it propagates through enclosing task groups during shutdown.
+
+    Exercises both shutdown paths: the request popped into ``_write_and_wait``
+    (inner finally) and the request still sitting in the priority queue
+    (outer drain).
+    """
+    c = Client("localhost", 8888)
+    await c.start()
+    try:
+        process_task = asyncio.create_task(c.process())
+
+        in_flight = asyncio.create_task(
+            c.request(1, CommandCodes.POWER, bytes([0xF0]))
+        )
+        queued = asyncio.create_task(
+            c.request(1, CommandCodes.VOLUME, bytes([0xF0]))
+        )
+        # Yield long enough for the send loop to pop in_flight; queued
+        # stays in the priority queue behind it.
+        await asyncio.sleep(0.05)
+
+        process_task.cancel()
+
+        with pytest.raises(asyncio.CancelledError):
+            await in_flight
+        with pytest.raises(asyncio.CancelledError):
+            await queued
+        with pytest.raises(asyncio.CancelledError):
+            await process_task
+    finally:
+        await c.stop()
