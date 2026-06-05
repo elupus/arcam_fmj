@@ -169,9 +169,8 @@ class ClientBase:
         _LOGGER.debug("Sending %s", packet)
         with self.listen(listen):
             await write_packet(writer, packet)
-            return await asyncio.wait_for(
-                future, timeout=_REQUEST_TIMEOUT.total_seconds()
-            )
+            async with asyncio.timeout(_REQUEST_TIMEOUT.total_seconds()):
+                return await future
 
     async def _process_send(self, writer: StreamWriter):
         try:
