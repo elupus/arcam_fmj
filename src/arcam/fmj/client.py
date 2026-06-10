@@ -3,11 +3,11 @@
 import asyncio
 from asyncio.streams import StreamReader, StreamWriter
 import logging
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable, Coroutine
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import timedelta
-from typing import overload
+from typing import Any, overload
 
 from serialx import open_serial_connection
 
@@ -45,6 +45,11 @@ _USER_PRIORITY = 0
 _UPDATE_PRIORITY = 10
 _HEARTBEAT_PRIORITY = 100
 
+#: A coroutine that fetches one piece of device state.
+UpdateTask = Coroutine[Any, Any, None]
+#: Supplies the update tasks wanted right now; re-invoked each loop pass.
+UpdateProvider = Callable[[], Awaitable[list[UpdateTask]]]
+
 
 @dataclass(order=True)
 class _QueueItem:
@@ -59,7 +64,7 @@ class ClientBase:
         self._reader: StreamReader | None = None
         self._writer: StreamWriter | None = None
         self._listen: set[Callable] = set()
-        self._update_providers: set[Callable] = set()
+        self._update_providers: set[UpdateProvider] = set()
         self._queue: asyncio.PriorityQueue[_QueueItem] | None = None
         self._seq: int = 0
 
@@ -86,10 +91,10 @@ class ClientBase:
         finally:
             self._listen.remove(listener)
 
-    def register_update_provider(self, provider: Callable) -> None:
+    def register_update_provider(self, provider: UpdateProvider) -> None:
         self._update_providers.add(provider)
 
-    def unregister_update_provider(self, provider: Callable) -> None:
+    def unregister_update_provider(self, provider: UpdateProvider) -> None:
         self._update_providers.discard(provider)
 
     async def start(self) -> None:
@@ -215,7 +220,7 @@ class ClientBase:
 
     async def _process_updates(self) -> None:
         while True:
-            tasks: list = []
+            tasks: list[UpdateTask] = []
             for provider in self._update_providers:
                 tasks.extend(await provider())
             if not tasks:

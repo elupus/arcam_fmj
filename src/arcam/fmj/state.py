@@ -92,7 +92,7 @@ from .rc5 import (
     RC5CodePlayback,
     RC5CodeToggle,
 )
-from .client import Client, _UPDATE_PRIORITY
+from .client import Client, UpdateTask, _UPDATE_PRIORITY
 from .utils import run_tasks
 
 _LOGGER = logging.getLogger(__name__)
@@ -764,7 +764,7 @@ class State:
             track = ""
         return status, track
 
-    async def get_update_tasks(self) -> list:
+    async def get_update_tasks(self) -> list[UpdateTask]:
         """Return a list of update coroutines for the current device state.
         """
         priority = _UPDATE_PRIORITY
@@ -878,7 +878,7 @@ class State:
         if self._amxduet is None:
             await _update_amxduet()
 
-        tasks: list = []
+        tasks: list[UpdateTask] = []
         for cc in CommandCodes:
             if not (cc.flags & CommandFlags.UPDATE):
                 continue
