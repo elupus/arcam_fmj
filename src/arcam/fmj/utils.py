@@ -21,6 +21,18 @@ async def run_tasks(*tasks: Coroutine) -> None:
         raise copy(exc.exceptions[0]).with_traceback(exc.exceptions[0].__traceback__)
 
 
+async def cancel_and_wait(task: asyncio.Task[Any]) -> None:
+    """Cancel a task and await it, re-raising only a cancellation of the calling task.
+    """
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        current = asyncio.current_task()
+        if current is not None and current.cancelling() > 0:
+            raise
+
+
 def async_retry(attempts=2, allowed_exceptions=()):
     def decorator(f):
         @functools.wraps(f)

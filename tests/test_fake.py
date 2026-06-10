@@ -1,11 +1,11 @@
 """Test with a fake server"""
 
 import asyncio
-import contextlib
 import logging
 import pytest
 from datetime import timedelta
 
+from arcam.fmj.utils import cancel_and_wait
 from arcam.fmj.commands import CommandCodes
 from arcam.fmj.errors import (
     CommandNotRecognised,
@@ -127,9 +127,7 @@ async def test_process_runs_update_providers(server):
             assert state.get_power() is False  # bytes([0x00]) → False
             assert state.get_volume() == 0x01
         finally:
-            process_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await process_task
+            await cancel_and_wait(process_task)
     finally:
         await state.stop()
         await c.stop()
@@ -149,9 +147,7 @@ async def test_heartbeat_keeps_connection_alive(speedy_client, server):
             await asyncio.sleep(_HEARTBEAT_TIMEOUT.total_seconds() + 0.5)
             assert c.connected
         finally:
-            process_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await process_task
+            await cancel_and_wait(process_task)
     finally:
         await c.stop()
 
