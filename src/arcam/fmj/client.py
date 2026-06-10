@@ -28,7 +28,7 @@ from .packets import (
     read_response,
     write_packet,
 )
-from .utils import async_retry, run_tasks
+from .utils import async_retry, cancel_and_wait, run_tasks
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -67,6 +67,9 @@ class ClientBase:
         self._update_providers: set[UpdateProvider] = set()
         self._queue: asyncio.PriorityQueue[_QueueItem] | None = None
         self._seq: int = 0
+        # Set whenever no connection is up, including before the first start().
+        self._disconnected = asyncio.Event()
+        self._disconnected.set()
 
     @property
     def peer(self) -> str:
@@ -104,6 +107,7 @@ class ClientBase:
         _LOGGER.debug("Connecting to %s", self.peer)
         self._reader, self._writer = await self._open()
         self._queue = asyncio.PriorityQueue()
+        self._disconnected.clear()
         _LOGGER.info("Connected to %s", self.peer)
 
     async def stop(self) -> None:
@@ -118,6 +122,7 @@ class ClientBase:
                 self._writer = None
                 self._reader = None
                 self._queue = None
+                self._disconnected.set()
 
     @overload
     async def request_raw(self, request: CommandPacket, priority: int = _USER_PRIORITY) -> ResponsePacket: ...
@@ -250,6 +255,7 @@ class ClientBase:
             )
         finally:
             _LOGGER.debug("Process task shutting down")
+            self._disconnected.set()
             self._writer.close()
 
 class Client(ClientBase):

@@ -93,7 +93,7 @@ from .rc5 import (
     RC5CodeToggle,
 )
 from .client import Client, UpdateTask, _UPDATE_PRIORITY
-from .utils import run_tasks
+from .utils import run_tasks, wait_any
 
 _LOGGER = logging.getLogger(__name__)
 _T = TypeVar("_T")
@@ -908,4 +908,7 @@ class State:
 
     async def update(self) -> None:
         """Block until the provider-driven update loop completes one pass."""
-        await self._updated.wait()
+        # pylint: disable=protected-access
+        await wait_any(self._updated, self._client._disconnected)
+        if self._client._disconnected.is_set():
+            raise NotConnectedException()

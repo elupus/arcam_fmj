@@ -33,6 +33,19 @@ async def cancel_and_wait(task: asyncio.Task[Any]) -> None:
             raise
 
 
+async def wait_any(*events: asyncio.Event) -> None:
+    """Wait until at least one of the events is set."""
+    if any(event.is_set() for event in events):
+        return
+    waits = [asyncio.create_task(event.wait()) for event in events]
+    try:
+        await asyncio.wait(waits, return_when=asyncio.FIRST_COMPLETED)
+    finally:
+        for wait in waits:
+            wait.cancel()
+        await asyncio.wait(waits)
+
+
 def async_retry(attempts=2, allowed_exceptions=()):
     def decorator(f):
         @functools.wraps(f)
