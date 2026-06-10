@@ -302,9 +302,5 @@ class ClientContext:
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         if self._task:
-            self._task.cancel()
-            try:
-                await self._task
-            except asyncio.CancelledError:
-                pass
+            await cancel_and_wait(self._task)
         await self._client.stop()
