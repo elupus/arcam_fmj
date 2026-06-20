@@ -35,6 +35,24 @@ from arcam.fmj.rc5 import (
     RC5CodeToggle,
 )
 
+# Representative model per family, so a test can seed a State whose _api_model
+# derives from a real device-model string the way the running library does.
+MODEL_FOR_API = {
+    ApiModel.API450_SERIES: "AVR450",
+    ApiModel.API860_SERIES: "AVR850",
+    ApiModel.APIHDA_SERIES: "AVR30",
+    ApiModel.APISA_SERIES: "SA30",
+    ApiModel.APIPA_SERIES: "PA720",
+    ApiModel.APIST_SERIES: "ST60",
+}
+
+
+def make_state(client, zn, api_model):
+    state = State(client, zn)
+    state._amxduet = AmxDuetResponse({"Device-Model": MODEL_FOR_API[api_model]})
+    return state
+
+
 TEST_PARAMS = [
     (1, ApiModel.API450_SERIES),
     (1, ApiModel.API860_SERIES),
@@ -73,7 +91,7 @@ PARAMS_TO_RC5COMMAND = {
 @pytest.mark.parametrize("zn, api_model", TEST_PARAMS)
 async def test_power_on(zn, api_model):
     client = MagicMock(spec=Client)
-    state = State(client, zn, api_model)
+    state = make_state(client, zn, api_model)
     response = ResponsePacket(
         zn,
         CommandCodes.SIMULATE_RC5_IR_COMMAND,
@@ -94,7 +112,7 @@ async def test_power_on(zn, api_model):
 @pytest.mark.parametrize("zn, api_model", TEST_PARAMS)
 async def test_power_off(zn, api_model):
     client = MagicMock(spec=Client)
-    state = State(client, zn, api_model)
+    state = make_state(client, zn, api_model)
 
     assert state.get_power() is None
     await state.set_power(False)
@@ -190,7 +208,7 @@ def test_get_mute(byte_val, expected):
 async def test_set_mute_write_supported():
     """SA/PA/ST series use direct MUTE command."""
     client = MagicMock(spec=Client)
-    state = State(client, 1, ApiModel.APISA_SERIES)
+    state = make_state(client, 1, ApiModel.APISA_SERIES)
     await state.set_mute(True)
     client.request.assert_called_with(1, CommandCodes.MUTE, bytes([0x00]), 0)
 
@@ -198,7 +216,7 @@ async def test_set_mute_write_supported():
 async def test_set_mute_rc5():
     """450/860/HDA series use RC5 IR command for mute."""
     client = MagicMock(spec=Client)
-    state = State(client, 1, ApiModel.API450_SERIES)
+    state = make_state(client, 1, ApiModel.API450_SERIES)
     await state.set_mute(True)
     client.request.assert_called_with(
         1, CommandCodes.SIMULATE_RC5_IR_COMMAND, bytes([16, 119]), 0)
@@ -216,7 +234,7 @@ async def test_set_mute_rc5():
 ])
 def test_get_2ch(fmt, expected):
     client = MagicMock(spec=Client)
-    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    state = make_state(client, 1, ApiModel.APIHDA_SERIES)
     state._state[CommandCodes.INCOMING_AUDIO_FORMAT] = bytes([fmt, 0x02])
     assert state.get_2ch() == expected
 
@@ -224,7 +242,7 @@ def test_get_2ch(fmt, expected):
 def test_get_2ch_no_audio():
     """No audio format data defaults to 2ch."""
     client = MagicMock(spec=Client)
-    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    state = make_state(client, 1, ApiModel.APIHDA_SERIES)
     assert state.get_2ch() is True
 
 
@@ -260,6 +278,18 @@ def test_listen_amxduet():
     state._listen(amx)
     assert state.model == "AV860"
     assert state.revision == "1.2.3"
+    assert state._api_model == ApiModel.API860_SERIES
+
+
+def test_amxduet_resolves_api_model_for_every_zone():
+    """An AMX response broadcast to every zone sharing a client resolves _api_model on each."""
+    client = MagicMock(spec=Client)
+    z1, z2 = State(client, 1), State(client, 2)
+    amx = AmxDuetResponse({"Device-Model": "AV41"})
+    z1._listen(amx)
+    z2._listen(amx)
+    assert z1.model == z2.model == "AV41"
+    assert z1._api_model == z2._api_model == ApiModel.APIHDA_SERIES
 
 
 # --- Save/Restore Settings (0x06) ---
@@ -676,7 +706,7 @@ async def test_set_compression():
 
 def test_get_imax_enhanced_none():
     client = MagicMock(spec=Client)
-    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    state = make_state(client, 1, ApiModel.APIHDA_SERIES)
     assert state.get_imax_enhanced() is None
 
 
@@ -687,7 +717,7 @@ def test_get_imax_enhanced_none():
 ])
 def test_get_imax_enhanced(byte_val, expected):
     client = MagicMock(spec=Client)
-    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    state = make_state(client, 1, ApiModel.APIHDA_SERIES)
     state._state[CommandCodes.IMAX_ENHANCED] = bytes([byte_val])
     assert state.get_imax_enhanced() == expected
 
@@ -700,7 +730,7 @@ def test_get_imax_enhanced(byte_val, expected):
 async def test_set_imax_enhanced(mode, expected_byte):
     """Set values are asymmetric: OFF->0xF3, ON->0xF2, AUTO->0xF1."""
     client = MagicMock(spec=Client)
-    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    state = make_state(client, 1, ApiModel.APIHDA_SERIES)
     await state.set_imax_enhanced(mode)
     client.request.assert_called_with(
         1, CommandCodes.IMAX_ENHANCED, bytes([expected_byte]), 0)
@@ -711,7 +741,7 @@ async def test_set_imax_enhanced(mode, expected_byte):
 
 def test_get_network_playback_status_none():
     client = MagicMock(spec=Client)
-    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    state = make_state(client, 1, ApiModel.APIHDA_SERIES)
     assert state.get_network_playback_status() is None
 
 
@@ -723,7 +753,7 @@ def test_get_network_playback_status_none():
 ])
 def test_get_network_playback_status(byte_val, expected):
     client = MagicMock(spec=Client)
-    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    state = make_state(client, 1, ApiModel.APIHDA_SERIES)
     state._state[CommandCodes.NETWORK_PLAYBACK_STATUS] = bytes([byte_val])
     assert state.get_network_playback_status() == expected
 
@@ -733,13 +763,13 @@ def test_get_network_playback_status(byte_val, expected):
 
 def test_get_now_playing_none():
     client = MagicMock(spec=Client)
-    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    state = make_state(client, 1, ApiModel.APIHDA_SERIES)
     assert state.get_now_playing() is None
 
 
 def test_get_now_playing():
     client = MagicMock(spec=Client)
-    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    state = make_state(client, 1, ApiModel.APIHDA_SERIES)
     state._now_playing = NowPlayingInfo(
         track="Bohemian Rhapsody",
         artist="Queen",
@@ -760,7 +790,7 @@ def test_get_now_playing():
 
 def test_get_bluetooth_status_none():
     client = MagicMock(spec=Client)
-    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    state = make_state(client, 1, ApiModel.APIHDA_SERIES)
     status, track = state.get_bluetooth_status()
     assert status is None
     assert track is None
@@ -768,7 +798,7 @@ def test_get_bluetooth_status_none():
 
 def test_get_bluetooth_status_no_connection():
     client = MagicMock(spec=Client)
-    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    state = make_state(client, 1, ApiModel.APIHDA_SERIES)
     state._state[CommandCodes.BLUETOOTH_STATUS] = bytes([0x00])
     status, track = state.get_bluetooth_status()
     assert status == BluetoothAudioStatus.NO_CONNECTION
@@ -777,7 +807,7 @@ def test_get_bluetooth_status_no_connection():
 
 def test_get_bluetooth_status_playing_with_track():
     client = MagicMock(spec=Client)
-    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    state = make_state(client, 1, ApiModel.APIHDA_SERIES)
     state._state[CommandCodes.BLUETOOTH_STATUS] = bytes([0x03]) + b"My Song"
     status, track = state.get_bluetooth_status()
     assert status == BluetoothAudioStatus.PLAYING_AAC
@@ -789,7 +819,7 @@ def test_get_bluetooth_status_playing_with_track():
 
 async def test_send_playback():
     client = MagicMock(spec=Client)
-    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    state = make_state(client, 1, ApiModel.APIHDA_SERIES)
     await state.send_playback(RC5CodePlayback.PLAY)
     client.request.assert_called_with(
         1, CommandCodes.SIMULATE_RC5_IR_COMMAND, bytes([0x10, 0x35]), 0)
@@ -797,7 +827,7 @@ async def test_send_playback():
 
 async def test_send_navigation():
     client = MagicMock(spec=Client)
-    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    state = make_state(client, 1, ApiModel.APIHDA_SERIES)
     await state.send_navigation(RC5CodeNavigation.UP)
     client.request.assert_called_with(
         1, CommandCodes.SIMULATE_RC5_IR_COMMAND, bytes([0x10, 0x56]), 0)
@@ -805,7 +835,7 @@ async def test_send_navigation():
 
 async def test_send_toggle():
     client = MagicMock(spec=Client)
-    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    state = make_state(client, 1, ApiModel.APIHDA_SERIES)
     await state.send_toggle(RC5CodeToggle.RADIO)
     client.request.assert_called_with(
         1, CommandCodes.SIMULATE_RC5_IR_COMMAND, bytes([0x10, 0x5B]), 0)
@@ -814,7 +844,7 @@ async def test_send_toggle():
 async def test_send_playback_unsupported_model():
     """PA series has no playback."""
     client = MagicMock(spec=Client)
-    state = State(client, 1, ApiModel.APIPA_SERIES)
+    state = make_state(client, 1, ApiModel.APIPA_SERIES)
     with pytest.raises(ValueError):
         await state.send_playback(RC5CodePlayback.PLAY)
     client.request.assert_not_called()
@@ -823,7 +853,7 @@ async def test_send_playback_unsupported_model():
 async def test_send_playback_unsupported_code():
     """SA series lacks playback codes."""
     client = MagicMock(spec=Client)
-    state = State(client, 1, ApiModel.APISA_SERIES)
+    state = make_state(client, 1, ApiModel.APISA_SERIES)
     with pytest.raises(ValueError):
         await state.send_playback(RC5CodePlayback.PLAY)
     client.request.assert_not_called()
@@ -858,7 +888,7 @@ def test_rc5_avr_has_navigation(model):
 
 async def test_inc_bass_equalization():
     client = MagicMock(spec=Client)
-    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    state = make_state(client, 1, ApiModel.APIHDA_SERIES)
     await state.inc_bass_equalization()
     client.request.assert_called_with(
         1, CommandCodes.SIMULATE_RC5_IR_COMMAND, bytes([0x10, 0x2C]), 0)
@@ -866,7 +896,7 @@ async def test_inc_bass_equalization():
 
 async def test_dec_bass_equalization():
     client = MagicMock(spec=Client)
-    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    state = make_state(client, 1, ApiModel.APIHDA_SERIES)
     await state.dec_bass_equalization()
     client.request.assert_called_with(
         1, CommandCodes.SIMULATE_RC5_IR_COMMAND, bytes([0x10, 0x38]), 0)
@@ -875,7 +905,7 @@ async def test_dec_bass_equalization():
 async def test_inc_bass_equalization_unsupported():
     """SA series has no bass RC5 codes."""
     client = MagicMock(spec=Client)
-    state = State(client, 1, ApiModel.APISA_SERIES)
+    state = make_state(client, 1, ApiModel.APISA_SERIES)
     with pytest.raises(ValueError):
         await state.inc_bass_equalization()
 
@@ -892,7 +922,7 @@ def test_rc5_bass_table_entries_are_valid():
 
 async def test_set_display_brightness():
     client = MagicMock(spec=Client)
-    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    state = make_state(client, 1, ApiModel.APIHDA_SERIES)
     await state.set_display_brightness(DisplayBrightness.L2)
     client.request.assert_called_with(
         1, CommandCodes.SIMULATE_RC5_IR_COMMAND, bytes([0x10, 0x23]), 0)
@@ -900,7 +930,7 @@ async def test_set_display_brightness():
 
 async def test_set_hdmi_output():
     client = MagicMock(spec=Client)
-    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    state = make_state(client, 1, ApiModel.APIHDA_SERIES)
     await state.set_hdmi_output(HdmiOutput.OUT_1_2)
     client.request.assert_called_with(
         1, CommandCodes.SIMULATE_RC5_IR_COMMAND, bytes([0x10, 0x4B]), 0)
@@ -909,7 +939,7 @@ async def test_set_hdmi_output():
 async def test_set_hdmi_output_unsupported():
     """450 series has no HDMI output codes."""
     client = MagicMock(spec=Client)
-    state = State(client, 1, ApiModel.API450_SERIES)
+    state = make_state(client, 1, ApiModel.API450_SERIES)
     with pytest.raises(ValueError):
         await state.set_hdmi_output(HdmiOutput.OUT_1)
 
@@ -930,7 +960,7 @@ def test_rc5_hdmi_output_table_entries_are_valid():
 
 async def test_set_direct_mode():
     client = MagicMock(spec=Client)
-    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    state = make_state(client, 1, ApiModel.APIHDA_SERIES)
     await state.set_direct_mode(True)
     client.request.assert_called_with(
         1, CommandCodes.SIMULATE_RC5_IR_COMMAND, bytes([0x10, 0x4E]), 0)
@@ -945,7 +975,7 @@ async def test_set_direct_mode():
 def test_is_command_supported_universal():
     """Commands with version=None are always supported."""
     client = MagicMock(spec=Client)
-    state = State(client, 1, ApiModel.APISA_SERIES)
+    state = State(client, 1)
     state._amxduet = AmxDuetResponse({"Device-Model": "SA30"})
     assert state._is_command_supported(CommandCodes.POWER) is True
     assert state._is_command_supported(CommandCodes.VOLUME) is True
@@ -954,7 +984,7 @@ def test_is_command_supported_universal():
 def test_is_command_supported_matching_model():
     """Commands with version set are supported when model is in the set."""
     client = MagicMock(spec=Client)
-    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    state = State(client, 1)
     state._amxduet = AmxDuetResponse({"Device-Model": "AVR30"})
     # IMAX_ENHANCED has version=APIVERSION_IMAX_SERIES which includes AVR30
     assert state._is_command_supported(CommandCodes.IMAX_ENHANCED) is True
@@ -965,7 +995,7 @@ def test_is_command_supported_matching_model():
 def test_is_command_supported_non_matching_model():
     """Commands with version set are NOT supported when model is not in the set."""
     client = MagicMock(spec=Client)
-    state = State(client, 1, ApiModel.APISA_SERIES)
+    state = State(client, 1)
     state._amxduet = AmxDuetResponse({"Device-Model": "SA30"})
     # IMAX_ENHANCED is not supported on SA series
     assert state._is_command_supported(CommandCodes.IMAX_ENHANCED) is False
@@ -978,7 +1008,7 @@ def test_is_command_supported_non_matching_model():
 def test_is_command_supported_no_model_is_permissive():
     """When model is unknown, version-restricted commands are allowed."""
     client = MagicMock(spec=Client)
-    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    state = State(client, 1)
     # No AMX discovery yet, model is None
     assert state.model is None
     assert state._is_command_supported(CommandCodes.IMAX_ENHANCED) is True
@@ -987,7 +1017,7 @@ def test_is_command_supported_no_model_is_permissive():
 def test_is_command_supported_runtime_blocklist():
     """Commands in the runtime blocklist are not supported regardless of version."""
     client = MagicMock(spec=Client)
-    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    state = State(client, 1)
     state._amxduet = AmxDuetResponse({"Device-Model": "AVR30"})
     assert state._is_command_supported(CommandCodes.VOLUME) is True
     state._unsupported_commands.add(CommandCodes.VOLUME)
@@ -997,7 +1027,7 @@ def test_is_command_supported_runtime_blocklist():
 def test_require_command_raises_for_unsupported():
     """_require_command raises UnsupportedCommand for unsupported commands."""
     client = MagicMock(spec=Client)
-    state = State(client, 1, ApiModel.APISA_SERIES)
+    state = State(client, 1)
     state._amxduet = AmxDuetResponse({"Device-Model": "SA30"})
     with pytest.raises(UnsupportedCommand) as exc_info:
         state._require_command(CommandCodes.IMAX_ENHANCED)
@@ -1008,7 +1038,7 @@ def test_require_command_raises_for_unsupported():
 def test_require_command_passes_for_supported():
     """_require_command does not raise for supported commands."""
     client = MagicMock(spec=Client)
-    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    state = State(client, 1)
     state._amxduet = AmxDuetResponse({"Device-Model": "AVR30"})
     state._require_command(CommandCodes.POWER)  # should not raise
     state._require_command(CommandCodes.IMAX_ENHANCED)  # should not raise
@@ -1017,7 +1047,7 @@ def test_require_command_passes_for_supported():
 def test_require_command_raises_for_runtime_blocked():
     """_require_command raises for commands blocked at runtime."""
     client = MagicMock(spec=Client)
-    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    state = State(client, 1)
     state._unsupported_commands.add(CommandCodes.VOLUME)
     with pytest.raises(UnsupportedCommand):
         state._require_command(CommandCodes.VOLUME)
@@ -1026,7 +1056,7 @@ def test_require_command_raises_for_runtime_blocked():
 async def test_setter_raises_for_unsupported_command():
     """Setter methods raise UnsupportedCommand when the command is not supported."""
     client = MagicMock(spec=Client)
-    state = State(client, 1, ApiModel.APISA_SERIES)
+    state = State(client, 1)
     state._amxduet = AmxDuetResponse({"Device-Model": "SA30"})
     with pytest.raises(UnsupportedCommand):
         await state.set_imax_enhanced(ImaxEnhancedMode.AUTO)
@@ -1036,7 +1066,7 @@ async def test_setter_raises_for_unsupported_command():
 async def test_setter_raises_for_runtime_blocked_command():
     """Setter methods raise UnsupportedCommand for runtime-blocked commands."""
     client = MagicMock(spec=Client)
-    state = State(client, 1, ApiModel.APIHDA_SERIES)
+    state = State(client, 1)
     state._unsupported_commands.add(CommandCodes.VOLUME)
     with pytest.raises(UnsupportedCommand):
         await state.set_volume(50)
@@ -1051,7 +1081,7 @@ async def test_update_skips_unsupported_commands():
     client.connected = True
     # Make all requests raise so we purely test which commands are attempted
     client.request.side_effect = CommandInvalidAtThisTime()
-    state = State(client, 1, ApiModel.APISA_SERIES)
+    state = State(client, 1)
     state._amxduet = AmxDuetResponse({"Device-Model": "SA30"})
 
     await state.update()
@@ -1071,7 +1101,7 @@ async def test_update_records_command_not_recognised():
     client = MagicMock(spec=Client)
     client.connected = True
     client.request.side_effect = CommandNotRecognised(cc=CommandCodes.MENU)
-    state = State(client, 1, ApiModel.API450_SERIES)
+    state = State(client, 1)
     state._amxduet = AmxDuetResponse({"Device-Model": "AVR450"})
 
     assert CommandCodes.MENU not in state._unsupported_commands

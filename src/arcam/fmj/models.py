@@ -223,6 +223,23 @@ class ApiModel(enum.Enum):
     APIPA_SERIES = 5
     APIST_SERIES = 6
 
+_API_MODEL_BY_MODEL = {
+    model: api
+    for series, api in (
+        (APIVERSION_450_SERIES, ApiModel.API450_SERIES),
+        (APIVERSION_860_SERIES, ApiModel.API860_SERIES),
+        (APIVERSION_HDA_SERIES, ApiModel.APIHDA_SERIES),
+        (APIVERSION_SA_SERIES, ApiModel.APISA_SERIES),
+        (APIVERSION_PA_SERIES, ApiModel.APIPA_SERIES),
+        (APIVERSION_ST_SERIES, ApiModel.APIST_SERIES),
+    )
+    for model in series
+}
+
+def api_model_for(model: str | None) -> ApiModel:
+    """Map an AMX device-model string to its product family; API450 for unknown/None."""
+    return _API_MODEL_BY_MODEL.get(model, ApiModel.API450_SERIES)
+
 _T = TypeVar("_T", bound="IntOrTypeEnum")
 
 class IntOrTypeEnum(enum.IntEnum):
