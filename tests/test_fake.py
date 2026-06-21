@@ -103,11 +103,9 @@ async def test_silent_server_disconnect(speedy_client, silent_server):
     from arcam.fmj.client import _HEARTBEAT_TIMEOUT
 
     c = Client("localhost", 8888)
-    connected = True
-    with pytest.raises(ConnectionFailed):
-        async with ClientContext(c):
-            await asyncio.sleep(_HEARTBEAT_TIMEOUT.total_seconds() + 0.5)
-            connected = c.connected
+    async with ClientContext(c):
+        await asyncio.sleep(_HEARTBEAT_TIMEOUT.total_seconds() + 0.5)
+        connected = c.connected
     assert not connected
 
 

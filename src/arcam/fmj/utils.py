@@ -31,6 +31,8 @@ async def cancel_and_wait(task: asyncio.Task[Any]) -> None:
         current = asyncio.current_task()
         if current is not None and current.cancelling() > 0:
             raise
+    except Exception:
+        _LOGGER.exception("Error from task %r", task)
 
 
 async def wait_any(*events: asyncio.Event) -> None:
