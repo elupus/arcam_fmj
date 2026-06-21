@@ -22,10 +22,8 @@ from .codecs import (
 from .commands import CommandCodes
 from .errors import CommandInvalidAtThisTime, CommandNotRecognised
 from .models import (
-    APIVERSION_450_SERIES,
-    APIVERSION_860_SERIES,
-    APIVERSION_HDA_SERIES,
-    ApiModel,
+    APIVERSION_AVR_SERIES,
+    api_model_for,
 )
 from .packets import ResponsePacket
 from .rc5 import (
@@ -268,14 +266,9 @@ async def run_server(args):
         def __init__(self, host, port, model):
             super().__init__(host, port, model)
 
-            if model in APIVERSION_450_SERIES:
-                self._api_version = ApiModel.API450_SERIES
-            elif model in APIVERSION_860_SERIES:
-                self._api_version = ApiModel.API860_SERIES
-            elif model in APIVERSION_HDA_SERIES:
-                self._api_version = ApiModel.APIHDA_SERIES
-            else:
+            if model not in APIVERSION_AVR_SERIES:
                 raise ValueError("Unexpected model")
+            self._api_version = api_model_for(model)
 
             rc5_key = (self._api_version, 1)
 

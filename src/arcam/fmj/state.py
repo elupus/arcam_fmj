@@ -49,14 +49,9 @@ from .errors import (
     UnsupportedZone,
 )
 from .models import (
-    APIVERSION_450_SERIES,
-    APIVERSION_860_SERIES,
-    APIVERSION_HDA_SERIES,
-    APIVERSION_PA_SERIES,
     APIVERSION_RC5_NUMERIC_SERIES,
-    APIVERSION_SA_SERIES,
-    APIVERSION_ST_SERIES,
     ApiModel,
+    api_model_for,
 )
 from .packets import (
     AmxDuetRequest,
@@ -125,16 +120,13 @@ class State:
     _state: dict[int, bytes | None]
     _presets: dict[int, PresetDetail]
 
-    def __init__(
-        self, client: Client, zn: int, api_model: ApiModel = ApiModel.API450_SERIES
-    ) -> None:
+    def __init__(self, client: Client, zn: int) -> None:
         self._zn = zn
         self._client = client
         self._state = dict()
         self._presets = dict()
         self._now_playing: NowPlayingInfo | None = None
         self._amxduet: AmxDuetResponse | None = None
-        self._api_model = api_model
         self._unsupported_commands: set[CommandCodes] = set()
 
     async def start(self) -> None:
@@ -224,6 +216,10 @@ class State:
         if self._amxduet:
             return self._amxduet.device_revision
         return None
+
+    @property
+    def _api_model(self) -> ApiModel:
+        return api_model_for(self.model)
 
     def _is_command_supported(self, cc: CommandCodes) -> bool:
         """Check if a command is supported by the current device."""
@@ -836,25 +832,6 @@ class State:
             try:
                 data = await self._client.request_raw(AmxDuetRequest(), priority)
                 self._amxduet = data
-
-                if data.device_model in APIVERSION_450_SERIES:
-                    self._api_model = ApiModel.API450_SERIES
-
-                if data.device_model in APIVERSION_860_SERIES:
-                    self._api_model = ApiModel.API860_SERIES
-
-                if data.device_model in APIVERSION_HDA_SERIES:
-                    self._api_model = ApiModel.APIHDA_SERIES
-
-                if data.device_model in APIVERSION_SA_SERIES:
-                    self._api_model = ApiModel.APISA_SERIES
-
-                if data.device_model in APIVERSION_PA_SERIES:
-                    self._api_model = ApiModel.APIPA_SERIES
-
-                if data.device_model in APIVERSION_ST_SERIES:
-                    self._api_model = ApiModel.APIST_SERIES
-
             except ResponseException as e:
                 _LOGGER.debug("Response error skipping %s", e.ac)
             except NotConnectedException as e:

@@ -8,7 +8,23 @@ from arcam.fmj.state import State
 from arcam.fmj.codecs import AnswerCodes, SourceCodes
 from arcam.fmj.commands import CommandCodes
 from arcam.fmj.models import ApiModel
-from arcam.fmj.packets import ResponsePacket
+from arcam.fmj.packets import AmxDuetResponse, ResponsePacket
+
+
+MODEL_FOR_API = {
+    ApiModel.API450_SERIES: "AVR450",
+    ApiModel.API860_SERIES: "AVR850",
+    ApiModel.APIHDA_SERIES: "AVR30",
+    ApiModel.APISA_SERIES: "SA30",
+    ApiModel.APIPA_SERIES: "PA720",
+    ApiModel.APIST_SERIES: "ST60",
+}
+
+
+def make_state(client, zn, api_model):
+    state = State(client, zn)
+    state._amxduet = AmxDuetResponse({"Device-Model": MODEL_FOR_API[api_model]})
+    return state
 
 
 @pytest.mark.parametrize(
@@ -32,7 +48,7 @@ from arcam.fmj.packets import ResponsePacket
 )
 async def test_get_source(zn, api_model, source, data):
     client = MagicMock(spec=Client)
-    state = State(client, zn, api_model)
+    state = make_state(client, zn, api_model)
     state._state[CommandCodes.CURRENT_SOURCE] = data
 
     assert state.get_source() == source
@@ -55,7 +71,7 @@ async def test_get_source(zn, api_model, source, data):
 )
 async def test_set_source(zn, api_model, source, ir, data):
     client = MagicMock(spec=Client)
-    state = State(client, zn, api_model)
+    state = make_state(client, zn, api_model)
 
     if ir:
         command_code = CommandCodes.SIMULATE_RC5_IR_COMMAND
@@ -83,7 +99,7 @@ async def test_set_source(zn, api_model, source, ir, data):
 )
 async def test_set_source_invalid(zn, api_model, source):
     client = MagicMock(spec=Client)
-    state = State(client, zn, api_model)
+    state = make_state(client, zn, api_model)
 
     with pytest.raises(ValueError):
         await state.set_source(source)
