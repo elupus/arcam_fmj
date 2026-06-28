@@ -18,9 +18,10 @@ from arcam.fmj.codecs import (
     RoomEqMode,
     SAVE_RESTORE_CONFIRMATION,
     SaveRestoreSubCommand,
+    SourceCodes,
     VideoSelection,
 )
-from arcam.fmj.commands import CommandCodes, POWER_WRITE_SUPPORTED
+from arcam.fmj.commands import CommandCodes, CommandFlags, POWER_WRITE_SUPPORTED
 from arcam.fmj.errors import UnsupportedCommand
 from arcam.fmj.models import ApiModel
 from arcam.fmj.packets import AmxDuetResponse, ResponsePacket
@@ -355,24 +356,8 @@ def test_get_display_info_type_none():
 def test_get_display_info_type():
     client = MagicMock(spec=Client)
     state = State(client, 1)
-    state._state[CommandCodes.DISPLAY_INFORMATION_TYPE] = bytes([0x02])
+    state._state[CommandCodes.DISPLAY_INFO_TYPE] = bytes([0x02])
     assert state.get_display_info_type() == 2
-
-
-async def test_set_display_info_type():
-    client = MagicMock(spec=Client)
-    state = State(client, 1)
-    await state.set_display_info_type(0x03)
-    client.request.assert_called_with(
-        1, CommandCodes.DISPLAY_INFORMATION_TYPE, bytes([0x03]), 0)
-
-
-async def test_set_display_info_type_cycle():
-    client = MagicMock(spec=Client)
-    state = State(client, 1)
-    await state.set_display_info_type(0xE0)
-    client.request.assert_called_with(
-        1, CommandCodes.DISPLAY_INFORMATION_TYPE, bytes([0xE0]), 0)
 
 
 # --- Lipsync Delay (0x40) ---
@@ -1118,3 +1103,169 @@ async def test_set_video_selection():
     state = State(client, 1)
     await state.set_video_selection(VideoSelection.SAT)
     client.request.assert_called_with(1, CommandCodes.VIDEO_SELECTION, bytes([0x01]), 0)
+
+
+# --- Update conditions / _should_update -----------------------------------
+
+def _state_at_source(source: SourceCodes) -> State:
+    """Helper: a fresh State with CURRENT_SOURCE seeded to `source`."""
+    client = MagicMock(spec=Client)
+    state = State(client, 1)
+    state._state[CommandCodes.CURRENT_SOURCE] = source.to_bytes(
+        state._api_model, state._zn,
+    )
+    return state
+
+
+def test_should_update_no_update_flag():
+    """Commands without the UPDATE flag are never polled."""
+    state = State(MagicMock(spec=Client), 1)
+    assert not (CommandCodes.RESTORE_FACTORY_DEFAULT.flags & CommandFlags.UPDATE)
+    assert state._should_update(CommandCodes.RESTORE_FACTORY_DEFAULT) is False
+
+
+def test_should_update_pushed_first_pass_polls_even_if_known():
+    """Pushed CCs are polled during the initial pass regardless of cache."""
+    state = State(MagicMock(spec=Client), 1)
+    state._state[CommandCodes.POWER] = bytes([1])
+    assert state._updated.is_set() is False
+    assert state._should_update(CommandCodes.POWER) is True
+
+
+def test_should_update_pushed_skipped_after_first_pass():
+    state = State(MagicMock(spec=Client), 1)
+    state._updated.set()
+    assert CommandCodes.POWER not in state._state
+    assert state._should_update(CommandCodes.POWER) is False
+
+
+def test_should_update_not_pushed_always_polls():
+    state = _state_at_source(SourceCodes.NET)
+    state._updated.set()
+    # NETWORK_PLAYBACK_STATUS is NOT_PUSHED, sources={NET, USB, NET_USB}
+    assert state._should_update(CommandCodes.NETWORK_PLAYBACK_STATUS) is True
+
+
+def test_should_update_sources_no_match():
+    state = _state_at_source(SourceCodes.CD)
+    assert state._should_update(CommandCodes.NETWORK_PLAYBACK_STATUS) is False
+
+
+def test_should_update_sources_match():
+    state = _state_at_source(SourceCodes.NET)
+    assert state._should_update(CommandCodes.NETWORK_PLAYBACK_STATUS) is True
+
+
+def test_should_update_sources_unknown_is_permissive():
+    """When source isn't yet known, fetch source-gated CCs anyway."""
+    state = State(MagicMock(spec=Client), 1)
+    assert state.get_source() is None
+    assert state._should_update(CommandCodes.NETWORK_PLAYBACK_STATUS) is True
+
+
+def test_should_update_zone_2_requires_zone_support():
+    """Commands without ZONE_SUPPORT are skipped on zone 2 even if eligible."""
+    client = MagicMock(spec=Client)
+    state = State(client, 2)
+    # MUTE has ZONE_SUPPORT — ok
+    assert state._should_update(CommandCodes.MUTE) is True
+    # INCOMING_AUDIO_FORMAT has no ZONE_SUPPORT
+    assert state._should_update(CommandCodes.INCOMING_AUDIO_FORMAT) is False
+
+
+async def test_update_skips_commands_for_wrong_source():
+    """get_update_tasks() must not produce a request for NETWORK_PLAYBACK_STATUS
+    when source is not in its sources set."""
+    state = _state_at_source(SourceCodes.CD)
+    state._amxduet = AmxDuetResponse({"Device-Model": "AVR450"})
+    tasks = await state.get_update_tasks()
+    # Run the tasks so we can inspect what got requested
+    await asyncio.gather(*tasks)
+    requested = [call.args[1] for call in state._client.request.call_args_list]
+    assert CommandCodes.NETWORK_PLAYBACK_STATUS not in requested
+    assert CommandCodes.NOW_PLAYING_INFO not in requested
+    # But POWER (no source gate) should be fetched
+    assert CommandCodes.POWER in requested
+
+
+async def test_update_pushed_skipped_after_first_pass():
+    """After the initial pass, pushed CCs are no longer requested;
+    NOT_PUSHED ones still are (when source matches)."""
+    state = _state_at_source(SourceCodes.NET)
+    state._amxduet = AmxDuetResponse({"Device-Model": "AVR450"})
+    state._updated.set()
+    tasks = await state.get_update_tasks()
+    await asyncio.gather(*tasks)
+    requested = [call.args[1] for call in state._client.request.call_args_list]
+    # POWER is pushed — should NOT appear in a post-first-pass batch
+    assert CommandCodes.POWER not in requested
+    # NETWORK_PLAYBACK_STATUS is NOT_PUSHED + source matches — should appear
+    assert CommandCodes.NETWORK_PLAYBACK_STATUS in requested
+
+
+# --- Accessor source gating ----------------------------------------------
+
+def test_get_dab_station_returns_none_when_source_mismatch():
+    state = _state_at_source(SourceCodes.CD)
+    state._state[CommandCodes.DAB_STATION] = b"BBC R4"
+    assert state.get_dab_station() is None
+
+
+def test_get_dab_station_returns_value_when_source_unknown():
+    state = State(MagicMock(spec=Client), 1)
+    state._state[CommandCodes.DAB_STATION] = b"BBC R4"
+    assert state.get_dab_station() == "BBC R4"
+
+
+def test_get_dab_station_returns_value_when_source_matches():
+    state = _state_at_source(SourceCodes.DAB)
+    state._state[CommandCodes.DAB_STATION] = b"BBC R4"
+    assert state.get_dab_station() == "BBC R4"
+
+
+def test_get_dls_pdt_gated_by_source():
+    state = _state_at_source(SourceCodes.CD)
+    state._state[CommandCodes.DLS_PDT] = b"Now Playing"
+    assert state.get_dls_pdt() is None
+
+
+def test_get_rds_information_gated_by_source():
+    state = _state_at_source(SourceCodes.CD)
+    state._state[CommandCodes.RDS_INFORMATION] = b"BBC R4"
+    assert state.get_rds_information() is None
+
+
+def test_get_tuner_preset_gated_by_source():
+    state = _state_at_source(SourceCodes.CD)
+    state._state[CommandCodes.TUNER_PRESET] = bytes([3])
+    assert state.get_tuner_preset() is None
+
+
+def test_get_preset_details_gated_by_source():
+    state = _state_at_source(SourceCodes.CD)
+    state._presets = {1: object()}
+    assert state.get_preset_details() is None
+
+
+def test_get_network_playback_status_gated_by_source():
+    state = _state_at_source(SourceCodes.CD)
+    state._state[CommandCodes.NETWORK_PLAYBACK_STATUS] = bytes([0x01])
+    assert state.get_network_playback_status() is None
+
+
+def test_get_bluetooth_status_gated_by_source():
+    state = _state_at_source(SourceCodes.CD)
+    state._state[CommandCodes.BLUETOOTH_STATUS] = bytes([0x01]) + b"Track"
+    assert state.get_bluetooth_status() == (None, None)
+
+
+def test_get_now_playing_gated_by_source():
+    state = _state_at_source(SourceCodes.CD)
+    state._now_playing = object()  # sentinel; gate must return None before this is observed
+    assert state.get_now_playing() is None
+
+
+async def test_set_tuner_preset_noops_when_source_mismatch():
+    state = _state_at_source(SourceCodes.CD)
+    await state.set_tuner_preset(3)
+    state._client.request.assert_not_called()
