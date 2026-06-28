@@ -96,7 +96,7 @@ async def test_silent_server_request(speedy_client, silent_server, client):
 
 async def test_unsupported_zone(speedy_client, silent_server, client):
     with pytest.raises(UnsupportedZone):
-        await client.request(0x02, CommandCodes.DECODE_MODE_STATUS_2CH, bytes([0xF0]))
+        await client.request(0x02, CommandCodes.DECODE_MODE_2CH, bytes([0xF0]))
 
 
 async def test_silent_server_disconnect(speedy_client, silent_server):
