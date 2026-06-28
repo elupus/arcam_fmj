@@ -1,3 +1,4 @@
+import asyncio
 import pytest
 from unittest.mock import MagicMock
 from arcam.fmj.client import Client
@@ -1084,7 +1085,7 @@ async def test_update_skips_unsupported_commands():
     state = State(client, 1)
     state._amxduet = AmxDuetResponse({"Device-Model": "SA30"})
 
-    await state.update()
+    await asyncio.gather(*await state.get_update_tasks())
     requested_commands = [call.args[1] for call in client.request.call_args_list]
     # These commands have version restrictions that exclude SA30
     assert CommandCodes.IMAX_ENHANCED not in requested_commands
@@ -1105,7 +1106,7 @@ async def test_update_records_command_not_recognised():
     state._amxduet = AmxDuetResponse({"Device-Model": "AVR450"})
 
     assert CommandCodes.MENU not in state._unsupported_commands
-    await state.update()
+    await asyncio.gather(*await state.get_update_tasks())
     assert CommandCodes.MENU in state._unsupported_commands
 
 

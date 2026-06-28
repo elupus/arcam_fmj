@@ -180,8 +180,7 @@ async def run_state(args):
         client = Client(args.host, args.port)
     else:
         client = ClientSerial(args.serial)
-    async with ClientContext(client):
-        state = State(client, args.zone)
+    async with ClientContext(client), State(client, args.zone) as state:
         await state.update()
 
         pin = tuple(args.pin)
@@ -247,16 +246,15 @@ async def run_state(args):
 
         if args.monitor:
             updated = asyncio.Event()
-            async with state:
-                prev = state.to_dict()
-                with client.listen(lambda _: updated.set()):
-                    while client.connected:
-                        await updated.wait()
-                        updated.clear()
-                        curr = state.to_dict()
-                        if prev != curr:
-                            pprint(curr)
-                            prev = curr
+            prev = state.to_dict()
+            with client.listen(lambda _: updated.set()):
+                while client.connected:
+                    await updated.wait()
+                    updated.clear()
+                    curr = state.to_dict()
+                    if prev != curr:
+                        pprint(curr)
+                        prev = curr
         else:
             pprint(state.to_dict())
 

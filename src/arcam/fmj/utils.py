@@ -1,4 +1,7 @@
+import asyncio
 import aiohttp
+from collections.abc import Coroutine
+from copy import copy
 import functools
 import logging
 import re
@@ -6,6 +9,43 @@ from defusedxml import ElementTree
 from typing import Optional, Any
 
 _LOGGER = logging.getLogger(__name__)
+
+
+async def run_tasks(*tasks: Coroutine) -> None:
+    """Run coroutines in a TaskGroup, unwrapping BaseExceptionGroup on failure."""
+    try:
+        async with asyncio.TaskGroup() as group:
+            for task in tasks:
+                group.create_task(task)
+    except BaseExceptionGroup as exc:
+        raise copy(exc.exceptions[0]).with_traceback(exc.exceptions[0].__traceback__)
+
+
+async def cancel_and_wait(task: asyncio.Task[Any]) -> None:
+    """Cancel a task and await it, re-raising only a cancellation of the calling task.
+    """
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        current = asyncio.current_task()
+        if current is not None and current.cancelling() > 0:
+            raise
+    except Exception:
+        _LOGGER.exception("Error from task %r", task)
+
+
+async def wait_any(*events: asyncio.Event) -> None:
+    """Wait until at least one of the events is set."""
+    if any(event.is_set() for event in events):
+        return
+    waits = [asyncio.create_task(event.wait()) for event in events]
+    try:
+        await asyncio.wait(waits, return_when=asyncio.FIRST_COMPLETED)
+    finally:
+        for wait in waits:
+            wait.cancel()
+        await asyncio.wait(waits)
 
 
 def async_retry(attempts=2, allowed_exceptions=()):

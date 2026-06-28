@@ -87,7 +87,8 @@ from .rc5 import (
     RC5CodePlayback,
     RC5CodeToggle,
 )
-from .client import Client
+from .client import Client, UpdateTask, _UPDATE_PRIORITY
+from .utils import run_tasks, wait_any
 
 _LOGGER = logging.getLogger(__name__)
 _T = TypeVar("_T")
@@ -128,14 +129,17 @@ class State:
         self._now_playing: NowPlayingInfo | None = None
         self._amxduet: AmxDuetResponse | None = None
         self._unsupported_commands: set[CommandCodes] = set()
+        self._updated = asyncio.Event()
 
     async def start(self) -> None:
         # pylint: disable=protected-access
         self._client._listen.add(self._listen)
+        self._client.register_update_provider(self.get_update_tasks)
 
     async def stop(self) -> None:
         # pylint: disable=protected-access
         self._client._listen.remove(self._listen)
+        self._client.unregister_update_provider(self.get_update_tasks)
 
     async def __aenter__(self) -> "State":
         await self.start()
@@ -756,8 +760,10 @@ class State:
             track = ""
         return status, track
 
-    async def update(self, flags: CommandFlags = CommandFlags.FULL_UPDATE) -> None:
-        priority = flags.priority
+    async def get_update_tasks(self) -> list[UpdateTask]:
+        """Return a list of update coroutines for the current device state.
+        """
+        priority = _UPDATE_PRIORITY
 
         async def _update(cc: CommandCodes):
             try:
@@ -843,14 +849,15 @@ class State:
             if self._state:
                 self._state = dict()
                 self._now_playing = None
-            return
+            self._updated.clear()
+            return []
 
         if self._amxduet is None:
             await _update_amxduet()
 
-        tasks: list = []
+        tasks: list[UpdateTask] = []
         for cc in CommandCodes:
-            if not (cc.flags & flags):
+            if not (cc.flags & CommandFlags.UPDATE):
                 continue
             if not self._is_command_supported(cc):
                 continue
@@ -860,5 +867,25 @@ class State:
                 tasks.append(_update_presets())
             else:
                 tasks.append(_update(cc))
-        if tasks:
-            await asyncio.gather(*tasks)
+
+        if not self._updated.is_set():
+            if not tasks:
+                self._updated.set()
+                return []
+
+            async def _run_and_signal():
+                try:
+                    await run_tasks(*tasks)
+                finally:
+                    self._updated.set()
+
+            return [_run_and_signal()]
+
+        return tasks
+
+    async def update(self) -> None:
+        """Block until the provider-driven update loop completes one pass."""
+        # pylint: disable=protected-access
+        await wait_any(self._updated, self._client._disconnected)
+        if self._client._disconnected.is_set():
+            raise NotConnectedException()
