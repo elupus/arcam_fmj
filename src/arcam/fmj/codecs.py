@@ -7,6 +7,7 @@ individual docstrings for the mapping. Definitions are ordered by CC.
 from __future__ import annotations
 
 import enum
+from dataclasses import dataclass
 from typing import Any, Union
 
 import attr
@@ -20,6 +21,7 @@ from .models import (
     ApiModel,
     IntOrTypeEnum,
 )
+from .schemas import Schema
 
 # --- AC byte (all responses) ---
 
@@ -643,6 +645,52 @@ SAMPLE_RATE_MAP: dict[int, int | None] = {
     0x08: None,  # Undetected
 }
 
+# --- CC 0x49: VIDEO_FILM_MODE ---
+
+class VideoFilmMode(IntOrTypeEnum):
+    """Video film-mode detection setting.
+
+    Used by VIDEO_FILM_MODE (0x49).
+
+    See: SH256E "Set/Request Film Mode (0x49)".
+    """
+
+    AUTO = 0x00
+    OFF = 0x01
+
+# --- CC 0x4C/0x4D: VIDEO_NOISE_REDUCTION / VIDEO_MPEG_NOISE_REDUCTION ---
+
+class VideoNoiseReduction(IntOrTypeEnum):
+    """Video noise reduction level.
+
+    Shared by VIDEO_NOISE_REDUCTION (0x4C) and VIDEO_MPEG_NOISE_REDUCTION (0x4D).
+
+    See: SH256E "Set/Request Noise Reduction (0x4C)",
+         "Set/Request MPEG Noise Reduction (0x4D)".
+    """
+
+    OFF = 0x00
+    LOW = 0x01
+    MEDIUM = 0x02
+    HIGH = 0x03
+
+# --- CC 0x4E: ZONE_1_OSD_ON_OFF ---
+
+class ZoneOsd(IntOrTypeEnum):
+    """Zone 1 on-screen display state.
+
+    Used by ZONE_1_OSD_ON_OFF (0x4E). Response uses 0x00/0x01; Set uses
+    0xF1/0xF2 (via set_map on the ByteEnum schema).
+
+    See: SH256E "Set/Request Zone 1 OSD on/off (0x4E)".
+    """
+
+    ON = 0x00
+    OFF = 0x01
+
+#: Asymmetric set codes for ZONE_1_OSD_ON_OFF — the set form uses 0xF1/0xF2.
+ZONE_OSD_SET_MAP = {ZoneOsd.ON: 0xF1, ZoneOsd.OFF: 0xF2}
+
 # --- CC 0x4F: VIDEO_OUTPUT_SWITCHING ---
 
 class HdmiOutput(IntOrTypeEnum):
@@ -658,6 +706,70 @@ class HdmiOutput(IntOrTypeEnum):
     OUT_1_2 = 0x04
 
 # --- CC 0x50: BLUETOOTH_STATUS ---
+
+# --- CC 0x58: AUTO_SHUTDOWN_CONTROL ---
+
+class AutoShutdown(IntOrTypeEnum):
+    """Auto-shutdown timer setting.
+
+    Used by AUTO_SHUTDOWN_CONTROL (0x58).
+
+    See: SH277E "Auto shutdown control (0x58)".
+    """
+
+    DISABLED = 0x00
+    MINUTES_30 = 0x01
+    HOUR_1 = 0x02
+    HOURS_2 = 0x03
+    HOURS_4 = 0x04
+
+# --- CC 0x5B: PROCESSOR_MODE_INPUT ---
+
+@dataclass(frozen=True)
+class SaProcessorModeInput(Schema):
+    """1 byte ↔ ``SourceCodes | None``; 0x00 → None (disabled), other bytes
+    map via SA-series source encoding (zone 1).
+
+    Used by PROCESSOR_MODE_INPUT (0x5B). The data byte reuses the SA source
+    encoding (PHONO=0x01, AUX=0x02, …, GAME=0x09) with 0x00 reserved for
+    "disabled".
+
+    See: SH306E / SH320E "Processor mode input (0x5B)".
+    """
+
+    @property
+    def type_name(self) -> str:
+        return "SourceCodes | None"
+
+    def decode(self, data: bytes) -> "SourceCodes | None":
+        if int.from_bytes(data, "big") == 0x00:
+            return None
+        return SourceCodes.from_bytes(data, ApiModel.APISA_SERIES, 1)
+
+    def encode(self, value: "SourceCodes | None") -> bytes:
+        if value is None:
+            return bytes([0x00])
+        return value.to_bytes(ApiModel.APISA_SERIES, 1)
+
+# --- CC 0x61: DAC_FILTER ---
+
+class DacFilter(IntOrTypeEnum):
+    """DAC digital filter type.
+
+    Used by DAC_FILTER (0x61). SA20 supports all seven; SA10 supports
+    only the first three.
+
+    See: SH277E "DAC Filter (0x61)".
+    """
+
+    LINEAR_FAST = 0x00
+    LINEAR_SLOW = 0x01
+    MINIMUM_FAST = 0x02
+    MINIMUM_SLOW = 0x03
+    BRICK_WALL = 0x04
+    CORRECTED_FAST = 0x05
+    APODIZING = 0x06
+
 
 class BluetoothAudioStatus(IntOrTypeEnum):
     """Bluetooth connection and codec status.
