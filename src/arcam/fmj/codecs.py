@@ -7,7 +7,9 @@ individual docstrings for the mapping. Definitions are ordered by CC.
 from __future__ import annotations
 
 import enum
-from typing import Any, Union
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any, Generic, TypeVar, Union
 
 import attr
 
@@ -20,6 +22,128 @@ from .models import (
     ApiModel,
     IntOrTypeEnum,
 )
+
+# === Codecs ===
+# Codec[T] maps a command's data payload to/from a typed value; commands.py
+# attaches one to each Command and State.get/set delegate to decode/encode.
+# decode may return None for sentinel or out-of-range bytes. The generic codecs
+# live here; command-specific ones live with their CC below.
+
+_T = TypeVar("_T")
+_E = TypeVar("_E", bound=IntOrTypeEnum)
+
+
+def _get_scaled_negative(
+    data: bytes | None, min_value: float, max_value: float, scale: float
+) -> float | None:
+    if data is None:
+        return None
+    neg_limit = round(-min_value / scale) + 0x80
+    pos_limit = round(max_value / scale)
+    byte_val = int.from_bytes(data, "big")
+    if 0x81 <= byte_val <= neg_limit:
+        return -(byte_val - 0x80) * scale
+    if 0x00 <= byte_val <= pos_limit:
+        return byte_val * scale
+    return None
+
+
+def _set_scaled(value: float, min_value: float, max_value: float, scale: float) -> int:
+    value = max(min_value, min(max_value, value))
+    iv = round(value / scale)
+    return iv if iv >= 0 else 0x80 - iv
+
+
+class Codec(Generic[_T]):
+    """Maps a command payload to/from a typed value."""
+
+    def decode(self, data: bytes) -> _T | None:
+        raise NotImplementedError
+
+    def encode(self, value: _T) -> bytes:
+        raise NotImplementedError
+
+
+@dataclass(frozen=True)
+class BoolCodec(Codec[bool]):
+    """1 byte ↔ bool. inverted=True flips the mapping (MUTE)."""
+
+    inverted: bool = False
+
+    def decode(self, data: bytes) -> bool:
+        v = int.from_bytes(data, "big")
+        return v == 0x00 if self.inverted else v == 0x01
+
+    def encode(self, value: bool) -> bytes:
+        if self.inverted:
+            return bytes([0x00 if value else 0x01])
+        return bytes([0x01 if value else 0x00])
+
+
+class IntCodec(Codec[int]):
+    """1 byte ↔ int."""
+
+    def decode(self, data: bytes) -> int:
+        return int.from_bytes(data, "big")
+
+    def encode(self, value: int) -> bytes:
+        return bytes([value])
+
+
+@dataclass(frozen=True)
+class EnumCodec(Codec[_E]):
+    """1 byte ↔ IntOrTypeEnum via from_bytes / value. set_map supplies the
+    asymmetric write codes for IMAX_ENHANCED and ZONE_1_OSD_ON_OFF."""
+
+    enum_cls: type[_E]
+    set_map: dict[_E, int] | None = None
+
+    def decode(self, data: bytes) -> _E:
+        return self.enum_cls.from_bytes(data)
+
+    def encode(self, value: _E) -> bytes:
+        if self.set_map is not None:
+            return bytes([self.set_map[value]])
+        return bytes([int(value)])
+
+
+@dataclass(frozen=True)
+class ScaledCodec(Codec[float]):
+    """Negative-biased scaled float; out-of-range bytes decode to None."""
+
+    min_value: float
+    max_value: float
+    scale: float
+
+    def decode(self, data: bytes) -> float | None:
+        return _get_scaled_negative(data, self.min_value, self.max_value, self.scale)
+
+    def encode(self, value: float) -> bytes:
+        return bytes([_set_scaled(value, self.min_value, self.max_value, self.scale)])
+
+
+@dataclass(frozen=True)
+class StringCodec(Codec[str]):
+    """N bytes ↔ str, decoded with errors='replace' and trailing whitespace stripped."""
+
+    encoding: str = "utf-8"
+
+    def decode(self, data: bytes) -> str:
+        return data.decode(self.encoding, errors="replace").rstrip()
+
+    def encode(self, value: str) -> bytes:
+        return value.encode(self.encoding)
+
+
+@dataclass(frozen=True)
+class StructCodec(Codec[_T]):
+    """Multi-byte struct via a from_bytes callable (read-only)."""
+
+    parse: Callable[[bytes], _T]
+
+    def decode(self, data: bytes) -> _T:
+        return self.parse(data)
+
 
 # --- AC byte (all responses) ---
 
@@ -191,6 +315,19 @@ class MenuCodes(IntOrTypeEnum):
     TUNER = 0x08
     NETWORK = 0x09
     USB = 0x0A
+
+# --- CC 0x15: TUNER_PRESET ---
+
+class TunerPresetCodec(Codec[int]):
+    """1 byte ↔ preset number; 0xff (no preset selected) decodes to None."""
+
+    def decode(self, data: bytes) -> int | None:
+        if data == b"\xff":
+            return None
+        return int.from_bytes(data, "big")
+
+    def encode(self, value: int) -> bytes:
+        return bytes([value])
 
 # --- CC 0x1B: PRESET_DETAIL ---
 
@@ -401,6 +538,17 @@ SOURCE_CODES: dict[tuple[ApiModel, int], dict[SourceCodes, bytes]] = {
     (ApiModel.APISA_SERIES, 2): SA_SOURCE_MAPPING,
     (ApiModel.APIST_SERIES, 1): ST_SOURCE_MAPPING,
 }
+
+# --- CC 0x34: ROOM_EQ_NAMES ---
+
+class RoomEqNamesCodec(Codec[list[str]]):
+    """Concatenated 20-byte ASCII records → list of names (read-only)."""
+
+    def decode(self, data: bytes) -> list[str]:
+        return [
+            data[i:i + 20].decode("ascii", errors="replace").rstrip("\x00").strip()
+            for i in range(0, len(data), 20)
+        ]
 
 # --- CC 0x37: ROOM_EQUALIZATION ---
 
@@ -643,6 +791,58 @@ SAMPLE_RATE_MAP: dict[int, int | None] = {
     0x08: None,  # Undetected
 }
 
+class SampleRateCodec(Codec[int]):
+    """1 byte → sample rate in Hz via SAMPLE_RATE_MAP (read-only)."""
+
+    def decode(self, data: bytes) -> int | None:
+        return SAMPLE_RATE_MAP.get(data[0], 0)
+
+# --- CC 0x49: VIDEO_FILM_MODE ---
+
+class VideoFilmMode(IntOrTypeEnum):
+    """Video film-mode detection setting.
+
+    Used by VIDEO_FILM_MODE (0x49).
+
+    See: SH256E "Set/Request Film Mode (0x49)".
+    """
+
+    AUTO = 0x00
+    OFF = 0x01
+
+# --- CC 0x4C/0x4D: VIDEO_NOISE_REDUCTION / VIDEO_MPEG_NOISE_REDUCTION ---
+
+class VideoNoiseReduction(IntOrTypeEnum):
+    """Video noise reduction level.
+
+    Shared by VIDEO_NOISE_REDUCTION (0x4C) and VIDEO_MPEG_NOISE_REDUCTION (0x4D).
+
+    See: SH256E "Set/Request Noise Reduction (0x4C)",
+         "Set/Request MPEG Noise Reduction (0x4D)".
+    """
+
+    OFF = 0x00
+    LOW = 0x01
+    MEDIUM = 0x02
+    HIGH = 0x03
+
+# --- CC 0x4E: ZONE_1_OSD_ON_OFF ---
+
+class ZoneOsd(IntOrTypeEnum):
+    """Zone 1 on-screen display state.
+
+    Used by ZONE_1_OSD_ON_OFF (0x4E). Response uses 0x00/0x01; Set uses
+    0xF1/0xF2 (via set_map on the ByteEnum schema).
+
+    See: SH256E "Set/Request Zone 1 OSD on/off (0x4E)".
+    """
+
+    ON = 0x00
+    OFF = 0x01
+
+#: Asymmetric set codes for ZONE_1_OSD_ON_OFF — the set form uses 0xF1/0xF2.
+ZONE_OSD_SET_MAP = {ZoneOsd.ON: 0xF1, ZoneOsd.OFF: 0xF2}
+
 # --- CC 0x4F: VIDEO_OUTPUT_SWITCHING ---
 
 class HdmiOutput(IntOrTypeEnum):
@@ -658,6 +858,64 @@ class HdmiOutput(IntOrTypeEnum):
     OUT_1_2 = 0x04
 
 # --- CC 0x50: BLUETOOTH_STATUS ---
+
+# --- CC 0x58: AUTO_SHUTDOWN_CONTROL ---
+
+class AutoShutdown(IntOrTypeEnum):
+    """Auto-shutdown timer setting.
+
+    Used by AUTO_SHUTDOWN_CONTROL (0x58).
+
+    See: SH277E "Auto shutdown control (0x58)".
+    """
+
+    DISABLED = 0x00
+    MINUTES_30 = 0x01
+    HOUR_1 = 0x02
+    HOURS_2 = 0x03
+    HOURS_4 = 0x04
+
+# --- CC 0x5B: PROCESSOR_MODE_INPUT ---
+
+class SaProcessorModeCodec(Codec["SourceCodes | None"]):
+    """1 byte ↔ SourceCodes | None; 0x00 → None (disabled), other bytes via the
+    SA-series source encoding (zone 1).
+
+    See: SH306E / SH320E "Processor mode input (0x5B)".
+    """
+
+    def decode(self, data: bytes) -> SourceCodes | None:
+        if int.from_bytes(data, "big") == 0x00:
+            return None
+        try:
+            return SourceCodes.from_bytes(data, ApiModel.APISA_SERIES, 1)
+        except ValueError:
+            return None
+
+    def encode(self, value: SourceCodes | None) -> bytes:
+        if value is None:
+            return bytes([0x00])
+        return value.to_bytes(ApiModel.APISA_SERIES, 1)
+
+# --- CC 0x61: DAC_FILTER ---
+
+class DacFilter(IntOrTypeEnum):
+    """DAC digital filter type.
+
+    Used by DAC_FILTER (0x61). SA20 supports all seven; SA10 supports
+    only the first three.
+
+    See: SH277E "DAC Filter (0x61)".
+    """
+
+    LINEAR_FAST = 0x00
+    LINEAR_SLOW = 0x01
+    MINIMUM_FAST = 0x02
+    MINIMUM_SLOW = 0x03
+    BRICK_WALL = 0x04
+    CORRECTED_FAST = 0x05
+    APODIZING = 0x06
+
 
 class BluetoothAudioStatus(IntOrTypeEnum):
     """Bluetooth connection and codec status.
