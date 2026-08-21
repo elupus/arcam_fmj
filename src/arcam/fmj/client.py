@@ -12,7 +12,7 @@ from typing import Any, overload
 from serialx import open_serial_connection
 
 from .codecs import AnswerCodes
-from .commands import CommandCodes, CommandFlags
+from .commands import POWER, CommandFlags, command_for
 from .errors import (
     ArcamException,
     ConnectionFailed,
@@ -140,11 +140,13 @@ class ClientBase:
         self._queue.put_nowait(_QueueItem(priority, self._seq, request, future))
         return await future
 
-    async def request(self, zn: int, cc: CommandCodes, data: bytes, priority: int = _USER_PRIORITY):
+    async def request(self, zn: int, cc: int, data: bytes, priority: int = _USER_PRIORITY):
         if self._queue is None:
             raise NotConnectedException()
 
-        if not (cc.flags & CommandFlags.ZONE_SUPPORT) and zn != 1:
+        command = command_for(cc)
+        flags = command.flags if command is not None else CommandFlags(0)
+        if not (flags & CommandFlags.ZONE_SUPPORT) and zn != 1:
             raise UnsupportedZone()
 
         response = await self.request_raw(CommandPacket(zn, cc, data), priority)
@@ -237,7 +239,7 @@ class ClientBase:
             await asyncio.sleep(_HEARTBEAT_INTERVAL.total_seconds())
             _LOGGER.debug("Sending heartbeat ping")
             try:
-                await self.request(1, CommandCodes.POWER, bytes([0xF0]), _HEARTBEAT_PRIORITY)
+                await self.request(1, POWER.cc, bytes([0xF0]), _HEARTBEAT_PRIORITY)
             except (ArcamException, TimeoutError):
                 _LOGGER.debug("Heartbeat ping timed out")
 

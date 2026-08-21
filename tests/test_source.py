@@ -1,3 +1,7 @@
+from arcam.fmj.commands import (
+    CURRENT_SOURCE,
+    SIMULATE_RC5_IR_COMMAND,
+)
 import logging
 
 import pytest
@@ -6,7 +10,6 @@ from unittest.mock import MagicMock
 from arcam.fmj.client import Client
 from arcam.fmj.state import State
 from arcam.fmj.codecs import AnswerCodes, SourceCodes
-from arcam.fmj.commands import CommandCodes
 from arcam.fmj.models import ApiModel
 from arcam.fmj.packets import AmxDuetResponse, ResponsePacket
 
@@ -49,7 +52,7 @@ def make_state(client, zn, api_model):
 async def test_get_source(zn, api_model, source, data):
     client = MagicMock(spec=Client)
     state = make_state(client, zn, api_model)
-    state._state[CommandCodes.CURRENT_SOURCE] = data
+    state._state[CURRENT_SOURCE.cc] = data
 
     assert state.get_source() == source
 
@@ -62,6 +65,7 @@ async def test_get_source(zn, api_model, source, data):
         (1, ApiModel.APIHDA_SERIES, SourceCodes.AUX, True, bytes([16, 99])),
         (1, ApiModel.APIHDA_SERIES, SourceCodes.UHD, True, bytes([16, 125])),
         (1, ApiModel.APISA_SERIES, SourceCodes.AUX, False, bytes([0x02])),
+        (1, ApiModel.APIST_SERIES, SourceCodes.DIG1, False, bytes([0x01])),
         (2, ApiModel.API450_SERIES, SourceCodes.AUX, True, bytes([23, 13])),
         (2, ApiModel.API860_SERIES, SourceCodes.AUX, True, bytes([23, 13])),
         (2, ApiModel.APIHDA_SERIES, SourceCodes.AUX, True, bytes([23, 13])),
@@ -74,9 +78,9 @@ async def test_set_source(zn, api_model, source, ir, data):
     state = make_state(client, zn, api_model)
 
     if ir:
-        command_code = CommandCodes.SIMULATE_RC5_IR_COMMAND
+        command_code = SIMULATE_RC5_IR_COMMAND.cc
     else:
-        command_code = CommandCodes.CURRENT_SOURCE
+        command_code = CURRENT_SOURCE.cc
 
     client.request.return_value = ResponsePacket(
         zn,
