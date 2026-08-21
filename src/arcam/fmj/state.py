@@ -233,6 +233,28 @@ class State:
             return self.model in cc.version
         return True
 
+    def _is_command_supported_on_source(self, cc: CommandCodes) -> bool:
+        """True iff `cc` has no source gate, the gate is satisfied, or the current source is unknown."""
+        if cc.sources is None:
+            return True
+        src = self.get_source()
+        return src is None or src in cc.sources
+
+    def _should_update(self, cc: CommandCodes) -> bool:
+        """Whether the update loop should fetch this command right now."""
+        if not self._is_command_supported(cc):
+            return False
+        if not (cc.flags & CommandFlags.ZONE_SUPPORT) and self._zn != 1:
+            return False
+        if not (cc.flags & CommandFlags.UPDATE):
+            return False
+        # Pushed commands are fetched only during the initial pass.
+        if not (cc.flags & CommandFlags.NOT_PUSHED) and self._updated.is_set():
+            return False
+        if not self._is_command_supported_on_source(cc):
+            return False
+        return True
+
     def _require_command(self, cc: CommandCodes) -> None:
         """Raise UnsupportedCommand if the command is not supported."""
         if not self._is_command_supported(cc):
@@ -659,33 +681,45 @@ class State:
             await self._send_rc5(RC5CODE_VOLUME, False)
 
     def get_dab_station(self) -> str | None:
+        if not self._is_command_supported_on_source(CommandCodes.DAB_STATION):
+            return None
         value = self._state.get(CommandCodes.DAB_STATION)
         if value is None:
             return None
         return value.decode("utf8", errors="replace").rstrip()
 
     def get_dls_pdt(self) -> str | None:
+        if not self._is_command_supported_on_source(CommandCodes.DLS_PDT_INFO):
+            return None
         value = self._state.get(CommandCodes.DLS_PDT_INFO)
         if value is None:
             return None
         return value.decode("utf8", errors="replace").rstrip()
 
     def get_rds_information(self) -> str | None:
+        if not self._is_command_supported_on_source(CommandCodes.RDS_INFORMATION):
+            return None
         value = self._state.get(CommandCodes.RDS_INFORMATION)
         if value is None:
             return None
         return value.decode("utf8", errors="replace").rstrip()
 
     async def set_tuner_preset(self, preset: int) -> None:
+        if not self._is_command_supported_on_source(CommandCodes.TUNER_PRESET):
+            return
         await self._request(self._zn, CommandCodes.TUNER_PRESET, bytes([preset]))
 
     def get_tuner_preset(self) -> int | None:
+        if not self._is_command_supported_on_source(CommandCodes.TUNER_PRESET):
+            return None
         value = self._state.get(CommandCodes.TUNER_PRESET)
         if value is None or value == b"\xff":
             return None
         return int.from_bytes(value, "big")
 
-    def get_preset_details(self) -> dict[int, PresetDetail]:
+    def get_preset_details(self) -> dict[int, PresetDetail] | None:
+        if not self._is_command_supported_on_source(CommandCodes.PRESET_DETAIL):
+            return None
         return self._presets
 
     async def send_navigation(self, code: RC5CodeNavigation) -> None:
@@ -737,6 +771,8 @@ class State:
 
     def get_network_playback_status(self) -> NetworkPlaybackStatus | None:
         """Return the network playback status (stopped/transitioning/playing/paused)."""
+        if not self._is_command_supported_on_source(CommandCodes.NETWORK_PLAYBACK_STATUS):
+            return None
         value = self._state.get(CommandCodes.NETWORK_PLAYBACK_STATUS)
         if value is None:
             return None
@@ -744,12 +780,16 @@ class State:
 
     def get_now_playing(self) -> NowPlayingInfo | None:
         """Return now-playing metadata (HDA series, NET/BT sources)."""
+        if not self._is_command_supported_on_source(CommandCodes.NOW_PLAYING_INFO):
+            return None
         return self._now_playing
 
     def get_bluetooth_status(
         self,
     ) -> tuple[BluetoothAudioStatus, str] | tuple[None, None]:
         """Return Bluetooth audio status and track name (HDA series)."""
+        if not self._is_command_supported_on_source(CommandCodes.BLUETOOTH_STATUS):
+            return None, None
         value = self._state.get(CommandCodes.BLUETOOTH_STATUS)
         if value is None:
             return None, None
@@ -857,9 +897,7 @@ class State:
 
         tasks: list[UpdateTask] = []
         for cc in CommandCodes:
-            if not (cc.flags & CommandFlags.UPDATE):
-                continue
-            if not self._is_command_supported(cc):
+            if not self._should_update(cc):
                 continue
             if cc == CommandCodes.NOW_PLAYING_INFO:
                 tasks.append(_update_now_playing())

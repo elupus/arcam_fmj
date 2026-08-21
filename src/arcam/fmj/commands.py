@@ -1,13 +1,16 @@
 """CommandCodes enum — the command catalogue.
 
-Each entry carries ``(value, version, flags)`` where *version* gates model
-support and *flags* describe protocol behaviour. Definitions are ordered
-by command-code hex value within each section.
+Each entry carries ``(value, version, flags, sources)`` where *version*
+gates model support, *flags* describe protocol behaviour (including update
+loop participation), and *sources* gates both update polling and cached
+accessors to a specific source set. Definitions are ordered by
+command-code hex value within each section.
 """
 from __future__ import annotations
 
 import enum
 
+from .codecs import SourceCodes
 from .models import (
     APIVERSION_450_SERIES,
     APIVERSION_AMP_DIAGNOSTICS_SERIES,
@@ -90,15 +93,25 @@ _SIMPLE_IP = APIVERSION_SIMPLE_IP_SERIES
 _PHONO = APIVERSION_PHONO_SERIES
 _DAC_FILT = APIVERSION_DAC_FILTER_SERIES
 
+_FM = frozenset({SourceCodes.FM})
+_DAB = frozenset({SourceCodes.DAB})
+_TUN = frozenset({SourceCodes.FM, SourceCodes.DAB})
+_NET = frozenset({SourceCodes.NET, SourceCodes.USB, SourceCodes.NET_USB})
+_BT = frozenset({SourceCodes.BT})
+
 class CommandCodes(IntOrTypeEnum):
     """Per-command protocol metadata.
 
-    Each member is ``(cc_byte, version_set | None, flags)``. The ``version``
-    field gates which device families support the command; ``flags`` describe
-    zone support, polling requirements, and update behaviour.
+    Each member is ``(cc_byte, version_set | None, flags, sources)``. The
+    ``version`` field gates which device families support the command;
+    ``flags`` describe protocol behaviour (UPDATE gates participation in
+    the update loop, NOT_PUSHED forces every-cycle polling); ``sources``
+    (when not None) restricts both the update loop and cached accessors
+    to a specific source set.
     """
 
     flags: CommandFlags
+    sources: frozenset[SourceCodes] | None
 
     @classmethod
     def _create_member(cls, value):
@@ -109,26 +122,34 @@ class CommandCodes(IntOrTypeEnum):
             obj._value_ = value
             obj.version = None
             obj.flags = CommandFlags(0)
+            obj.sources = None
             pseudo_member = cls._value2member_map_.setdefault(value, obj)
         return pseudo_member
 
-    def __new__(cls, value: int, version: set[str] | None = None, flags=CommandFlags(0)):
+    def __new__(
+        cls,
+        value: int,
+        version: set[str] | None = None,
+        flags: CommandFlags | None = None,
+        sources: frozenset[SourceCodes] | None = None,
+    ):
         obj = int.__new__(cls, value)
         obj._value_ = value
         obj.version = version
-        obj.flags = flags
+        obj.flags = flags if flags is not None else CommandFlags(0)
+        obj.sources = sources
         return obj
 
     # fmt: off
-    # Name                            CC    Version     Flags
-    # ====                            ==    =======     =====
+    # Name                            CC    Version     Flags             Sources
+    # ====                            ==    =======     =====             =======
 
     # --- System ---
     POWER                           = 0x00, None,       _Z | _U
     DISPLAY_BRIGHTNESS              = 0x01, _AVR_SA_ST
     HEADPHONES                      = 0x02, _AVR_SA,    _U
-    FMGENRE                         = 0x03, _AVR,       _Z
-    SOFTWARE_VERSION                = 0x04, None
+    FMGENRE                         = 0x03, _AVR,       _Z | _U,          _FM
+    SOFTWARE_VERSION                = 0x04, None,       _U
     RESTORE_FACTORY_DEFAULT         = 0x05, None
     SAVE_RESTORE_COPY_OF_SETTINGS   = 0x06, _AVR
     SIMULATE_RC5_IR_COMMAND         = 0x08, _AVR_SA_ST, _Z
@@ -145,18 +166,18 @@ class CommandCodes(IntOrTypeEnum):
     DIRECT_MODE_STATUS              = 0x0F, _DIRECT
     DECODE_MODE_STATUS_2CH          = 0x10, _AVR,       _U
     DECODE_MODE_STATUS_MCH          = 0x11, _AVR,       _U
-    RDS_INFORMATION                 = 0x12, _AVR,       _Z | _U
+    RDS_INFORMATION                 = 0x12, _AVR,       _Z | _U,          _FM
     VIDEO_OUTPUT_RESOLUTION         = 0x13, _AVR
 
     # --- Menu / Tuner / Source ---
     MENU                            = 0x14, _AVR,       _U
-    TUNER_PRESET                    = 0x15, _AVR,       _Z | _U
+    TUNER_PRESET                    = 0x15, _AVR,       _Z | _U,          _FM
     TUNE                            = 0x16, _AVR,       _Z
-    DAB_STATION                     = 0x18, _AVR,       _Z | _U
+    DAB_STATION                     = 0x18, _AVR,       _Z | _U,          _DAB
     DAB_PROGRAM_TYPE_CATEGORY       = 0x19, _AVR,       _Z
-    DLS_PDT_INFO                    = 0x1A, _AVR,       _Z | _U
-    PRESET_DETAIL                   = 0x1B, _AVR,       _Z | _U
-    NETWORK_PLAYBACK_STATUS         = 0x1C, _NET_PLAY,  _U | _NP
+    DLS_PDT_INFO                    = 0x1A, _AVR,       _Z | _U,          _DAB
+    PRESET_DETAIL                   = 0x1B, _AVR,       _Z | _U,          _TUN
+    NETWORK_PLAYBACK_STATUS         = 0x1C, _NET_PLAY,  _U | _NP,         _NET
     CURRENT_SOURCE                  = 0x1D, _AVR_SA_ST, _Z | _U
     HEADPHONES_OVERRIDE             = 0x1F, _AVR_SA,    _Z
 
@@ -209,25 +230,25 @@ class CommandCodes(IntOrTypeEnum):
     VIDEO_MPEG_NOISE_REDUCTION      = 0x4D, _450
     ZONE_1_OSD_ON_OFF               = 0x4E, _AVR
     VIDEO_OUTPUT_SWITCHING          = 0x4F, _AVR
-    BLUETOOTH_STATUS                = 0x50, _HDA,       _U | _NP     # was "Output Frame Rate" in 450 (SH256E)
+    BLUETOOTH_STATUS                = 0x50, _HDA,       _U | _NP,          _BT     # was "Output Frame Rate" in 450 (SH256E)
 
     # --- Diagnostics / Amp Control ---
-    DC_OFFSET                       = 0x51, _THERM
-    SHORT_CIRCUIT_STATUS            = 0x52, _CLASS_G
+    DC_OFFSET                       = 0x51, _THERM,     _U | _NP
+    SHORT_CIRCUIT_STATUS            = 0x52, _CLASS_G,   _U | _NP
     FRIENDLY_NAME                   = 0x53, _SIMPLE_IP
     IP_ADDRESS                      = 0x54, _SIMPLE_IP
     TIMEOUT_COUNTER                 = 0x55, _AMP_DIAG
-    LIFTER_TEMPERATURE              = 0x56, _CLASS_G                 # bug in PA720 1.8: no sensor id in response
-    OUTPUT_TEMPERATURE              = 0x57, _THERM                   # bug in PA720 1.8: no sensor id in response
+    LIFTER_TEMPERATURE              = 0x56, _CLASS_G,   _U | _NP       # bug in PA720 1.8: no sensor id in response
+    OUTPUT_TEMPERATURE              = 0x57, _THERM,     _U | _NP       # bug in PA720 1.8: no sensor id in response
     AUTO_SHUTDOWN_CONTROL           = 0x58, _AMP_DIAG
     PHONO_INPUT_TYPE                = 0x59, _PHONO
     INPUT_DETECT                    = 0x5A, _AMP_DIAG
     PROCESSOR_MODE_INPUT            = 0x5B, _SA
-    PROCESSOR_MODE_VOLUME           = 0x5C, _SA                      # ST60 reuses 0x5C for Fixed Volume
+    PROCESSOR_MODE_VOLUME           = 0x5C, _SA                         # ST60 reuses 0x5C for Fixed Volume
     SYSTEM_STATUS                   = 0x5D, _AMP_DIAG
     SYSTEM_MODEL                    = 0x5E, _AMP_DIAG
-    DAC_FILTER                      = 0x61, _DAC_FILT                # clashes with AMPLIFIER_MODE on PA240
-    NOW_PLAYING_INFO                = 0x64, _NOW_PLAY,  _Z | _U | _NP
+    DAC_FILTER                      = 0x61, _DAC_FILT                   # clashes with AMPLIFIER_MODE on PA240
+    NOW_PLAYING_INFO                = 0x64, _NOW_PLAY,  _Z | _U | _NP,    _NET
     MAXIMUM_TURN_ON_VOLUME          = 0x65, _APP_SAFE
     MAXIMUM_VOLUME                  = 0x66, _APP_SAFE
     MAXIMUM_STREAMING_VOLUME        = 0x67, _APP_SAFE
