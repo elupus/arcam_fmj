@@ -27,8 +27,10 @@ from .commands import (
     CURRENT_SOURCE,
     CommandFlags,
     Command,
+    DAB_SCAN,
     DECODE_MODE_2CH,
     DECODE_MODE_MCH,
+    FM_SCAN,
     INCOMING_AUDIO_FORMAT,
     INPUT_NAME,
     LIFTER_TEMPERATURE,
@@ -537,6 +539,20 @@ class State:
             return None
         data = await self.request(INPUT_NAME, bytes([0xF0]))
         return data.decode("utf-8", errors="replace").rstrip("\x00").strip()
+
+    # FM_SCAN (0x23)
+    async def fm_scan(self, up: bool = True) -> None:
+        """Trigger an FM frequency scan in the given direction."""
+        if not self.supported_on_source(FM_SCAN):
+            return
+        await self.request(FM_SCAN, bytes([0x01 if up else 0x02]))
+
+    # DAB_SCAN (0x24)
+    async def dab_scan(self) -> None:
+        """Trigger a DAB station scan."""
+        if not self.supported_on_source(DAB_SCAN):
+            return
+        await self.request(DAB_SCAN, bytes([0xF0]))
 
     # INCOMING_AUDIO_FORMAT (0x43)
     def get_incoming_audio_format(

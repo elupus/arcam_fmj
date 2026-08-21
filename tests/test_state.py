@@ -40,12 +40,14 @@ from arcam.fmj.commands import (
     BALANCE,
     BASS_EQUALIZATION,
     COMPRESSION,
+    DAB_SCAN,
     DAB_STATION,
     DIRECT_MODE,
     DISPLAY_BRIGHTNESS,
     DISPLAY_INFO_TYPE,
     DLS_PDT,
     DOLBY_AUDIO,
+    FM_SCAN,
     HEADPHONES,
     IMAX_ENHANCED,
     LIPSYNC_DELAY,
@@ -1235,6 +1237,32 @@ def _state_at_source(source: SourceCodes) -> State:
         state.api_model, state._zn,
     )
     return state
+
+
+async def test_fm_scan():
+    state = _state_at_source(SourceCodes.FM)
+    await state.fm_scan()
+    state._client.request.assert_called_with(1, FM_SCAN.cc, bytes([0x01]), 0)
+    await state.fm_scan(up=False)
+    state._client.request.assert_called_with(1, FM_SCAN.cc, bytes([0x02]), 0)
+
+
+async def test_fm_scan_ignores_other_sources():
+    state = _state_at_source(SourceCodes.CD)
+    await state.fm_scan()
+    state._client.request.assert_not_called()
+
+
+async def test_dab_scan():
+    state = _state_at_source(SourceCodes.DAB)
+    await state.dab_scan()
+    state._client.request.assert_called_with(1, DAB_SCAN.cc, bytes([0xF0]), 0)
+
+
+async def test_dab_scan_ignores_other_sources():
+    state = _state_at_source(SourceCodes.CD)
+    await state.dab_scan()
+    state._client.request.assert_not_called()
 
 
 def test_should_update_no_update_flag():

@@ -287,7 +287,7 @@ ROOM_EQ_NAMES                   = ro     (0x34, _ROOM_NAM,  _U,            RoomE
 
 # --- Extended (2.0) ---
 INPUT_NAME                      = proto  (0x20, _AVR)
-FM_SCAN                         = proto  (0x23, _AVR)
+FM_SCAN                         = proto  (0x23, _AVR,       _0,            _FM)
 DAB_SCAN                        = proto  (0x24, _AVR,       _0,            _DAB)
 HEARTBEAT                       = proto  (0x25)
 REBOOT                          = proto  (0x26)
