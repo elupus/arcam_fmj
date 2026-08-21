@@ -23,6 +23,7 @@ from .rc5 import *  # noqa: F401,F403
 
 __all__ = [
     "CommandFlags",
+    "DISPLAY_BRIGHTNESS_WRITE_SUPPORTED",
     "MUTE_WRITE_SUPPORTED",
     "POWER_WRITE_SUPPORTED",
     "SOURCE_WRITE_SUPPORTED",
@@ -62,13 +63,21 @@ POWER_WRITE_SUPPORTED = {
 #: Models that accept a direct CC write for mute on/off.
 MUTE_WRITE_SUPPORTED = POWER_WRITE_SUPPORTED
 
+#: Models that accept a direct CC write for display brightness.
+DISPLAY_BRIGHTNESS_WRITE_SUPPORTED = {
+    ApiModel.APISA_SERIES,
+    ApiModel.APIST_SERIES,
+}
+
 #: Models that accept a direct CC write for source selection.
 SOURCE_WRITE_SUPPORTED = {
     ApiModel.APISA_SERIES,
+    ApiModel.APIST_SERIES,
 }
 
 #: Models that accept a direct CC write for volume step (inc/dec).
 VOLUME_STEP_SUPPORTED = {
+    ApiModel.APISA_SERIES,
     ApiModel.APIST_SERIES,
 }
 
@@ -249,7 +258,7 @@ def power(cc: int, version: set[str] | None, flags: CommandFlags, codec: Codec[b
 
 # --- System ---
 POWER                           = power  (0x00, None,       _Z | _U,       BoolCodec(), rc5=Rc5Write(RC5CODE_POWER))
-DISPLAY_BRIGHTNESS              = rw     (0x01, _AVR_SA_ST, _U,            EnumCodec(DisplayBrightness), rc5=Rc5Write(RC5CODE_DISPLAY_BRIGHTNESS))
+DISPLAY_BRIGHTNESS              = rw     (0x01, _AVR_SA_ST, _U,            EnumCodec(DisplayBrightness), rc5=Rc5Write(RC5CODE_DISPLAY_BRIGHTNESS, frozenset(DISPLAY_BRIGHTNESS_WRITE_SUPPORTED)))
 HEADPHONES                      = ro     (0x02, _AVR_SA,    _U,            BoolCodec())
 FM_GENRE                        = ro     (0x03, _AVR,       _Z | _U,       StringCodec(), _FM)
 SOFTWARE_VERSION                = ro     (0x04, None,       _U,            SoftwareVersionCodec())

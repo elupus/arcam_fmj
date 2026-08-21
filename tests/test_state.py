@@ -1010,6 +1010,18 @@ async def test_dec_bass_equalization():
         1, SIMULATE_RC5_IR_COMMAND.cc, bytes([0x10, 0x38]), 0)
 
 
+@pytest.mark.parametrize("api_model", [ApiModel.APISA_SERIES, ApiModel.APIST_SERIES])
+@pytest.mark.parametrize("increment, data", [(True, b"\xF1"), (False, b"\xF2")])
+async def test_step_volume_direct(api_model, increment, data):
+    client = MagicMock(spec=Client)
+    state = make_state(client, 1, api_model)
+    if increment:
+        await state.inc(VOLUME)
+    else:
+        await state.dec(VOLUME)
+    client.request.assert_called_with(1, VOLUME.cc, data, 0)
+
+
 async def test_inc_bass_equalization_unsupported():
     """SA series has no bass RC5 codes."""
     client = MagicMock(spec=Client)
@@ -1034,6 +1046,14 @@ async def test_set_display_brightness():
     await state.set(DISPLAY_BRIGHTNESS, DisplayBrightness.L2)
     client.request.assert_called_with(
         1, SIMULATE_RC5_IR_COMMAND.cc, bytes([0x10, 0x23]), 0)
+
+
+@pytest.mark.parametrize("api_model", [ApiModel.APISA_SERIES, ApiModel.APIST_SERIES])
+async def test_set_display_brightness_direct(api_model):
+    client = MagicMock(spec=Client)
+    state = make_state(client, 1, api_model)
+    await state.set(DISPLAY_BRIGHTNESS, DisplayBrightness.L2)
+    client.request.assert_called_with(1, DISPLAY_BRIGHTNESS.cc, bytes([0x02]), 0)
 
 
 async def test_set_hdmi_output():
