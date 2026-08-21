@@ -188,6 +188,17 @@ class DisplayBrightness(IntOrTypeEnum):
     L1 = 0x01
     L2 = 0x02
 
+
+class SoftwareVersionCodec(Codec[str]):
+    def decode(self, data: bytes) -> str | None:
+        if len(data) == 2:
+            major, minor = data
+        elif len(data) == 3 and 0xF0 <= data[0] <= 0xF5:
+            _, major, minor = data
+        else:
+            return None
+        return f"{major}.{minor}"
+
 # --- CC 0x06: SAVE_RESTORE_COPY_OF_SETTINGS ---
 
 class SaveRestoreSubCommand(enum.IntEnum):

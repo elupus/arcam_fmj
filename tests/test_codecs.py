@@ -21,6 +21,7 @@ from arcam.fmj.codecs import (
     SaProcessorModeCodec,
     SampleRateCodec,
     ScaledCodec,
+    SoftwareVersionCodec,
     SourceCodes,
     StringCodec,
     StructCodec,
@@ -61,6 +62,24 @@ def test_intcodec_roundtrip():
     s = IntCodec()
     for v in (0, 1, 127, 255):
         assert s.decode(s.encode(v)) == v
+
+
+@pytest.mark.parametrize(
+    "data, expected",
+    [
+        (bytes([0x02, 0x01]), "2.1"),
+        (bytes([0xF0, 0x02, 0x01]), "2.1"),
+        (bytes([0xF2, 0x03, 0x04]), "3.4"),
+        (bytes([0xF3, 0x05, 0x06]), "5.6"),
+        (bytes([0xF5, 0x07, 0x08]), "7.8"),
+        (bytes([0x00, 0x02, 0x01]), None),
+        (bytes([0x01]), None),
+        (bytes([0xF0, 0x01, 0x02, 0x03]), None),
+    ],
+)
+def test_software_version_codec(data, expected):
+    codec = SoftwareVersionCodec()
+    assert codec.decode(data) == expected
 
 
 def test_enumcodec_symmetric():

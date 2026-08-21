@@ -252,7 +252,7 @@ POWER                           = power  (0x00, None,       _Z | _U,       BoolC
 DISPLAY_BRIGHTNESS              = rw     (0x01, _AVR_SA_ST, _U,            EnumCodec(DisplayBrightness), rc5=Rc5Write(RC5CODE_DISPLAY_BRIGHTNESS))
 HEADPHONES                      = ro     (0x02, _AVR_SA,    _U,            BoolCodec())
 FM_GENRE                        = ro     (0x03, _AVR,       _Z | _U,       StringCodec(), _FM)
-SOFTWARE_VERSION                = proto  (0x04, None,       _U)
+SOFTWARE_VERSION                = ro     (0x04, None,       _U,            SoftwareVersionCodec())
 RESTORE_FACTORY_DEFAULT         = proto  (0x05)
 SAVE_RESTORE_COPY_OF_SETTINGS   = proto  (0x06, _AVR)
 SIMULATE_RC5_IR_COMMAND         = proto  (0x08, _AVR_SA_ST, _Z)
