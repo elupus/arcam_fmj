@@ -230,9 +230,9 @@ class PresetDetail:
         if type == PresetType.FM_RDS_NAME or type == PresetType.DAB:
             name = data[2:].decode("utf8").rstrip()
         elif type == PresetType.FM_FREQUENCY:
-            name = f"{data[2]}.{data[3]:2} MHz"
+            name = f"{data[2]}.{data[3]:02d} MHz"
         elif type == PresetType.AM_FREQUENCY:
-            name = f"{data[2]}{data[3]:2} kHz"
+            name = f"{data[2]}{data[3]:02d} kHz"
         else:
             name = str(data[2:])
         return PresetDetail(data[0], type, name)

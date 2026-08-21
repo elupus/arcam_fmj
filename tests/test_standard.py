@@ -9,6 +9,8 @@ from arcam.fmj.codecs import (
     AnswerCodes,
     IncomingVideoAspectRatio,
     IncomingVideoColorspace,
+    PresetDetail,
+    PresetType,
     VideoParameters,
 )
 from arcam.fmj.commands import CommandCodes
@@ -161,3 +163,16 @@ def test_video_parameters_7_bytes():
     assert vp.interlaced is False
     assert vp.aspect_ratio == IncomingVideoAspectRatio.ASPECT_16_9
     assert vp.colorspace is None
+
+
+@pytest.mark.parametrize(
+    "data, expected",
+    [
+        (bytes([1, PresetType.FM_FREQUENCY, 85, 5]), "85.05 MHz"),
+        (bytes([2, PresetType.FM_FREQUENCY, 105, 50]), "105.50 MHz"),
+        (bytes([3, PresetType.AM_FREQUENCY, 6, 5]), "605 kHz"),
+        (bytes([4, PresetType.AM_FREQUENCY, 10, 10]), "1010 kHz"),
+    ],
+)
+def test_preset_detail_frequency_padding(data, expected):
+    assert PresetDetail.from_bytes(data).name == expected
