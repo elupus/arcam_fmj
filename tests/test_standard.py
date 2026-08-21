@@ -1,3 +1,7 @@
+from arcam.fmj.commands import (
+    POWER,
+    VOLUME,
+)
 """Standard tests for component"""
 
 import asyncio
@@ -11,7 +15,6 @@ from arcam.fmj.codecs import (
     IncomingVideoColorspace,
     VideoParameters,
 )
-from arcam.fmj.commands import CommandCodes
 from arcam.fmj.errors import (
     CommandInvalidAtThisTime,
     CommandNotRecognised,
@@ -113,13 +116,13 @@ async def test_amx():
 
 
 def test_response_packet_roundtrip():
-    original = ResponsePacket(1, CommandCodes.VOLUME, AnswerCodes.STATUS_UPDATE, bytes([42]))
+    original = ResponsePacket(1, VOLUME.cc, AnswerCodes.STATUS_UPDATE, bytes([42]))
     rebuilt = ResponsePacket.from_bytes(original.to_bytes())
     assert rebuilt == original
 
 
 def test_command_packet_roundtrip():
-    original = CommandPacket(1, CommandCodes.POWER, bytes([0xF0]))
+    original = CommandPacket(1, POWER.cc, bytes([0xF0]))
     rebuilt = CommandPacket.from_bytes(original.to_bytes())
     assert rebuilt == original
 
@@ -132,7 +135,7 @@ def test_command_packet_roundtrip():
     (AnswerCodes.INVALID_DATA_LENGTH, InvalidDataLength),
 ])
 def test_response_exception_from_response(ac, expected_type):
-    response = ResponsePacket(1, CommandCodes.POWER, ac, b"")
+    response = ResponsePacket(1, POWER.cc, ac, b"")
     exc = ResponseException.from_response(response)
     assert isinstance(exc, expected_type)
 
