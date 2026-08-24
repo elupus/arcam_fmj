@@ -20,7 +20,6 @@ from .errors import (
     NullPacket,
 )
 from .codecs import AnswerCodes
-from .commands import CommandCodes
 
 _LOGGER = logging.getLogger(__name__)
 _WRITE_TIMEOUT = 3
@@ -60,7 +59,7 @@ class ResponsePacket:
 
         return ResponsePacket(
             data[1],
-            CommandCodes.from_int(data[2]),
+            data[2],
             AnswerCodes.from_int(data[3]),
             data[5 : 5 + data[4]],
         )
@@ -103,7 +102,7 @@ class CommandPacket:
             raise InvalidPacket(f"Invalid length in data {data!r}")
 
         return CommandPacket(
-            data[1], CommandCodes.from_int(data[2]), data[4 : 4 + data[3]]
+            data[1], data[2], data[4 : 4 + data[3]]
         )
 
 @attr.s

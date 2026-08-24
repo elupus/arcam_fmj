@@ -287,3 +287,12 @@ class IntOrTypeEnum(enum.IntEnum):
         signed: bool = False,
     ) -> _T:  # type: ignore[override]
         return cls.from_int(int.from_bytes(bytes, byteorder=byteorder, signed=signed))
+
+    @classmethod
+    def from_bytes_for_model(
+        cls: type[_T], data: bytes, model: str | None
+    ) -> _T | None:
+        return cls.from_bytes(data)
+
+    def to_bytes_for_model(self, model: str | None) -> bytes:
+        return bytes([int(self)])
