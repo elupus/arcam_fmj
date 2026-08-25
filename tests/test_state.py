@@ -134,6 +134,11 @@ def test_get_scaled_negative_none_input():
     assert _get_scaled_negative(None, -12.0, 12.0, 1.0) is None
 
 
+@pytest.mark.parametrize("data", [b"", bytes(2)])
+def test_get_scaled_negative_invalid_length(data):
+    assert _get_scaled_negative(data, -12.0, 12.0, 1.0) is None
+
+
 def test_get_scaled_negative_zero():
     assert _get_scaled_negative(bytes([0x00]), -12.0, 12.0, 1.0) == 0.0
 
@@ -185,6 +190,34 @@ def test_get_volume():
     state = State(client, 1)
     state._state[CommandCodes.VOLUME] = bytes([50])
     assert state.get_volume() == 50
+
+
+@pytest.mark.parametrize("data", [b"", bytes(2)])
+@pytest.mark.parametrize(
+    "command,getter",
+    [
+        (CommandCodes.VOLUME, State.get_volume),
+        (CommandCodes.POWER, State.get_power),
+        (CommandCodes.MENU, State.get_menu),
+        (CommandCodes.MUTE, State.get_mute),
+        (CommandCodes.HEADPHONES, State.get_headphones),
+        (CommandCodes.DISPLAY_INFORMATION_TYPE, State.get_display_info_type),
+        (CommandCodes.DECODE_MODE_STATUS_2CH, State.get_decode_mode_2ch),
+        (CommandCodes.DECODE_MODE_STATUS_MCH, State.get_decode_mode_mch),
+        (CommandCodes.ROOM_EQUALIZATION, State.get_room_equalization),
+        (CommandCodes.DOLBY_AUDIO, State.get_dolby_audio),
+        (CommandCodes.COMPRESSION, State.get_compression),
+        (CommandCodes.IMAX_ENHANCED, State.get_imax_enhanced),
+        (CommandCodes.VIDEO_SELECTION, State.get_video_selection),
+        (CommandCodes.TUNER_PRESET, State.get_tuner_preset),
+        (CommandCodes.NETWORK_PLAYBACK_STATUS, State.get_network_playback_status),
+        (CommandCodes.INCOMING_AUDIO_SAMPLE_RATE, State.get_incoming_audio_sample_rate),
+    ],
+)
+def test_scalar_getter_invalid_length(data, command, getter):
+    state = State(MagicMock(spec=Client), 1)
+    state._state[command] = data
+    assert getter(state) is None
 
 
 # --- Mute ---
@@ -246,6 +279,13 @@ def test_get_2ch_no_audio():
     client = MagicMock(spec=Client)
     state = make_state(client, 1, ApiModel.APIHDA_SERIES)
     assert state.get_2ch() is True
+
+
+@pytest.mark.parametrize("data", [b"", bytes(1), bytes(3)])
+def test_get_incoming_audio_format_invalid_length(data):
+    state = make_state(MagicMock(spec=Client), 1, ApiModel.APIHDA_SERIES)
+    state._state[CommandCodes.INCOMING_AUDIO_FORMAT] = data
+    assert state.get_incoming_audio_format() == (None, None)
 
 
 # --- Listener routing ---
@@ -787,6 +827,25 @@ def test_get_now_playing():
     assert info.sample_rate == 44100
 
 
+@pytest.mark.parametrize("data", [b"", bytes(2)])
+async def test_update_now_playing_invalid_sample_rate_and_encoder(data):
+    client = MagicMock(spec=Client)
+    client.connected = True
+    client.request.return_value = data
+    state = make_state(client, 1, ApiModel.APIHDA_SERIES)
+    state._state[CommandCodes.CURRENT_SOURCE] = SourceCodes.NET.to_bytes(
+        state._api_model, state.zn
+    )
+    state._updated.set()
+
+    await asyncio.gather(*await state.get_update_tasks())
+
+    info = state.get_now_playing()
+    assert info is not None
+    assert info.sample_rate is None
+    assert info.encoder is None
+
+
 # --- Bluetooth Status (0x50) ---
 
 
@@ -796,6 +855,13 @@ def test_get_bluetooth_status_none():
     status, track = state.get_bluetooth_status()
     assert status is None
     assert track is None
+
+
+def test_get_bluetooth_status_empty():
+    client = MagicMock(spec=Client)
+    state = make_state(client, 1, ApiModel.APIHDA_SERIES)
+    state._state[CommandCodes.BLUETOOTH_STATUS] = b""
+    assert state.get_bluetooth_status() == (None, None)
 
 
 def test_get_bluetooth_status_no_connection():
@@ -1094,6 +1160,20 @@ async def test_update_skips_unsupported_commands():
     assert CommandCodes.VIDEO_SELECTION not in requested_commands
     # But universal commands like POWER should still be requested
     assert CommandCodes.POWER in requested_commands
+
+
+async def test_update_presets_ignores_empty_payload():
+    client = MagicMock(spec=Client)
+    client.connected = True
+    client.request.return_value = b""
+    state = make_state(client, 1, ApiModel.APIHDA_SERIES)
+    state._state[CommandCodes.CURRENT_SOURCE] = SourceCodes.FM.to_bytes(
+        state._api_model, state.zn
+    )
+
+    await asyncio.gather(*await state.get_update_tasks())
+
+    assert state._presets == {}
 
 
 async def test_update_records_command_not_recognised():

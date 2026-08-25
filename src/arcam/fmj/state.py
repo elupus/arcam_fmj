@@ -95,14 +95,19 @@ _T = TypeVar("_T")
 
 
 
+def _get_byte(data: bytes | None) -> int | None:
+    if data is None or len(data) != 1:
+        return None
+    return data[0]
+
 def _get_scaled_negative(data: bytes | None, min_value: float, max_value: float, scale: float) -> float | None:
-    if data is None:
+    byte_val = _get_byte(data)
+    if byte_val is None:
         return None
 
     neg_limit = round(-min_value / scale) + 0x80
     pos_limit = round(max_value / scale)
 
-    byte_val = int.from_bytes(data, "big")
     if byte_val >= 0x81 and byte_val <= neg_limit:
         return - (byte_val - 0x80) * scale
     if byte_val >= 0x00 and byte_val <= pos_limit:
@@ -309,7 +314,7 @@ class State:
         self,
     ) -> tuple[IncomingAudioFormat, IncomingAudioConfig] | tuple[None, None]:
         value = self._state.get(CommandCodes.INCOMING_AUDIO_FORMAT)
-        if value is None:
+        if value is None or len(value) != 2:
             return None, None
         return (
             IncomingAudioFormat.from_int(value[0]),
@@ -317,25 +322,25 @@ class State:
         )
 
     def get_incoming_audio_sample_rate(self) -> int | None:
-        value = self._state.get(CommandCodes.INCOMING_AUDIO_SAMPLE_RATE)
+        value = _get_byte(self._state.get(CommandCodes.INCOMING_AUDIO_SAMPLE_RATE))
         if value is None:
             return None
-        return SAMPLE_RATE_MAP.get(value[0], 0)
+        return SAMPLE_RATE_MAP.get(value, 0)
 
     def get_decode_mode_2ch(self) -> DecodeMode2CH | None:
-        value = self._state.get(CommandCodes.DECODE_MODE_STATUS_2CH)
+        value = _get_byte(self._state.get(CommandCodes.DECODE_MODE_STATUS_2CH))
         if value is None:
             return None
-        return DecodeMode2CH.from_bytes(value)
+        return DecodeMode2CH.from_int(value)
 
     async def set_decode_mode_2ch(self, mode: DecodeMode2CH) -> None:
         await self._send_rc5(RC5CODE_DECODE_MODE_2CH, mode)
 
     def get_decode_mode_mch(self) -> DecodeModeMCH | None:
-        value = self._state.get(CommandCodes.DECODE_MODE_STATUS_MCH)
+        value = _get_byte(self._state.get(CommandCodes.DECODE_MODE_STATUS_MCH))
         if value is None:
             return None
-        return DecodeModeMCH.from_bytes(value)
+        return DecodeModeMCH.from_int(value)
 
     async def set_decode_mode_mch(self, mode: DecodeModeMCH) -> None:
         await self._send_rc5(RC5CODE_DECODE_MODE_MCH, mode)
@@ -385,10 +390,10 @@ class State:
         await self._send_rc5(RC5CODE_DIRECT_MODE, on)
 
     def get_power(self) -> bool | None:
-        value = self._state.get(CommandCodes.POWER)
+        value = _get_byte(self._state.get(CommandCodes.POWER))
         if value is None:
             return None
-        return int.from_bytes(value, "big") == 0x01
+        return value == 0x01
 
     async def set_power(self, power: bool) -> None:
         if self._api_model in POWER_WRITE_SUPPORTED:
@@ -411,16 +416,16 @@ class State:
                 )
 
     def get_menu(self) -> MenuCodes | None:
-        value = self._state.get(CommandCodes.MENU)
+        value = _get_byte(self._state.get(CommandCodes.MENU))
         if value is None:
             return None
-        return MenuCodes.from_bytes(value)
+        return MenuCodes.from_int(value)
 
     def get_mute(self) -> bool | None:
-        value = self._state.get(CommandCodes.MUTE)
+        value = _get_byte(self._state.get(CommandCodes.MUTE))
         if value is None:
             return None
-        return int.from_bytes(value, "big") == 0
+        return value == 0
 
     async def set_mute(self, mute: bool) -> None:
         if self._api_model in MUTE_WRITE_SUPPORTED:
@@ -431,17 +436,14 @@ class State:
 
     def get_headphones(self) -> bool | None:
         """Return whether headphones are connected."""
-        value = self._state.get(CommandCodes.HEADPHONES)
+        value = _get_byte(self._state.get(CommandCodes.HEADPHONES))
         if value is None:
             return None
-        return int.from_bytes(value, "big") == 0x01
+        return value == 0x01
 
     def get_display_info_type(self) -> int | None:
         """Return the current display information type."""
-        value = self._state.get(CommandCodes.DISPLAY_INFORMATION_TYPE)
-        if value is None:
-            return None
-        return int.from_bytes(value, "big")
+        return _get_byte(self._state.get(CommandCodes.DISPLAY_INFORMATION_TYPE))
 
     async def set_display_info_type(self, info_type: int) -> None:
         """Set the display information type. Use 0xE0 to cycle."""
@@ -526,10 +528,10 @@ class State:
 
     def get_room_equalization(self) -> RoomEqMode | None:
         """Return room equalization (DIRAC) mode."""
-        value = self._state.get(CommandCodes.ROOM_EQUALIZATION)
+        value = _get_byte(self._state.get(CommandCodes.ROOM_EQUALIZATION))
         if value is None:
             return None
-        return RoomEqMode.from_bytes(value)
+        return RoomEqMode.from_int(value)
 
     async def set_room_equalization(self, mode: RoomEqMode) -> None:
         """Set room equalization (DIRAC) mode."""
@@ -548,10 +550,10 @@ class State:
 
     def get_dolby_audio(self) -> DolbyAudioMode | None:
         """Return the current Dolby Audio mode."""
-        value = self._state.get(CommandCodes.DOLBY_AUDIO)
+        value = _get_byte(self._state.get(CommandCodes.DOLBY_AUDIO))
         if value is None:
             return None
-        return DolbyAudioMode.from_bytes(value)
+        return DolbyAudioMode.from_int(value)
 
     async def set_dolby_audio(self, mode: DolbyAudioMode) -> None:
         """Set the Dolby Audio mode."""
@@ -592,10 +594,10 @@ class State:
 
     def get_compression(self) -> CompressionMode | None:
         """Return the dynamic range compression setting."""
-        value = self._state.get(CommandCodes.COMPRESSION)
+        value = _get_byte(self._state.get(CommandCodes.COMPRESSION))
         if value is None:
             return None
-        return CompressionMode.from_bytes(value)
+        return CompressionMode.from_int(value)
 
     async def set_compression(self, mode: CompressionMode) -> None:
         """Set the dynamic range compression setting."""
@@ -603,10 +605,10 @@ class State:
 
     def get_imax_enhanced(self) -> ImaxEnhancedMode | None:
         """Return the IMAX Enhanced mode (HDA premium series)."""
-        value = self._state.get(CommandCodes.IMAX_ENHANCED)
+        value = _get_byte(self._state.get(CommandCodes.IMAX_ENHANCED))
         if value is None:
             return None
-        return ImaxEnhancedMode.from_bytes(value)
+        return ImaxEnhancedMode.from_int(value)
 
     async def set_imax_enhanced(self, mode: ImaxEnhancedMode) -> None:
         """Set the IMAX Enhanced mode (HDA premium series)."""
@@ -615,10 +617,10 @@ class State:
 
     def get_video_selection(self) -> VideoSelection | None:
         """Return the video input selection (pre-HDA AVR series)."""
-        value = self._state.get(CommandCodes.VIDEO_SELECTION)
+        value = _get_byte(self._state.get(CommandCodes.VIDEO_SELECTION))
         if value is None:
             return None
-        return VideoSelection.from_bytes(value)
+        return VideoSelection.from_int(value)
 
     async def set_video_selection(self, mode: VideoSelection) -> None:
         """Set the video input selection (pre-HDA AVR series)."""
@@ -660,10 +662,7 @@ class State:
             await self._send_rc5(RC5CODE_SOURCE, src)
 
     def get_volume(self) -> int | None:
-        value = self._state.get(CommandCodes.VOLUME)
-        if value is None:
-            return None
-        return int.from_bytes(value, "big")
+        return _get_byte(self._state.get(CommandCodes.VOLUME))
 
     async def set_volume(self, volume: int) -> None:
         await self._request(self._zn, CommandCodes.VOLUME, bytes([volume]))
@@ -712,10 +711,10 @@ class State:
     def get_tuner_preset(self) -> int | None:
         if not self._is_command_supported_on_source(CommandCodes.TUNER_PRESET):
             return None
-        value = self._state.get(CommandCodes.TUNER_PRESET)
-        if value is None or value == b"\xff":
+        value = _get_byte(self._state.get(CommandCodes.TUNER_PRESET))
+        if value is None or value == 0xFF:
             return None
-        return int.from_bytes(value, "big")
+        return value
 
     def get_preset_details(self) -> dict[int, PresetDetail] | None:
         if not self._is_command_supported_on_source(CommandCodes.PRESET_DETAIL):
@@ -773,10 +772,10 @@ class State:
         """Return the network playback status (stopped/transitioning/playing/paused)."""
         if not self._is_command_supported_on_source(CommandCodes.NETWORK_PLAYBACK_STATUS):
             return None
-        value = self._state.get(CommandCodes.NETWORK_PLAYBACK_STATUS)
+        value = _get_byte(self._state.get(CommandCodes.NETWORK_PLAYBACK_STATUS))
         if value is None:
             return None
-        return NetworkPlaybackStatus.from_bytes(value)
+        return NetworkPlaybackStatus.from_int(value)
 
     def get_now_playing(self) -> NowPlayingInfo | None:
         """Return now-playing metadata (HDA series, NET/BT sources)."""
@@ -791,7 +790,7 @@ class State:
         if not self._is_command_supported_on_source(CommandCodes.BLUETOOTH_STATUS):
             return None, None
         value = self._state.get(CommandCodes.BLUETOOTH_STATUS)
-        if value is None:
+        if not value:
             return None, None
         status = BluetoothAudioStatus.from_int(value[0])
         if len(value) > 1:
@@ -829,8 +828,9 @@ class State:
                     data = await self._request(
                         self._zn, CommandCodes.PRESET_DETAIL, bytes([preset]), priority
                     )
-                    if data != b"\x00":
-                        presets[preset] = PresetDetail.from_bytes(data)
+                    detail = PresetDetail.from_bytes(data)
+                    if detail is not None:
+                        presets[preset] = detail
                 except CommandInvalidAtThisTime:
                     break
                 except CommandNotRecognised:

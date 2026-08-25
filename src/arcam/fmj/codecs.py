@@ -225,17 +225,23 @@ class PresetDetail:
     name = attr.ib(type=str)
 
     @staticmethod
-    def from_bytes(data: bytes) -> "PresetDetail":
-        type = PresetType.from_int(data[1])
-        if type == PresetType.FM_RDS_NAME or type == PresetType.DAB:
-            name = data[2:].decode("utf8").rstrip()
-        elif type == PresetType.FM_FREQUENCY:
+    def from_bytes(data: bytes) -> "PresetDetail | None":
+        if len(data) < 2:
+            return None
+        preset_type = PresetType.from_int(data[1])
+        if preset_type in (PresetType.FM_RDS_NAME, PresetType.DAB):
+            name = data[2:].decode("utf8", errors="replace").rstrip()
+        elif preset_type == PresetType.FM_FREQUENCY:
+            if len(data) != 4:
+                return None
             name = f"{data[2]}.{data[3]:02d} MHz"
-        elif type == PresetType.AM_FREQUENCY:
+        elif preset_type == PresetType.AM_FREQUENCY:
+            if len(data) != 4:
+                return None
             name = f"{data[2]}{data[3]:02d} kHz"
         else:
             name = str(data[2:])
-        return PresetDetail(data[0], type, name)
+        return PresetDetail(data[0], preset_type, name)
 
 # --- CC 0x1C: NETWORK_PLAYBACK_STATUS ---
 
@@ -500,7 +506,9 @@ class VideoParameters:
     colorspace = attr.ib(type=IncomingVideoColorspace | None, default=None)
 
     @staticmethod
-    def from_bytes(data: bytes) -> "VideoParameters":
+    def from_bytes(data: bytes) -> "VideoParameters | None":
+        if len(data) not in (7, 8):
+            return None
         return VideoParameters(
             horizontal_resolution=int.from_bytes(data[0:2], "big"),
             vertical_resolution=int.from_bytes(data[2:4], "big"),
@@ -712,6 +720,16 @@ def _decode_string(data: bytes) -> str:
     """Decode a UTF-8 payload, stripping trailing NUL bytes."""
     return data.decode("utf8", errors="replace").rstrip("\x00")
 
+def _decode_now_playing_sample_rate(data: bytes) -> int | None:
+    if len(data) != 1:
+        return None
+    return SAMPLE_RATE_MAP.get(data[0], 0)
+
+def _decode_now_playing_encoder(data: bytes) -> NowPlayingEncoder | None:
+    if len(data) != 1:
+        return None
+    return NowPlayingEncoder.from_int(data[0])
+
 @attr.s
 class NowPlayingInfo:
     """Aggregated now-playing metadata from NOW_PLAYING_INFO (0x64).
@@ -727,5 +745,5 @@ class NowPlayingInfo:
     artist = attr.ib(type=str | None, default=None, metadata={"request": NowPlayingRequest.ARTIST, "converter": _decode_string})
     album = attr.ib(type=str | None, default=None, metadata={"request": NowPlayingRequest.ALBUM, "converter": _decode_string})
     application = attr.ib(type=str | None, default=None, metadata={"request": NowPlayingRequest.APPLICATION, "converter": _decode_string})
-    sample_rate = attr.ib(type=int | None, default=None, metadata={"request": NowPlayingRequest.SAMPLE_RATE, "converter": lambda x: SAMPLE_RATE_MAP.get(x[0], 0)})
-    encoder = attr.ib(type=NowPlayingEncoder | None, default=None, metadata={"request": NowPlayingRequest.ENCODER, "converter": lambda x: NowPlayingEncoder.from_int(x[0])})
+    sample_rate = attr.ib(type=int | None, default=None, metadata={"request": NowPlayingRequest.SAMPLE_RATE, "converter": _decode_now_playing_sample_rate})
+    encoder = attr.ib(type=NowPlayingEncoder | None, default=None, metadata={"request": NowPlayingRequest.ENCODER, "converter": _decode_now_playing_encoder})

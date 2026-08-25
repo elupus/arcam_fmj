@@ -144,6 +144,7 @@ def test_video_parameters_8_bytes():
     # 1280x720, 50Hz, progressive, 16:9, HDR10
     data = bytes([0x05, 0x00, 0x02, 0xD0, 0x32, 0x00, 0x02, 0x01])
     vp = VideoParameters.from_bytes(data)
+    assert vp is not None
     assert vp.horizontal_resolution == 1280
     assert vp.vertical_resolution == 720
     assert vp.refresh_rate == 50
@@ -157,12 +158,18 @@ def test_video_parameters_7_bytes():
     # 1280x720, 50Hz, progressive, 16:9
     data = bytes([0x05, 0x00, 0x02, 0xD0, 0x32, 0x00, 0x02])
     vp = VideoParameters.from_bytes(data)
+    assert vp is not None
     assert vp.horizontal_resolution == 1280
     assert vp.vertical_resolution == 720
     assert vp.refresh_rate == 50
     assert vp.interlaced is False
     assert vp.aspect_ratio == IncomingVideoAspectRatio.ASPECT_16_9
     assert vp.colorspace is None
+
+
+@pytest.mark.parametrize("data", [b"", bytes(6), bytes(9)])
+def test_video_parameters_invalid_length(data):
+    assert VideoParameters.from_bytes(data) is None
 
 
 @pytest.mark.parametrize(
@@ -175,4 +182,29 @@ def test_video_parameters_7_bytes():
     ],
 )
 def test_preset_detail_frequency_padding(data, expected):
-    assert PresetDetail.from_bytes(data).name == expected
+    detail = PresetDetail.from_bytes(data)
+    assert detail is not None
+    assert detail.name == expected
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        b"",
+        bytes([1]),
+        bytes([1, PresetType.FM_FREQUENCY]),
+        bytes([1, PresetType.FM_FREQUENCY, 85]),
+        bytes([1, PresetType.FM_FREQUENCY, 85, 5, 0]),
+        bytes([1, PresetType.AM_FREQUENCY]),
+        bytes([1, PresetType.AM_FREQUENCY, 6]),
+        bytes([1, PresetType.AM_FREQUENCY, 6, 5, 0]),
+    ],
+)
+def test_preset_detail_invalid_length(data):
+    assert PresetDetail.from_bytes(data) is None
+
+
+def test_preset_detail_invalid_text_encoding():
+    detail = PresetDetail.from_bytes(bytes([1, PresetType.DAB, 0xFF]))
+    assert detail is not None
+    assert detail.name == "\ufffd"
