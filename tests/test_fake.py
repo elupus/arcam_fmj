@@ -1,3 +1,6 @@
+from arcam.fmj.commands import (
+    DECODE_MODE_2CH,
+)
 """Test with a fake server"""
 
 import asyncio
@@ -6,7 +9,7 @@ import pytest
 from datetime import timedelta
 
 from arcam.fmj.utils import cancel_and_wait
-from arcam.fmj.commands import CommandCodes
+from arcam.fmj.commands import POWER, VOLUME
 from arcam.fmj.errors import (
     CommandNotRecognised,
     ConnectionFailed,
@@ -27,10 +30,10 @@ async def server(request):
     s = Server("localhost", 8888, "AVR450")
     async with ServerContext(s):
         s.register_handler(
-            0x01, CommandCodes.POWER, bytes([0xF0]), lambda **kwargs: bytes([0x00])
+            0x01, POWER.cc, bytes([0xF0]), lambda **kwargs: bytes([0x00])
         )
         s.register_handler(
-            0x01, CommandCodes.VOLUME, bytes([0xF0]), lambda **kwargs: bytes([0x01])
+            0x01, VOLUME.cc, bytes([0xF0]), lambda **kwargs: bytes([0x01])
         )
         yield s
 
@@ -64,14 +67,14 @@ async def speedy_client(mocker):
 
 
 async def test_power(server, client):
-    data = await client.request(0x01, CommandCodes.POWER, bytes([0xF0]))
+    data = await client.request(0x01, POWER.cc, bytes([0xF0]))
     assert data == bytes([0x00])
 
 
 async def test_multiple(server, client):
     data = await asyncio.gather(
-        client.request(0x01, CommandCodes.POWER, bytes([0xF0])),
-        client.request(0x01, CommandCodes.VOLUME, bytes([0xF0])),
+        client.request(0x01, POWER.cc, bytes([0xF0])),
+        client.request(0x01, VOLUME.cc, bytes([0xF0])),
     )
     assert data[0] == bytes([0x00])
     assert data[1] == bytes([0x01])
@@ -79,24 +82,24 @@ async def test_multiple(server, client):
 
 async def test_invalid_command(server, client):
     with pytest.raises(CommandNotRecognised):
-        await client.request(0x01, CommandCodes.from_int(0xFF), bytes([0xF0]))
+        await client.request(0x01, 0xFF, bytes([0xF0]))
 
 
 async def test_state(server, client):
     state = State(client, 0x01)
     await asyncio.gather(*await state.get_update_tasks())
-    assert state.get(CommandCodes.POWER) == bytes([0x00])
-    assert state.get(CommandCodes.VOLUME) == bytes([0x01])
+    assert state.get_cached(POWER.cc) == bytes([0x00])
+    assert state.get_cached(VOLUME.cc) == bytes([0x01])
 
 
 async def test_silent_server_request(speedy_client, silent_server, client):
     with pytest.raises(asyncio.TimeoutError):
-        await client.request(0x01, CommandCodes.POWER, bytes([0xF0]))
+        await client.request(0x01, POWER.cc, bytes([0xF0]))
 
 
 async def test_unsupported_zone(speedy_client, silent_server, client):
     with pytest.raises(UnsupportedZone):
-        await client.request(0x02, CommandCodes.DECODE_MODE_STATUS_2CH, bytes([0xF0]))
+        await client.request(0x02, DECODE_MODE_2CH.cc, bytes([0xF0]))
 
 
 async def test_silent_server_disconnect(speedy_client, silent_server):
@@ -121,10 +124,10 @@ async def test_process_runs_update_providers(server):
         process_task = asyncio.create_task(c.process())
         try:
             async with asyncio.timeout(5):
-                while state.get_power() is None or state.get_volume() is None:
+                while state.get(POWER) is None or state.get(VOLUME) is None:
                     await asyncio.sleep(0.05)
-            assert state.get_power() is False  # bytes([0x00]) → False
-            assert state.get_volume() == 0x01
+            assert state.get(POWER) is False  # bytes([0x00]) → False
+            assert state.get(VOLUME) == 0x01
         finally:
             await cancel_and_wait(process_task)
     finally:
@@ -225,8 +228,8 @@ async def test_update_returns_after_loop_pass(server):
         try:
             async with asyncio.timeout(5):
                 await state.update()
-            assert state.get_power() is False
-            assert state.get_volume() == 0x01
+            assert state.get(POWER) is False
+            assert state.get(VOLUME) == 0x01
         finally:
             await cancel_and_wait(process_task)
     finally:
