@@ -832,9 +832,9 @@ class State:
                     detail = PresetDetail.from_bytes(data)
                     if detail is not None:
                         presets[preset] = detail
-                except CommandInvalidAtThisTime:
+                except (CommandInvalidAtThisTime, InvalidZoneException):
                     break
-                except (CommandNotRecognised, InvalidZoneException):
+                except CommandNotRecognised:
                     _LOGGER.debug("Presets not supported skipping %s", preset)
                     break
                 except NotConnectedException as e:
