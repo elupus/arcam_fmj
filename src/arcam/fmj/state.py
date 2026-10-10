@@ -42,6 +42,7 @@ from .commands import (
 from .errors import (
     CommandInvalidAtThisTime,
     CommandNotRecognised,
+    InvalidZoneException,
     NotConnectedException,
     ParameterNotRecognised,
     ResponseException,
@@ -833,7 +834,7 @@ class State:
                         presets[preset] = detail
                 except CommandInvalidAtThisTime:
                     break
-                except CommandNotRecognised:
+                except (CommandNotRecognised, InvalidZoneException):
                     _LOGGER.debug("Presets not supported skipping %s", preset)
                     break
                 except NotConnectedException as e:

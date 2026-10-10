@@ -10,6 +10,7 @@ from arcam.fmj.commands import CommandCodes
 from arcam.fmj.errors import (
     CommandNotRecognised,
     ConnectionFailed,
+    InvalidZoneException,
     NotConnectedException,
     UnsupportedZone,
 )
@@ -231,4 +232,38 @@ async def test_update_returns_after_loop_pass(server):
             await cancel_and_wait(process_task)
     finally:
         await state.stop()
+        await c.stop()
+
+
+async def test_invalid_zone_presets_keep_connection(server):
+    """A zone rejecting preset queries must not tear down the shared client."""
+
+    def invalid_zone(**kwargs):
+        raise InvalidZoneException()
+
+    server.register_handler(
+        0x02, CommandCodes.POWER, bytes([0xF0]), lambda **kwargs: bytes([0x01])
+    )
+    server.register_handler(0x02, CommandCodes.PRESET_DETAIL, None, invalid_zone)
+
+    c = Client("localhost", 8888)
+    zone1 = State(c, 0x01)
+    zone2 = State(c, 0x02)
+    await c.start()
+    await zone1.start()
+    await zone2.start()
+    try:
+        process_task = asyncio.create_task(c.process())
+        try:
+            async with asyncio.timeout(5):
+                await asyncio.gather(zone1.update(), zone2.update())
+            assert c.connected
+            assert zone1.get_volume() == 0x01
+            assert zone2.get_power() is True
+            assert zone2.get_preset_details() == {}
+        finally:
+            await cancel_and_wait(process_task)
+    finally:
+        await zone2.stop()
+        await zone1.stop()
         await c.stop()
