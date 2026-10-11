@@ -1,6 +1,6 @@
 [project]
 name = "arcam-fmj"
-version = "3.0.1"
+dynamic = ["version"]
 description = "A python library for speaking to Arcam receivers"
 readme = "README.rst"
 authors = [
@@ -38,8 +38,17 @@ tests = [
 arcam-fmj = "arcam.fmj.console:main"
 
 [build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling", "uv-dynamic-versioning"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "uv-dynamic-versioning"
+
+[tool.uv-dynamic-versioning]
+pattern = "default-unprefixed"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/arcam"]
 
 [tool.isort]
 not_skip = "__init__.py"
