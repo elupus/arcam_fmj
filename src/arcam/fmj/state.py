@@ -815,12 +815,9 @@ class State:
 
         async def _update(cc: CommandCodes):
             try:
-                request = (
-                    SoftwareVersion.HOST
-                    if cc == CommandCodes.SOFTWARE_VERSION
-                    else 0xF0
+                data = await self._request(
+                    self._zn, cc, bytes([cc.update_request]), priority
                 )
-                data = await self._request(self._zn, cc, bytes([request]), priority)
                 self._state[cc] = data
             except UnsupportedZone:
                 _LOGGER.debug("Unsupported zone %s for %s", self._zn, cc)
