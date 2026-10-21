@@ -27,6 +27,7 @@ from .codecs import (
     SAMPLE_RATE_MAP,
     SAVE_RESTORE_CONFIRMATION,
     SaveRestoreSubCommand,
+    SoftwareVersion,
     SourceCodes,
     VideoParameters,
     VideoSelection,
@@ -226,6 +227,14 @@ class State:
         if self._amxduet:
             return self._amxduet.device_revision
         return None
+
+    @property
+    def host_version(self) -> str | None:
+        """Return the host firmware version, if it has been received."""
+        data = self._state.get(CommandCodes.SOFTWARE_VERSION)
+        if data is None or len(data) != 3 or data[0] != SoftwareVersion.HOST:
+            return None
+        return f"{data[1]}.{data[2]}"
 
     @property
     def _api_model(self) -> ApiModel:
@@ -807,7 +816,9 @@ class State:
 
         async def _update(cc: CommandCodes):
             try:
-                data = await self._request(self._zn, cc, bytes([0xF0]), priority)
+                data = await self._request(
+                    self._zn, cc, bytes([cc.update_request]), priority
+                )
                 self._state[cc] = data
             except UnsupportedZone:
                 _LOGGER.debug("Unsupported zone %s for %s", self._zn, cc)
