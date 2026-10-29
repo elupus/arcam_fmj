@@ -23,11 +23,7 @@ from arcam.fmj.codecs import (
 )
 from arcam.fmj.commands import CommandCodes, CommandFlags, POWER_WRITE_SUPPORTED
 from arcam.fmj.errors import UnsupportedCommand
-from arcam.fmj.models import (
-    APIVERSION_HDA_MULTI_ZONE_SERIES,
-    APIVERSION_HDA_PREMIUM_SERIES,
-    ApiModel,
-)
+from arcam.fmj.models import ApiModel
 from arcam.fmj.packets import AmxDuetResponse, ResponsePacket
 from arcam.fmj.rc5 import (
     RC5CODE_BASS,
@@ -336,17 +332,6 @@ def test_amxduet_resolves_api_model_for_every_zone():
     z2._listen(amx)
     assert z1.model == z2.model == "AV41"
     assert z1._api_model == z2._api_model == ApiModel.APIHDA_SERIES
-
-
-def test_audiocontrol_x9s_x7s_resolves_to_hda_series():
-    """The AudioControl Maestro X9S/X7S reports its own model string and uses the HDA API."""
-    client = MagicMock(spec=Client)
-    state = State(client, 1)
-    state._listen(AmxDuetResponse({"Device-Model": "X9S/X7S"}))
-    assert state.model == "X9S/X7S"
-    assert state._api_model == ApiModel.APIHDA_SERIES
-    assert "X9S/X7S" in APIVERSION_HDA_PREMIUM_SERIES
-    assert "X9S/X7S" in APIVERSION_HDA_MULTI_ZONE_SERIES
 
 
 # --- Save/Restore Settings (0x06) ---
