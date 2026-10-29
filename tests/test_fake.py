@@ -90,6 +90,14 @@ async def test_state(server, client):
     assert state.get(CommandCodes.VOLUME) == bytes([0x01])
 
 
+async def test_request_amxduet(server, client):
+    assert client.amxduet is None
+    amx = await client.request_amxduet()
+    assert amx.device_model == "AVR450"
+    assert client.amxduet is amx
+    assert await client.request_amxduet() is amx
+
+
 async def test_silent_server_request(speedy_client, silent_server, client):
     with pytest.raises(asyncio.TimeoutError):
         await client.request(0x01, CommandCodes.POWER, bytes([0xF0]))
