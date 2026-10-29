@@ -23,7 +23,7 @@ MODEL_FOR_API = {
 
 def make_state(client, zn, api_model):
     state = State(client, zn)
-    state._amxduet = AmxDuetResponse({"Device-Model": MODEL_FOR_API[api_model]})
+    state.client.amxduet = AmxDuetResponse({"Device-Model": MODEL_FOR_API[api_model]})
     return state
 
 
@@ -47,7 +47,7 @@ def make_state(client, zn, api_model):
     ],
 )
 async def test_get_source(zn, api_model, source, data):
-    client = MagicMock(spec=Client)
+    client = MagicMock(spec=Client, amxduet=None)
     state = make_state(client, zn, api_model)
     state._state[CommandCodes.CURRENT_SOURCE] = data
 
@@ -70,7 +70,7 @@ async def test_get_source(zn, api_model, source, data):
     ],
 )
 async def test_set_source(zn, api_model, source, ir, data):
-    client = MagicMock(spec=Client)
+    client = MagicMock(spec=Client, amxduet=None)
     state = make_state(client, zn, api_model)
 
     if ir:
@@ -98,7 +98,7 @@ async def test_set_source(zn, api_model, source, ir, data):
     ],
 )
 async def test_set_source_invalid(zn, api_model, source):
-    client = MagicMock(spec=Client)
+    client = MagicMock(spec=Client, amxduet=None)
     state = make_state(client, zn, api_model)
 
     with pytest.raises(ValueError):

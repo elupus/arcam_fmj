@@ -67,6 +67,7 @@ class ClientBase:
         self._update_providers: set[UpdateProvider] = set()
         self._queue: asyncio.PriorityQueue[_QueueItem] | None = None
         self._seq: int = 0
+        self._amxduet: AmxDuetResponse | None = None
         # Set whenever no connection is up, including before the first start().
         self._disconnected = asyncio.Event()
         self._disconnected.set()
@@ -85,6 +86,10 @@ class ClientBase:
     @property
     def started(self) -> bool:
         return self._writer is not None
+
+    @property
+    def amxduet(self) -> AmxDuetResponse | None:
+        return self._amxduet
 
     @contextmanager
     def listen(self, listener: Callable):
@@ -153,6 +158,12 @@ class ClientBase:
             return response.data
 
         raise ResponseException.from_response(response)
+
+    async def request_amxduet(self, priority: int = _USER_PRIORITY) -> AmxDuetResponse:
+        """Return the device's AMX info, requesting it only if not already cached."""
+        if self._amxduet is None:
+            self._amxduet = await self.request_raw(AmxDuetRequest(), priority)
+        return self._amxduet
 
     async def _process_receive(self, reader: StreamReader):
         while True:

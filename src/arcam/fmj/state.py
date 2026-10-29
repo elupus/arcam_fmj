@@ -55,7 +55,6 @@ from .models import (
     api_model_for,
 )
 from .packets import (
-    AmxDuetRequest,
     AmxDuetResponse,
     ResponsePacket,
 )
@@ -133,7 +132,6 @@ class State:
         self._state = dict()
         self._presets = dict()
         self._now_playing: NowPlayingInfo | None = None
-        self._amxduet: AmxDuetResponse | None = None
         self._unsupported_commands: set[CommandCodes] = set()
         self._updated = asyncio.Event()
 
@@ -191,12 +189,11 @@ class State:
 
     def __repr__(self) -> str:
         return "State ({}) Amx ({})".format(
-            self.to_dict(), self._amxduet.values if self._amxduet else {}
+            self.to_dict(), amxduet.values if (amxduet := self._client.amxduet) else {}
         )
 
     def _listen(self, packet: ResponsePacket | AmxDuetResponse) -> None:
-        if isinstance(packet, AmxDuetResponse):
-            self._amxduet = packet
+        if not isinstance(packet, ResponsePacket):
             return
 
         if packet.zn != self._zn:
@@ -217,14 +214,14 @@ class State:
 
     @property
     def model(self) -> str | None:
-        if self._amxduet:
-            return self._amxduet.device_model
+        if amxduet := self._client.amxduet:
+            return amxduet.device_model
         return None
 
     @property
     def revision(self) -> str | None:
-        if self._amxduet:
-            return self._amxduet.device_revision
+        if amxduet := self._client.amxduet:
+            return amxduet.device_revision
         return None
 
     @property
@@ -877,11 +874,10 @@ class State:
 
         async def _update_amxduet() -> None:
             try:
-                data = await self._client.request_raw(AmxDuetRequest(), priority)
-                self._amxduet = data
+                await self._client.request_amxduet(priority)
             except ResponseException as e:
                 _LOGGER.debug("Response error skipping %s", e.ac)
-            except NotConnectedException as e:
+            except NotConnectedException:
                 _LOGGER.debug("Not connected skipping amx")
             except TimeoutError:
                 _LOGGER.error("Timeout requesting amx")
@@ -893,7 +889,7 @@ class State:
             self._updated.clear()
             return []
 
-        if self._amxduet is None:
+        if self._client.amxduet is None:
             await _update_amxduet()
 
         tasks: list[UpdateTask] = []
