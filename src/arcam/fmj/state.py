@@ -51,6 +51,7 @@ from .errors import (
 )
 from .models import (
     APIVERSION_RC5_NUMERIC_SERIES,
+    APIVERSION_ZONE2_SERIES,
     ApiModel,
     api_model_for,
 )
@@ -247,8 +248,11 @@ class State:
         """Whether the update loop should fetch this command right now."""
         if not self._is_command_supported(cc):
             return False
-        if not (cc.flags & CommandFlags.ZONE_SUPPORT) and self._zn != 1:
-            return False
+        if self._zn != 1:
+            if not (cc.flags & CommandFlags.ZONE_SUPPORT):
+                return False
+            if self.model not in APIVERSION_ZONE2_SERIES:
+                return False
         if not (cc.flags & CommandFlags.UPDATE):
             return False
         # Pushed commands are fetched only during the initial pass.

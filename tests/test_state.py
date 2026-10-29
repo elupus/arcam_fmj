@@ -1259,11 +1259,42 @@ def test_should_update_sources_unknown_is_permissive():
 def test_should_update_zone_2_requires_zone_support():
     """Commands without ZONE_SUPPORT are skipped on zone 2 even if eligible."""
     client = MagicMock(spec=Client, amxduet=None)
-    state = State(client, 2)
+    state = make_state(client, 2, ApiModel.API450_SERIES)
     # MUTE has ZONE_SUPPORT — ok
     assert state._should_update(CommandCodes.MUTE) is True
     # INCOMING_AUDIO_FORMAT has no ZONE_SUPPORT
     assert state._should_update(CommandCodes.INCOMING_AUDIO_FORMAT) is False
+
+
+@pytest.mark.parametrize(
+    ("model", "expected"),
+    [
+        ("AVR450", True),
+        ("AVR30", True),
+        ("SA30", False),
+        ("PA720", False),
+        (None, False),
+    ],
+)
+def test_should_update_zone_2_requires_zone2_model(model, expected):
+    """Zone 2 is only polled on models that have a second zone."""
+    client = MagicMock(spec=Client, amxduet=None)
+    if model:
+        client.amxduet = AmxDuetResponse({"Device-Model": model})
+    state = State(client, 2)
+    assert state._should_update(CommandCodes.MUTE) is expected
+
+
+async def test_update_zone_2_without_zone2_model_completes():
+    """A zone 2 state on a single-zone model issues no requests, yet still
+    marks the first pass as done so update() does not block forever."""
+    client = MagicMock(spec=Client, amxduet=None)
+    client.connected = True
+    state = make_state(client, 2, ApiModel.APISA_SERIES)
+
+    assert await state.get_update_tasks() == []
+    client.request.assert_not_called()
+    assert state._updated.is_set()
 
 
 async def test_update_skips_commands_for_wrong_source():
