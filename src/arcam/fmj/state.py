@@ -251,7 +251,7 @@ class State:
         if self._zn != 1:
             if not (cc.flags & CommandFlags.ZONE_SUPPORT):
                 return False
-            if self.model not in APIVERSION_ZONE2_SERIES:
+            if self.model is not None and self.model not in APIVERSION_ZONE2_SERIES:
                 return False
         if not (cc.flags & CommandFlags.UPDATE):
             return False

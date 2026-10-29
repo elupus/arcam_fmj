@@ -22,7 +22,7 @@ from arcam.fmj.codecs import (
     VideoSelection,
 )
 from arcam.fmj.commands import CommandCodes, CommandFlags, POWER_WRITE_SUPPORTED
-from arcam.fmj.errors import UnsupportedCommand
+from arcam.fmj.errors import CommandInvalidAtThisTime, UnsupportedCommand
 from arcam.fmj.models import ApiModel
 from arcam.fmj.packets import AmxDuetResponse, ResponsePacket
 from arcam.fmj.rc5 import (
@@ -1273,7 +1273,7 @@ def test_should_update_zone_2_requires_zone_support():
         ("AVR30", True),
         ("SA30", False),
         ("PA720", False),
-        (None, False),
+        (None, True),
     ],
 )
 def test_should_update_zone_2_requires_zone2_model(model, expected):
@@ -1283,6 +1283,22 @@ def test_should_update_zone_2_requires_zone2_model(model, expected):
         client.amxduet = AmxDuetResponse({"Device-Model": model})
     state = State(client, 2)
     assert state._should_update(CommandCodes.MUTE) is expected
+
+
+async def test_update_zone_2_polls_when_amxduet_times_out():
+    """If AMX identification times out, zone 2 still runs its initial pass, so
+    pushed values are queried instead of waiting for unsolicited updates."""
+    client = MagicMock(spec=Client, amxduet=None)
+    client.connected = True
+    client.request_amxduet.side_effect = TimeoutError()
+    client.request.side_effect = CommandInvalidAtThisTime()
+    state = State(client, 2)
+
+    await asyncio.gather(*await state.get_update_tasks())
+
+    requested = [call.args[1] for call in client.request.call_args_list]
+    assert CommandCodes.POWER in requested
+    assert state._updated.is_set()
 
 
 async def test_update_zone_2_without_zone2_model_completes():
