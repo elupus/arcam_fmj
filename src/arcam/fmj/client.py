@@ -276,9 +276,12 @@ class Client(ClientBase):
         return f"{self.host}:{self.port}"
 
     async def _open(self) -> tuple[StreamReader, StreamWriter]:
-        return await asyncio.open_connection(
-            self._host, self._port
-        )
+        try:
+            return await asyncio.open_connection(
+                self._host, self._port
+            )
+        except Exception as err:
+            raise ConnectionFailed(f"Failed to connect to {self.peer}") from err
 
 class ClientSerial(ClientBase):
     def __init__(self, url: str, baudrate=38400) -> None:
@@ -291,9 +294,12 @@ class ClientSerial(ClientBase):
         return self._url
 
     async def _open(self) -> tuple[StreamReader, StreamWriter]:
-        return await open_serial_connection(
-            self._url, self._baudrate
-        )
+        try:
+            return await open_serial_connection(
+                self._url, self._baudrate
+            )
+        except Exception as err:
+            raise ConnectionFailed(f"Failed to connect to {self.peer}") from err
 
 class ClientContext:
     def __init__(self, client: Client):
