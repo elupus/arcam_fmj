@@ -38,6 +38,7 @@ APIVERSION_HDA_SERIES = {
     "AV41",
     "SDP-55",
     "SDP-58",
+    "X9S/X7S",
 }
 APIVERSION_HDA_PREMIUM_SERIES = {
     "AVR10",
@@ -50,6 +51,7 @@ APIVERSION_HDA_PREMIUM_SERIES = {
     "AV41",
     "SDP-55",
     "SDP-58",
+    "X9S/X7S",
 }
 APIVERSION_HDA_MULTI_ZONE_SERIES = {
     "AVR20",
@@ -60,6 +62,7 @@ APIVERSION_HDA_MULTI_ZONE_SERIES = {
     "AV41",
     "SDP-55",
     "SDP-58",
+    "X9S/X7S",
 }
 APIVERSION_PA_SERIES = {
     "PA720",
