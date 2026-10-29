@@ -18,6 +18,7 @@ from arcam.fmj.codecs import (
     RoomEqMode,
     SAVE_RESTORE_CONFIRMATION,
     SaveRestoreSubCommand,
+    SoftwareVersion,
     SourceCodes,
     VideoSelection,
 )
@@ -321,6 +322,49 @@ def test_listen_amxduet():
     assert state.model == "AV860"
     assert state.revision == "1.2.3"
     assert state._api_model == ApiModel.API860_SERIES
+
+
+@pytest.mark.parametrize(
+    "data, expected",
+    [
+        (bytes([SoftwareVersion.HOST, 1, 62]), "1.62"),
+        (bytes([SoftwareVersion.HOST, 2, 0]), "2.0"),
+        (None, None),
+        (b"", None),
+        (bytes([SoftwareVersion.RS232, 1, 62]), None),
+        (bytes([SoftwareVersion.HOST, 1]), None),
+    ],
+)
+def test_host_version(data, expected):
+    """Return the host firmware version from the software-version response."""
+    state = State(MagicMock(spec=Client), 1)
+    state._state[CommandCodes.SOFTWARE_VERSION] = data
+    assert state.host_version == expected
+
+
+async def test_update_requests_host_version():
+    """The initial software-version request asks for the host version."""
+    client = MagicMock(spec=Client)
+    client.connected = True
+
+    async def request(zn, cc, data, priority):
+        if cc == CommandCodes.SOFTWARE_VERSION:
+            return bytes([SoftwareVersion.HOST, 1, 62])
+        return b""
+
+    client.request.side_effect = request
+    state = State(client, 1)
+    state._amxduet = AmxDuetResponse({"Device-Model": "AVR30"})
+
+    await asyncio.gather(*await state.get_update_tasks())
+
+    version_request = next(
+        call
+        for call in client.request.call_args_list
+        if call.args[1] == CommandCodes.SOFTWARE_VERSION
+    )
+    assert version_request.args[2] == bytes([SoftwareVersion.HOST])
+    assert state.host_version == "1.62"
 
 
 def test_amxduet_resolves_api_model_for_every_zone():
