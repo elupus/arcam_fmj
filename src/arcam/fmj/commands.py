@@ -208,13 +208,13 @@ class CommandCodes(IntOrTypeEnum):
     DOLBY_AUDIO                     = 0x38, _AVR,       _Z | _U     # was "Dolby Volume" in 450/860 (SH256E/SH274E)
     DOLBY_LEVELER                   = 0x39, _PRE_HDA,   _Z          # removed from HDA (SH289E issue C.0)
     DOLBY_VOLUME_CALIBRATION_OFFSET = 0x3A, _PRE_HDA,   _Z          # removed from HDA (SH289E issue C.0)
-    BALANCE                         = 0x3B, _AVR_SA,    _Z | _U
+    BALANCE                         = 0x3B, _AVR_SA,    _U
     DOLBY_PLII_X_MUSIC_DIMENSION    = 0x3C, _450
     DOLBY_PLII_X_MUSIC_CENTRE_WIDTH = 0x3D, _450
     DOLBY_PLII_X_MUSIC_PANORAMA     = 0x3E, _450
-    SUBWOOFER_TRIM                  = 0x3F, _AVR,       _Z | _U
-    LIPSYNC_DELAY                   = 0x40, _AVR,       _Z | _U
-    COMPRESSION                     = 0x41, _AVR,       _Z | _U
+    SUBWOOFER_TRIM                  = 0x3F, _AVR,       _U
+    LIPSYNC_DELAY                   = 0x40, _AVR,       _U
+    COMPRESSION                     = 0x41, _AVR,       _U
 
     # --- Incoming Signal / Video ---
     INCOMING_VIDEO_PARAMETERS       = 0x42, _AVR,       _U
