@@ -36,6 +36,17 @@ class AnswerCodes(IntOrTypeEnum):
     COMMAND_INVALID_AT_THIS_TIME = 0x85
     INVALID_DATA_LENGTH = 0x86
 
+
+class SoftwareVersion(enum.IntEnum):
+    """Software component selectors for the software-version command."""
+
+    RS232 = 0xF0
+    HOST = 0xF1
+    OSD = 0xF2
+    DSP = 0xF3
+    NET = 0xF4
+    IAP = 0xF5
+
 # --- CC 0x01: DISPLAY_BRIGHTNESS ---
 
 class DisplayBrightness(IntOrTypeEnum):

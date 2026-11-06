@@ -1,16 +1,16 @@
 """CommandCodes enum — the command catalogue.
 
-Each entry carries ``(value, version, flags, sources)`` where *version*
-gates model support, *flags* describe protocol behaviour (including update
-loop participation), and *sources* gates both update polling and cached
-accessors to a specific source set. Definitions are ordered by
-command-code hex value within each section.
+Each entry carries ``(value, version, flags, sources, update_request)``.
+*version* gates model support, *flags* describe protocol behaviour (including
+update loop participation), and *sources* gates both update polling and cached
+accessors to a specific source set. Definitions are ordered by command-code
+hex value within each section.
 """
 from __future__ import annotations
 
 import enum
 
-from .codecs import SourceCodes
+from .codecs import SoftwareVersion, SourceCodes
 from .models import (
     APIVERSION_450_SERIES,
     APIVERSION_AMP_DIAGNOSTICS_SERIES,
@@ -102,16 +102,18 @@ _BT = frozenset({SourceCodes.BT})
 class CommandCodes(IntOrTypeEnum):
     """Per-command protocol metadata.
 
-    Each member is ``(cc_byte, version_set | None, flags, sources)``. The
-    ``version`` field gates which device families support the command;
+    Each member is ``(cc_byte, version_set | None, flags, sources, update_request)``.
+    The ``version`` field gates which device families support the command;
     ``flags`` describe protocol behaviour (UPDATE gates participation in
     the update loop, NOT_PUSHED forces every-cycle polling); ``sources``
     (when not None) restricts both the update loop and cached accessors
-    to a specific source set.
+    to a specific source set; ``update_request`` is the byte sent when
+    polling the command.
     """
 
     flags: CommandFlags
     sources: frozenset[SourceCodes] | None
+    update_request: int
 
     @classmethod
     def _create_member(cls, value):
@@ -123,6 +125,7 @@ class CommandCodes(IntOrTypeEnum):
             obj.version = None
             obj.flags = CommandFlags(0)
             obj.sources = None
+            obj.update_request = 0xF0
             pseudo_member = cls._value2member_map_.setdefault(value, obj)
         return pseudo_member
 
@@ -132,24 +135,26 @@ class CommandCodes(IntOrTypeEnum):
         version: set[str] | None = None,
         flags: CommandFlags | None = None,
         sources: frozenset[SourceCodes] | None = None,
+        update_request: int = 0xF0,
     ):
         obj = int.__new__(cls, value)
         obj._value_ = value
         obj.version = version
         obj.flags = flags if flags is not None else CommandFlags(0)
         obj.sources = sources
+        obj.update_request = update_request
         return obj
 
     # fmt: off
-    # Name                            CC    Version     Flags             Sources
-    # ====                            ==    =======     =====             =======
+    # Name                            CC    Version     Flags             Sources  Poll parameter
+    # ====                            ==    =======     =====             =======  ==============
 
     # --- System ---
     POWER                           = 0x00, None,       _Z | _U
     DISPLAY_BRIGHTNESS              = 0x01, _AVR_SA_ST
     HEADPHONES                      = 0x02, _AVR_SA,    _U
     FMGENRE                         = 0x03, _AVR,       _Z | _U,          _FM
-    SOFTWARE_VERSION                = 0x04, None,       _U
+    SOFTWARE_VERSION                = 0x04, None,       _U,               None,    SoftwareVersion.HOST
     RESTORE_FACTORY_DEFAULT         = 0x05, None
     SAVE_RESTORE_COPY_OF_SETTINGS   = 0x06, _AVR
     SIMULATE_RC5_IR_COMMAND         = 0x08, _AVR_SA_ST, _Z
