@@ -141,6 +141,36 @@ async def test_process_runs_update_providers(server):
         await c.stop()
 
 
+async def test_process_updates_paces_passes(server, monkeypatch):
+    """Providers that keep returning tasks must not spin the update loop."""
+    interval = timedelta(milliseconds=50)
+    monkeypatch.setattr("arcam.fmj.client._UPDATE_IDLE_INTERVAL", interval)
+
+    c = Client("localhost", 8888)
+    passes = 0
+
+    async def _noop():
+        pass
+
+    async def provider():
+        nonlocal passes
+        passes += 1
+        return [_noop()]
+
+    c.register_update_provider(provider)
+    await c.start()
+    try:
+        process_task = asyncio.create_task(c.process())
+        try:
+            await asyncio.sleep(interval.total_seconds() * 5)
+        finally:
+            await cancel_and_wait(process_task)
+    finally:
+        await c.stop()
+
+    assert 1 <= passes <= 6
+
+
 async def test_heartbeat_keeps_connection_alive(speedy_client, server):
     """With no providers registered, _process_updates falls back to
     sleeping — the heartbeat task keeps the connection alive past

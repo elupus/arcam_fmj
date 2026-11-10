@@ -36,7 +36,7 @@ _REQUEST_TIMEOUT = timedelta(milliseconds=500)
 _REQUEST_RETRY_COUNT = 2
 _REQUEST_SETTLE_TIME = timedelta(milliseconds=5)
 
-_UPDATE_IDLE_INTERVAL = timedelta(milliseconds=200)
+_UPDATE_IDLE_INTERVAL = timedelta(seconds=1)
 
 _HEARTBEAT_INTERVAL = timedelta(seconds=5)
 _HEARTBEAT_TIMEOUT = _HEARTBEAT_INTERVAL + _HEARTBEAT_INTERVAL
@@ -238,10 +238,9 @@ class ClientBase:
             tasks: list[UpdateTask] = []
             for provider in self._update_providers:
                 tasks.extend(await provider())
-            if not tasks:
-                await asyncio.sleep(_UPDATE_IDLE_INTERVAL.total_seconds())
-                continue
-            await run_tasks(*tasks)
+            if tasks:
+                await run_tasks(*tasks)
+            await asyncio.sleep(_UPDATE_IDLE_INTERVAL.total_seconds())
 
     async def _process_heartbeat(self):
         while True:
